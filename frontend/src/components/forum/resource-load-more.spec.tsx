@@ -91,7 +91,7 @@ describe('ResourceLoadMore pagination', () => {
       supportedVersion: 'V8',
       compatibility: 'Linux',
       resourceKind: 'schematic',
-      mapFilters: { planet: 'serpulo', block: 'router', width: 128, height: 128 },
+      mapFilters: { block: 'router', width: 128, height: 128 },
     });
 
     await clickLoadMore();
@@ -107,7 +107,6 @@ describe('ResourceLoadMore pagination', () => {
       supported_version: 'V8',
       compatibility: 'Linux',
       resource_kind: 'schematic',
-      planet: 'serpulo',
       block: 'router',
       width: 128,
       height: 128,
@@ -132,6 +131,25 @@ describe('ResourceLoadMore pagination', () => {
     expect(params.width).toBe(128);
     expect(params.height).toBe(128);
     expect(params.block).toBeUndefined();
+  });
+
+  it('sends no planet condition for a blueprint continuation', async () => {
+    mockList.mockResolvedValueOnce(page([2], null));
+    await mount({
+      initialResources: [{ id: 1 } as never],
+      initialCursor: 'cursor-1',
+      hasMore: true,
+      resourceKind: 'schematic',
+      mapFilters: { block: 'router', width: 64 },
+    });
+
+    await clickLoadMore();
+
+    const params = mockList.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.block).toBe('router');
+    expect(params.width).toBe(64);
+    expect(params.planet).toBeUndefined();
+    expect(params.height).toBeUndefined();
   });
 
   it('sends no map condition when the resource kind is not map or blueprint', async () => {

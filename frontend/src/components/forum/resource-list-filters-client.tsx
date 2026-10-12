@@ -13,6 +13,7 @@ import {
   isBlockFilterKind,
   isMapFilterKind,
   mapDimensionInvalid,
+  mapFilterKeys,
   mergeResourceQuery,
 } from '@/lib/resources/query';
 import { useI18n } from '@/i18n/provider';
@@ -45,14 +46,13 @@ export default function ResourceFilters({
   const supportedVersion = searchParams.get('supported_version') || initialSupportedVersion || '';
   const compatibility = searchParams.get('compatibility') || initialCompatibility || '';
   const resourceKind = searchParams.get('resource_kind') || initialResourceKind || '';
-  // Map conditions are read and rendered only for map/schematic: the URL is
+  // Each kind renders exactly the conditions it can answer: a map gets
+  // planet/width/height, a blueprint gets block/width/height. The URL is
   // canonicalised on the server, so anything hidden here is already gone.
   const showMapFilters = isMapFilterKind(resourceKind);
-  // `block` is blueprint-only: the backend matches it against
-  // `renderer_metadata_json.block_types[*].name`, and the map renderer emits no
-  // `block_types`, so a map control could only ever return an empty list.
   const showBlockFilter = isBlockFilterKind(resourceKind);
-  const planet = showMapFilters ? searchParams.get('planet') || initialPlanet || '' : '';
+  const showPlanetFilter = mapFilterKeys(resourceKind).includes('planet');
+  const planet = showPlanetFilter ? searchParams.get('planet') || initialPlanet || '' : '';
   const urlBlock = showBlockFilter ? searchParams.get('block') || initialBlock || '' : '';
   const urlWidth = showMapFilters ? searchParams.get('width') || initialWidth || '' : '';
   const urlHeight = showMapFilters ? searchParams.get('height') || initialHeight || '' : '';
@@ -147,7 +147,7 @@ export default function ResourceFilters({
 
   const activeFilters = [
     selectedCategory, urlSearch, tag, supportedVersion, compatibility, resourceKind,
-    ...(showMapFilters ? [planet, urlBlock, urlWidth, urlHeight] : []),
+    planet, urlBlock, urlWidth, urlHeight,
   ].filter(Boolean).length;
   const hasFilters = activeFilters > 0 || sort !== 'created_at';
   const chipClass = (active: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? 'bg-[var(--primary-button)] text-white' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'}`;
@@ -172,11 +172,11 @@ export default function ResourceFilters({
 
   /** Shared by the desktop menu and the mobile sheet, so both expose the same controls. */
   const mapFilterFields = (scope: string) => <div role="group" aria-label={t('resourceList.mapFilters')} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-    <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'planet')}>{t('resourceList.planet')}
+    {showPlanetFilter && <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'planet')}>{t('resourceList.planet')}
       <select id={fieldId(scope, 'planet')} value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}>
         <option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}
       </select>
-    </label>
+    </label>}
     {showBlockFilter && <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
       <input
         id={fieldId(scope, 'block')}
@@ -267,7 +267,7 @@ export default function ResourceFilters({
       {tag && removableChip('tag', t('resourceList.tagChip', { value: tag }))}
       {supportedVersion && removableChip('supported_version', t('resourceList.versionChip', { value: supportedVersion }))}
       {compatibility && removableChip('compatibility', t('resourceList.platformChip', { value: compatibility }))}
-      {showMapFilters && planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
+      {showPlanetFilter && planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
       {showBlockFilter && urlBlock && removableChip('block', t('resourceList.blockChip', { value: urlBlock }))}
       {showMapFilters && urlWidth && removableChip('width', t('resourceList.widthChip', { value: urlWidth }))}
       {showMapFilters && urlHeight && removableChip('height', t('resourceList.heightChip', { value: urlHeight }))}

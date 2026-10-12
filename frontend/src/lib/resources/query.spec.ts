@@ -1,7 +1,9 @@
 import {
-  BLOCK_FILTER_KINDS,
   MAX_MAP_DIMENSION,
+  isBlockFilterKind,
+  isMapFilterKind,
   mapDimensionInvalid,
+  mapFilterKeys,
   mergeResourceQuery,
   normalizeResourceFilterParams,
   parseMapDimension,
@@ -10,47 +12,61 @@ import {
 import { RESOURCE_KINDS as resourceKinds } from '../display-labels';
 
 /**
- * Renderer metadata evidence: the backend matches `block` against
- * `renderer_metadata_json.block_types[*].name`, the schematic renderer emits
- * that field, and the map renderer does not. A map URL carrying `block` is
- * therefore unanswerable and must not survive canonicalisation.
+ * Field provenance, not symmetry:
+ * - `block` matches `renderer_metadata_json.block_types[*].name`. Only the
+ *   schematic renderer emits `block_types`, so only a blueprint can answer it.
+ * - `planet` comes from map rules. No schematic-side source exists: the
+ *   analyzer projects no planet, `schematic_version_metadata` has no planet
+ *   column, and the official `.msch` fixture carries no planet tag.
  */
-test('only the blueprint kind owns the block condition', () => {
-  expect(BLOCK_FILTER_KINDS).toEqual(['schematic']);
+test('each kind exposes exactly the conditions its renderer metadata can answer', () => {
+  expect(mapFilterKeys('map')).toEqual(['planet', 'width', 'height']);
+  expect(mapFilterKeys('schematic')).toEqual(['block', 'width', 'height']);
+  for (const kind of ['mod', 'pack', 'save', 'other', '', undefined, null]) expect(mapFilterKeys(kind)).toEqual([]);
+  expect(isMapFilterKind('map')).toBe(true);
+  expect(isMapFilterKind('schematic')).toBe(true);
+  expect(isMapFilterKind('mod')).toBe(false);
+  expect(isBlockFilterKind('schematic')).toBe(true);
+  expect(isBlockFilterKind('map')).toBe(false);
+});
+
+test('a parse drops every condition the selected kind cannot answer', () => {
   expect(parseMapFilters('map', { block: 'router', planet: 'serpulo', width: '128', height: '128' }))
     .toEqual({ planet: 'serpulo', width: 128, height: 128 });
   expect(parseMapFilters('schematic', { block: 'router', planet: 'serpulo', width: '128', height: '128' }))
-    .toEqual({ block: 'router', planet: 'serpulo', width: 128, height: 128 });
+    .toEqual({ block: 'router', width: 128, height: 128 });
   expect(parseMapFilters('mod', { block: 'router' })).toEqual({});
   expect(parseMapFilters(undefined, { block: 'router' })).toEqual({});
 });
 
-test('a direct map link drops block once and keeps the shared conditions', () => {
-  const requested = new URLSearchParams('resource_kind=map&planet=serpulo&block=router&width=128&height=128&category_id=3');
-  const canonical = normalizeResourceFilterParams(requested);
-  expect(canonical.get('block')).toBeNull();
-  expect(canonical.get('planet')).toBe('serpulo');
-  expect(canonical.get('width')).toBe('128');
-  expect(canonical.get('height')).toBe('128');
-  expect(canonical.get('category_id')).toBe('3');
+test('a direct link drops the conditions its kind cannot answer, exactly once', () => {
+  const map = normalizeResourceFilterParams(
+    new URLSearchParams('resource_kind=map&planet=serpulo&block=router&width=128&height=128&category_id=3'),
+  );
+  expect(map.get('block')).toBeNull();
+  expect(map.get('planet')).toBe('serpulo');
+  expect(map.get('width')).toBe('128');
+  expect(map.get('height')).toBe('128');
+  expect(map.get('category_id')).toBe('3');
   // Canonicalising the result again is a no-op, so SSR cannot redirect in a loop.
-  expect(normalizeResourceFilterParams(canonical).toString()).toBe(canonical.toString());
+  expect(normalizeResourceFilterParams(map).toString()).toBe(map.toString());
 
-  const stillBlueprint = normalizeResourceFilterParams(
+  const schematic = normalizeResourceFilterParams(
     new URLSearchParams('resource_kind=schematic&planet=erekir&block=router&width=64&height=64'),
   );
-  expect(stillBlueprint.get('block')).toBe('router');
-  expect(stillBlueprint.get('planet')).toBe('erekir');
-  expect(stillBlueprint.toString()).toBe('resource_kind=schematic&planet=erekir&block=router&width=64&height=64');
+  expect(schematic.get('planet')).toBeNull();
+  expect(schematic.get('block')).toBe('router');
+  expect(schematic.get('width')).toBe('64');
+  expect(schematic.get('height')).toBe('64');
+  expect(schematic.toString()).toBe('resource_kind=schematic&block=router&width=64&height=64');
 });
 
-test('resource filter updates preserve existing URL query compatibility', () => {
+test('resource filter updates preserve every unrelated URL condition', () => {
   const result = new URLSearchParams(mergeResourceQuery(
-    'category_id=4&sort=download_count&tag=campaign&supported_version=V8&compatibility=Linux&resource_kind=map&planet=Serpulo',
-    { resource_kind: 'schematic', tag: null },
+    'category_id=4&sort=download_count&tag=campaign&supported_version=V8&compatibility=Linux&resource_kind=mod',
+    { tag: null },
   ));
-  for (const key of ['category_id', 'sort', 'supported_version', 'compatibility', 'planet']) expect(result.has(key)).toBe(true);
-  expect(result.get('resource_kind')).toBe('schematic');
+  for (const key of ['category_id', 'sort', 'supported_version', 'compatibility', 'resource_kind']) expect(result.has(key)).toBe(true);
   expect(result.has('tag')).toBe(false);
 });
 
@@ -74,22 +90,23 @@ test('removing one resource filter preserves all other shareable URL state', () 
   }
 });
 
-test('planet and dimensions survive a map/schematic switch, block only survives into a blueprint', () => {
-  // Canonical map URL (no block) switching to a blueprint.
+test('a map/blueprint switch keeps only the conditions both kinds can answer', () => {
+  // Canonical map URL switching to a blueprint: width/height carry over, the
+  // map-only planet goes because a blueprint has no planet source.
   const schematic = new URLSearchParams(mergeResourceQuery(
     'resource_kind=map&planet=serpulo&width=128&height=128&category_id=3',
     { resource_kind: 'schematic' },
   ));
   expect(schematic.get('resource_kind')).toBe('schematic');
-  expect(schematic.get('planet')).toBe('serpulo');
   expect(schematic.get('width')).toBe('128');
   expect(schematic.get('height')).toBe('128');
   expect(schematic.get('category_id')).toBe('3');
+  expect(schematic.has('planet')).toBe(false);
   expect(schematic.has('block')).toBe(false);
 
-  // Blueprint switching back to a map: block goes with the kind it belongs to.
+  // Blueprint switching to a map: block goes with the kind it belongs to.
   const backToMap = new URLSearchParams(mergeResourceQuery(
-    'resource_kind=schematic&planet=erekir&block=router&width=64&height=64',
+    'resource_kind=schematic&block=router&width=64&height=64&planet=erekir',
     { resource_kind: 'map' },
   ));
   expect(backToMap.get('resource_kind')).toBe('map');
@@ -130,11 +147,10 @@ test('dimensions are validated against the backend 1..4096 integer range', () =>
 
 test('invalid dimensions never reach the query while valid siblings stay', () => {
   const query = new URLSearchParams(mergeResourceQuery(
-    'resource_kind=schematic&planet=serpulo&width=0&height=4097',
+    'resource_kind=schematic&width=0&height=4097',
     { block: 'router' },
   ));
   expect(query.get('block')).toBe('router');
-  expect(query.get('planet')).toBe('serpulo');
   expect(query.has('width')).toBe(false);
   expect(query.has('height')).toBe(false);
 
@@ -148,13 +164,21 @@ test('invalid dimensions never reach the query while valid siblings stay', () =>
   expect(map.has('width')).toBe(false);
 });
 
-test('switching into a map from another kind clears a leftover block condition', () => {
-  const fromBlueprint = new URLSearchParams(mergeResourceQuery(
-    'resource_kind=schematic&block=router&planet=serpulo',
+test('switching between kinds clears the conditions the target kind cannot answer', () => {
+  const toMap = new URLSearchParams(mergeResourceQuery(
+    'resource_kind=schematic&block=router&width=64&planet=serpulo',
     { resource_kind: 'map' },
   ));
-  expect(fromBlueprint.has('block')).toBe(false);
-  expect(fromBlueprint.get('planet')).toBe('serpulo');
+  expect(toMap.has('block')).toBe(false);
+  expect(toMap.get('planet')).toBe('serpulo');
+  expect(toMap.get('width')).toBe('64');
+
+  const toBlueprint = new URLSearchParams(mergeResourceQuery(
+    'resource_kind=map&planet=serpulo&width=64',
+    { resource_kind: 'schematic' },
+  ));
+  expect(toBlueprint.has('planet')).toBe(false);
+  expect(toBlueprint.get('width')).toBe('64');
 
   for (const kind of ['mod', 'pack', '']) {
     const query = new URLSearchParams(mergeResourceQuery(
@@ -170,7 +194,8 @@ test('parseMapFilters gates on kind and trims text conditions', () => {
   expect(parseMapFilters(undefined, { planet: 'serpulo' })).toEqual({});
   expect(parseMapFilters('map', { planet: ' serpulo ', block: ' ', width: '128', height: 'abc' }))
     .toEqual({ planet: 'serpulo', width: 128 });
-  expect(parseMapFilters('schematic', { block: 'router', height: '64' })).toEqual({ block: 'router', height: 64 });
+  expect(parseMapFilters('schematic', { block: ' router ', planet: 'erekir', height: '64' }))
+    .toEqual({ block: 'router', height: 64 });
 });
 
 
@@ -178,13 +203,13 @@ test('SSR canonicalization keeps blueprint conditions and drops the rest from a 
   const kept = normalizeResourceFilterParams(new URLSearchParams(
     'resource_kind=schematic&planet=erekir&block=router&width=64&height=64&category_id=3',
   ));
-  expect(kept.get('planet')).toBe('erekir');
   expect(kept.get('block')).toBe('router');
   expect(kept.get('width')).toBe('64');
   expect(kept.get('height')).toBe('64');
   expect(kept.get('category_id')).toBe('3');
+  expect(kept.has('planet')).toBe(false);
   // A URL that is already canonical must not be redirected again.
-  expect(kept.toString()).toBe('resource_kind=schematic&planet=erekir&block=router&width=64&height=64&category_id=3');
+  expect(kept.toString()).toBe('resource_kind=schematic&block=router&width=64&height=64&category_id=3');
 });
 
 test('SSR canonicalization strips block from a map URL exactly once', () => {

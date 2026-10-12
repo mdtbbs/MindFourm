@@ -130,9 +130,9 @@ export default async function ResourcesPage({
   }
 
   const resourceKind = params.get('resource_kind') || undefined;
-  // One rule, one reader: `planet`/`width`/`height` exist for maps and
-  // blueprints, `block` only while the blueprint renderer metadata that
-  // answers it is in play.
+  // One rule, one reader: a kind only carries the conditions its own renderer
+  // metadata can answer (see `lib/resources/query.ts`), so a condition with no
+  // source for this kind is removed instead of being queried.
   const mapFilters = parseMapFilters(resourceKind, {
     planet: params.get('planet'),
     block: params.get('block'),

@@ -1,20 +1,35 @@
 /**
  * Structured map/blueprint filters. The backend `QueryResourcesDto` owns the
  * values (`planet` string, `block` string, `width`/`height` integers 1..4096);
- * this module owns the two rules the UI and SSR share, so a URL can never carry
- * a condition the filter UI cannot show or remove.
+ * this module owns the single rule the UI and SSR share, so a URL can never
+ * carry a condition the filter UI cannot show, remove, or have answered.
  *
- * `planet`/`width`/`height` exist for maps and blueprints. `block` exists for
- * blueprints only: the backend matches it against
- * `renderer_metadata_json.block_types[*].name`, and the map renderer emits no
- * `block_types`, so a map URL carrying `block` can only ever return empty
- * results. Maps therefore drop it instead of offering a control that cannot hit.
+ * Which kind can answer which condition is evidence, not symmetry:
+ * - `map`: the renderer emits `planet` (from map rules) plus `width`/`height`.
+ * - `schematic`: the renderer emits `block_types[*].name` — the only field the
+ *   backend `block` filter matches — plus `width`/`height`. It has no persisted
+ *   `planet`: `schematic-analyzer` projects no planet, `schematic_version_metadata`
+ *   has no planet column, and the checked-in official `.msch` fixture carries no
+ *   planet tag. A blueprint-side planet control would filter on a value that has
+ *   no source, so blueprints do not expose it.
  */
 export const MAP_FILTER_KEYS = ['planet', 'block', 'width', 'height'] as const;
-/** Kinds that own `planet`/`width`/`height`. */
-export const MAP_FILTER_KINDS = ['map', 'schematic'] as const;
-/** Kinds that additionally own `block`. */
-export const BLOCK_FILTER_KINDS = ['schematic'] as const;
+export type MapFilterKey = (typeof MAP_FILTER_KEYS)[number];
+
+/** The conditions each resource kind can actually answer. */
+const KIND_FILTER_KEYS: Record<string, readonly MapFilterKey[]> = {
+  map: ['planet', 'width', 'height'],
+  schematic: ['block', 'width', 'height'],
+};
+
+/**
+ * The subset of MAP_FILTER_KEYS a kind can query, empty for every other kind:
+ * a hidden condition is removed from the URL rather than merely ignored.
+ */
+export function mapFilterKeys(kind?: string | null): readonly MapFilterKey[] {
+  return (kind && KIND_FILTER_KEYS[kind]) || [];
+}
+
 export const MIN_MAP_DIMENSION = 1;
 export const MAX_MAP_DIMENSION = 4096;
 
@@ -25,16 +40,14 @@ export type MapFilterValues = {
   height?: number;
 };
 
-function isKindIn(kinds: readonly string[], kind?: string | null): boolean {
-  return Boolean(kind) && kinds.includes(kind as string);
-}
-
+/** True while the list is narrowed to a kind that exposes any map condition. */
 export function isMapFilterKind(kind?: string | null): boolean {
-  return isKindIn(MAP_FILTER_KINDS, kind);
+  return mapFilterKeys(kind).length > 0;
 }
 
+/** True only for the kind whose renderer metadata answers the `block` filter. */
 export function isBlockFilterKind(kind?: string | null): boolean {
-  return isKindIn(BLOCK_FILTER_KINDS, kind);
+  return mapFilterKeys(kind).includes('block');
 }
 
 /** Digits only: an empty, signed, fractional or out-of-range value is not a query. */
@@ -55,14 +68,19 @@ export function parseMapFilters(
   kind: string | null | undefined,
   values: { planet?: string | null; block?: string | null; width?: string | null; height?: string | null },
 ): MapFilterValues {
-  if (!isMapFilterKind(kind)) return {};
+  const allowed = mapFilterKeys(kind);
+  if (!allowed.length) return {};
   const result: MapFilterValues = {};
-  const planet = values.planet?.trim();
-  if (planet) result.planet = planet;
-  // `block` is blueprint-only: keeping it for a map would send a condition the
-  // renderer metadata can never satisfy.
-  const block = isBlockFilterKind(kind) ? values.block?.trim() : '';
-  if (block) result.block = block;
+  // Only the conditions this kind can answer survive, so a hand-edited or stale
+  // URL parameter is dropped here instead of being sent to the API.
+  if (allowed.includes('planet')) {
+    const planet = values.planet?.trim();
+    if (planet) result.planet = planet;
+  }
+  if (allowed.includes('block')) {
+    const block = values.block?.trim();
+    if (block) result.block = block;
+  }
   const width = parseMapDimension(values.width);
   if (width !== null) result.width = width;
   const height = parseMapDimension(values.height);
