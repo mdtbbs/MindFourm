@@ -17,6 +17,7 @@
     "bodyLabel": "本文",
     "bodyPlaceholder": "本文を入力してください。画像は貼り付けるかドラッグしてアップロードできます…",
     "category": "カテゴリ",
+    "categoryDefaultHint": "カテゴリを選択しない場合、管理者が設定した既定のカテゴリに投稿されます。",
     "tags": "タグ",
     "tagsPlaceholder": "タグはカンマで区切ってください",
     "tagsAvailable": "使用可能: {tags}",

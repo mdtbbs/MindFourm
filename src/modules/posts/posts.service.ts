@@ -143,6 +143,20 @@ export class PostsService {
     dto.title = normalizePostTitle(dto.title);
     if (!dto.title) throw new BadRequestException('标题不能为空');
 
+    const hasRequestedCategory = dto.category_id !== undefined && dto.category_id !== null;
+    const configuredDefaultCategory = hasRequestedCategory
+      ? null
+      : await this.settingsService.get?.('default_post_category_id');
+    const parsedDefaultCategoryId = typeof configuredDefaultCategory === 'string'
+      && /^\d+$/.test(configuredDefaultCategory.trim())
+      ? Number(configuredDefaultCategory.trim())
+      : undefined;
+    const categoryId = hasRequestedCategory
+      ? dto.category_id
+      : Number.isSafeInteger(parsedDefaultCategoryId) && (parsedDefaultCategoryId ?? 0) > 0
+        ? parsedDefaultCategoryId
+        : undefined;
+
     // JSON is the canonical rich-text source for updated clients. Markdown remains
     // a compatibility projection used by existing services and older clients.
     const richJsonWrite = dto.content_json !== undefined && dto.content_json !== null;
@@ -179,13 +193,17 @@ export class PostsService {
     // rollback cannot leave the author paid and the moderators notified for a post
     // that does not exist.
     const { post, authorUsername } = await this.dataSource.transaction(async (manager) => {
-      // Validate category if provided
-      if (dto.category_id) {
+      // Respect an explicitly selected category; otherwise apply the admin-configured
+      // default. A stale default must not silently create uncategorized posts.
+      if (categoryId !== undefined && categoryId !== null) {
         const category = await manager.findOne(Category, {
-          where: { id: dto.category_id },
+          where: { id: categoryId },
         });
         if (!category) {
-          throw new BadRequestException('分类不存在');
+          throw new BadRequestException(hasRequestedCategory ? '分类不存在' : '管理员设置的默认板块不存在，请联系管理员调整设置');
+        }
+        if (!hasRequestedCategory && category.is_active !== 1) {
+          throw new BadRequestException('管理员设置的默认板块已停用，请联系管理员调整默认板块');
         }
       }
 
@@ -193,7 +211,7 @@ export class PostsService {
       const newPost = manager.create(Post, {
         user_id: userId,
         content_language: dto.content_language?.trim() || 'unknown',
-        category_id: dto.category_id,
+        category_id: categoryId,
         required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
         source: provenance.source || 'USER',

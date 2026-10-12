@@ -287,6 +287,7 @@ export default function PostForm() {
                 onChange={e => setCategoryId(e.target.value)}
                 options={categoryOptions}
               />
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('postForm.categoryDefaultHint')}</p>
             </div>
 
             {/* Tags */}

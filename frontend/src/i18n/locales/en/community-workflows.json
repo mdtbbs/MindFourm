@@ -17,6 +17,7 @@
     "bodyLabel": "Discussion content",
     "bodyPlaceholder": "Write your discussion. Paste or drop images to upload them…",
     "category": "Category",
+    "categoryDefaultHint": "If you leave this blank, your post will use the default category set by an admin.",
     "tags": "Tags",
     "tagsPlaceholder": "Separate tags with commas",
     "tagsAvailable": "Available: {tags}",

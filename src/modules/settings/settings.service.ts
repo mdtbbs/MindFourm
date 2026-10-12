@@ -339,6 +339,12 @@ export class SettingsService implements OnModuleInit {
       'resource_upload_directory',
       'home_ad_slots',
     ]),
+    posts: new Set([
+      'posts_per_page',
+      'max_post_length',
+      'allow_attachments',
+      'default_post_category_id',
+    ]),
     brand: new Set([
       'site_name',
       'site_tagline',
@@ -535,6 +541,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
       { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },
+      { key: 'default_post_category_id', value: '', category: 'posts', description: 'Category used for posts when the author does not choose one' },
       { key: 'max_post_length', value: '10000', category: 'posts', description: 'Maximum post length' },
       { key: 'allow_attachments', value: 'true', category: 'posts', description: 'Allow file attachments' },
       { key: 'default_sort', value: 'newest', category: 'display', description: 'Default post sort order' },

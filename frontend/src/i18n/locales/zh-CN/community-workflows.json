@@ -17,6 +17,7 @@
     "bodyLabel": "帖子正文",
     "bodyPlaceholder": "使用富文本编辑器编写帖子内容，支持粘贴或拖放上传图片…",
     "category": "分类",
+    "categoryDefaultHint": "不选择板块时，帖子会发布到管理员设置的默认板块。",
     "tags": "标签",
     "tagsPlaceholder": "用逗号分隔标签",
     "tagsAvailable": "可用：{tags}",
