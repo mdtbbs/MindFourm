@@ -75,6 +75,7 @@ export default function ResourceFilters({
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterTrigger = useRef<HTMLButtonElement>(null);
   const mobilePanel = useRef<HTMLElement>(null);
+  const pendingQuery = useRef<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   const closeMobileFilters = () => {
@@ -111,10 +112,22 @@ export default function ResourceFilters({
   useEffect(() => setLocalMapValues((current) => ({ ...current, width: urlWidth })), [urlWidth]);
   useEffect(() => setLocalMapValues((current) => ({ ...current, height: urlHeight })), [urlHeight]);
 
+  /**
+   * A commit chains off the query this component last navigated to, not off the
+   * `searchParams` of the current render: two commits in a row (a keyboard Tab
+   * through two text conditions, no pause) both start from the same render, and
+   * the second would otherwise overwrite the first with a stale snapshot.
+   */
   const updateFilters = useCallback((updates: Record<string, string | null>) => {
-    const query = mergeResourceQuery(searchParams.toString(), updates);
+    const query = mergeResourceQuery(pendingQuery.current ?? searchParams.toString(), updates);
+    pendingQuery.current = query;
     router.push(query ? `/resources?${query}` : '/resources');
   }, [router, searchParams]);
+
+  // The render caught up with the navigation: from here the URL is authority
+  // again, so a later commit need not chain off a pending query.
+  const renderedQuery = searchParams.toString();
+  useEffect(() => { pendingQuery.current = null; }, [renderedQuery]);
 
   const removeFilter = (key: string) => {
     if (key === 'search') setLocalSearch('');

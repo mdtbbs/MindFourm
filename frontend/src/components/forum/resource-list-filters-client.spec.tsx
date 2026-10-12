@@ -80,6 +80,12 @@ describe('ResourceFilters map and blueprint conditions', () => {
   const commit = async (input: HTMLInputElement) => {
     await act(async () => { input.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })); });
   };
+  /** Enter commits the field without leaving it, so focus never moves on its own. */
+  const pressEnter = async (input: HTMLInputElement) => {
+    await act(async () => {
+      input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
+  };
   // React maps onFocus to the bubbling focusin event, so a bare 'focus'
   // dispatch is ignored; focus() is what a user coming back to the field does.
   const focusField = async (input: HTMLInputElement) => {
@@ -252,6 +258,63 @@ describe('ResourceFilters map and blueprint conditions', () => {
     await setValue(field('desktop', 'width'), '');
     await commit(field('desktop', 'width'));
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  /**
+   * D1: a keyboard Tab through both dimension fields commits the second field
+   * before the first navigation has rendered. Both commits used to start from
+   * the same rendered `searchParams` snapshot, so the second overwrote the
+   * first and the condition the user typed silently vanished from the URL.
+   */
+  it('keeps both dimensions when they are committed by blur without a pause', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await commit(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(String(mockPush.mock.calls[0][0])).toBe('/resources?resource_kind=map&width=128');
+    expect(String(mockPush.mock.calls[1][0])).toBe('/resources?resource_kind=map&width=128&height=64');
+  });
+
+  it('keeps both dimensions when they are committed by Enter without a pause', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await pressEnter(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await pressEnter(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    const last = pushQuery();
+    expect(last.get('width')).toBe('128');
+    expect(last.get('height')).toBe('64');
+    expect(last.get('resource_kind')).toBe('map');
+  });
+
+  it('keeps a blueprint block and both dimensions committed back to back', async () => {
+    // Blueprint exposes block/width/height, so the same Tab walk crosses three
+    // fields: a commit that starts from a stale snapshot loses two of them.
+    await mount('resource_kind=schematic', 'schematic');
+    await setValue(field('desktop', 'block'), 'router');
+    await commit(field('desktop', 'block'));
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await pressEnter(field('desktop', 'height'));
+
+    expect(pushQuery().toString()).toBe('resource_kind=schematic&block=router&width=128&height=64');
+  });
+
+  it('drops an invalid dimension without taking the freshly committed one with it', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '0');
+    await commit(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(pushQuery().toString()).toBe('resource_kind=map&width=128');
   });
 
   it('commits a valid dimension and keeps the sibling conditions in the same query', async () => {
