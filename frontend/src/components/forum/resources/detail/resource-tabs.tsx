@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { ArrowDownToLine, Download, FileArchive, Image as ImageIcon, MessageSquare, Package } from 'lucide-react';
 import type { Resource } from '@/types';
 import { resourceApi } from '@/lib/api/client';
@@ -9,6 +10,7 @@ import ResourceCommentThread from '../../resource-comment-thread';
 import { useI18n } from '@/i18n/provider';
 import Link from 'next/link';
 import { buildHybridParam } from '@/lib/seo/hybrid-param';
+import ResourceVersionChangeSummary, { type VersionChangeCache } from './resource-version-change-summary';
 
 export type ResourceTab = 'overview' | 'updates' | 'versions' | 'reviews';
 
@@ -31,6 +33,12 @@ export default function ResourceTabs({ resource, selectedVersionPublicId, active
   commentCount: number; onCommentCountChange: (count: number) => void;
 }) {
   const { t, locale } = useI18n();
+  // Diff responses are cached per (kind, resource, version) so switching tabs or
+  // re-rendering the panel never re-requests the same version pair.
+  const changeCache = useRef<VersionChangeCache>(new Map());
+  // Same default the rest of the detail page uses: the selected release, or the
+  // newest published one when the reader has not picked a historical version.
+  const changeSummaryVersion = selectedVersionPublicId || resource.versions?.find((version) => version.public_id)?.public_id;
   const tabs = [
     { id: 'overview' as const, label: t('resourceTabs.overview'), icon: Package },
     { id: 'updates' as const, label: t('resourceTabs.updates'), icon: ArrowDownToLine, count: resource.versions?.length || 0 },
@@ -42,7 +50,7 @@ export default function ResourceTabs({ resource, selectedVersionPublicId, active
   return <section aria-label={t('resourceTabs.detailAria')} className="min-w-0">
     <div className="mb-5 flex gap-1 overflow-x-auto border-b border-[var(--border)]" role="tablist" aria-label={t('resourceTabs.sectionsAria')}>{tabs.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => onChange(id)} className={`relative inline-flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-semibold ${activeTab === id ? 'text-[var(--primary-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}><Icon className="h-4 w-4" />{label}{count ? <span className="rounded-full bg-[var(--bg-elevated)] px-1.5 py-0.5 text-xs">{new Intl.NumberFormat(locale).format(count)}</span> : null}{activeTab === id && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--primary)]" />}</button>)}</div>
     {activeTab === 'overview' && <div className="space-y-5"><section className="py-5"><h2 className="mb-4 text-xl font-bold text-[var(--text)]">{t('resourceTabs.description')}</h2>{resource.content_json || resource.content ? <RichContentRenderer json={resource.content_json} markdownFallback={resource.content} /> : <p className="text-[var(--text-muted)]">{t('resourceTabs.emptyDescription')}</p>}</section>{metadata?.gallery_images?.length ? <section className="border-t border-[var(--border)] py-5"><h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-[var(--text)]"><ImageIcon className="h-5 w-5" />{t('resourceTabs.gallery')}</h2><div className="grid gap-3 sm:grid-cols-2">{metadata.gallery_images.map((image) => <img key={image} src={image} alt={`${resource.title} — ${t('resourceTabs.gallery')}`} className={`max-h-80 w-full ${resource.resource_kind === 'map' || resource.resource_kind === 'schematic' ? 'object-contain' : 'object-cover'}`} />)}</div></section> : null}</div>}
-    {activeTab === 'updates' && <section className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-5 text-xl font-bold text-[var(--text)]">{t('resourceTabs.updates')}</h2>{metadata?.changelog && <div className="mb-6 border-b border-[var(--border)] pb-6"><MarkdownRenderer content={metadata.changelog} /></div>}{resource.versions?.length ? <div className="space-y-6">{resource.versions.map((version) => <article key={version.id} className="relative border-l-2 border-[var(--primary)] pl-5"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[var(--text)]">{version.version || t('resourceTabs.versionUnnamed')}</h3><time className="text-sm text-[var(--text-muted)]">{formatDate(version.published_at || version.created_at, locale)}</time></div>{version.release_notes_markdown || version.release_notes || version.content ? <div className="mt-2"><MarkdownRenderer content={version.release_notes_markdown || version.release_notes || version.content || ''} /></div> : <p className="mt-2 text-sm text-[var(--text-muted)]">{t('resourceTabs.noReleaseNotes')}</p>}</article>)}</div> : <p className="text-[var(--text-muted)]">{t('resourceTabs.noChangelog')}</p>}</section>}
+    {activeTab === 'updates' && <section className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-5 text-xl font-bold text-[var(--text)]">{t('resourceTabs.updates')}</h2><ResourceVersionChangeSummary resourcePublicId={resource.public_id} resourceKind={resource.resource_kind} toVersionPublicId={changeSummaryVersion} versions={resource.versions} cache={changeCache.current} />{metadata?.changelog && <div className="mb-6 border-b border-[var(--border)] pb-6"><MarkdownRenderer content={metadata.changelog} /></div>}{resource.versions?.length ? <div className="space-y-6">{resource.versions.map((version) => <article key={version.id} className="relative border-l-2 border-[var(--primary)] pl-5"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[var(--text)]">{version.version || t('resourceTabs.versionUnnamed')}</h3><time className="text-sm text-[var(--text-muted)]">{formatDate(version.published_at || version.created_at, locale)}</time></div>{version.release_notes_markdown || version.release_notes || version.content ? <div className="mt-2"><MarkdownRenderer content={version.release_notes_markdown || version.release_notes || version.content || ''} /></div> : <p className="mt-2 text-sm text-[var(--text-muted)]">{t('resourceTabs.noReleaseNotes')}</p>}</article>)}</div> : <p className="text-[var(--text-muted)]">{t('resourceTabs.noChangelog')}</p>}</section>}
     {activeTab === 'versions' && <section className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-5 text-xl font-bold text-[var(--text)]">{t('resourceTabs.versionsTitle')}</h2>{resource.versions?.length ? <div className="space-y-3">{resource.versions.map((version) => {
       const detailHref = version.public_id
         ? `/resources/${buildHybridParam(resource.id, resource.slug || '')}/versions/${encodeURIComponent(version.public_id)}`
