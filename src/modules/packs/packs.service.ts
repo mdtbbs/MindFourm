@@ -9,10 +9,9 @@ import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourcePackItem } from '@entities/resource-pack-item.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
-import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
-import { ResourceVersionDependency } from '@entities/resource-version-dependency.entity';
 import { CapabilitiesService } from '../capabilities/capabilities.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
+import { ResourceDependencyReadService, UnifiedCompatibility, UnifiedDependency } from '../resources/resource-dependency-read.service';
 import { getClientIp } from '@common/utils/client-context.util';
 import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
 
@@ -35,8 +34,7 @@ export class PacksService {
     @InjectRepository(ResourceCategory) private readonly categoryRepo: Repository<ResourceCategory>,
     @InjectRepository(ResourceVersion) private readonly versionRepo: Repository<ResourceVersion>,
     @InjectRepository(ResourceFile) private readonly fileRepo: Repository<ResourceFile>,
-    @InjectRepository(ResourceVersionDependency) private readonly dependencyRepo: Repository<ResourceVersionDependency>,
-    @InjectRepository(ResourceVersionCompatibility) private readonly compatibilityRepo: Repository<ResourceVersionCompatibility>,
+    private readonly dependencyRead: ResourceDependencyReadService,
     private readonly dataSource: DataSource,
     private readonly capabilities: CapabilitiesService,
     private readonly downloadGrants: DownloadGrantService,
@@ -194,17 +192,9 @@ export class PacksService {
       throw new NotFoundException('Pack 清单包含不可用的固定版本');
     }
 
-    const dependencies = await this.dependencyRepo.find({
-      where: { resource_version_id: In(memberVersionIds) },
-      order: { sort_order: 'ASC', id: 'ASC' },
-    });
-    const dependencyTargetIds = [...new Set(dependencies
-      .map((item) => Number(item.target_resource_id))
-      .filter((id) => Number.isInteger(id) && id > 0))];
-    const dependencyTargets = dependencyTargetIds.length
-      ? await this.resourceRepo.find({ where: { id: In(dependencyTargetIds) } })
-      : [];
-    const categoryIds = [...new Set([...memberResources, ...dependencyTargets]
+    // Member dependencies are resolved through the unified read projection in
+    // getManifest; here we only need member categories for visibility checks.
+    const categoryIds = [...new Set([...memberResources]
       .map((resource) => Number(resource?.category_id))
       .filter((id) => Number.isInteger(id) && id > 0))];
     const activeCategoryIds = categoryIds.length
@@ -222,16 +212,16 @@ export class PacksService {
     });
   }
 
-  private gameVersion(compatibilities: ResourceVersionCompatibility[]): string | null {
+  private gameVersion(compatibilities: UnifiedCompatibility[]): string | null {
     const compatible = compatibilities
       .filter((item) => item.runtime === 'mindustry')
-      .sort((a, b) => String(a.game_series || '').localeCompare(String(b.game_series || ''))
-        || String(a.min_version_value || '').localeCompare(String(b.min_version_value || ''))
-        || String(a.max_version_value || '').localeCompare(String(b.max_version_value || '')))[0];
+      .sort((a, b) => String(a.game_version || '').localeCompare(String(b.game_version || ''))
+        || String(a.min_version || '').localeCompare(String(b.min_version || ''))
+        || String(a.max_version || '').localeCompare(String(b.max_version || '')))[0];
     if (!compatible) return null;
-    if (compatible.min_version_value && compatible.min_version_value === compatible.max_version_value) return compatible.min_version_value;
-    if (compatible.min_version_value && compatible.max_version_value) return `${compatible.min_version_value}..${compatible.max_version_value}`;
-    return compatible.min_version_value || compatible.max_version_value || compatible.game_series || null;
+    if (compatible.min_version && compatible.min_version === compatible.max_version) return compatible.min_version;
+    if (compatible.min_version && compatible.max_version) return `${compatible.min_version}..${compatible.max_version}`;
+    return compatible.min_version || compatible.max_version || compatible.game_version || null;
   }
 
   async getManifest(packPublicId: string, versionPublicId: string) {
@@ -240,39 +230,19 @@ export class PacksService {
     await this.assertPublicResource(pack);
     if (version.status !== 'published' || !version.public_id) throw new NotFoundException('Pack 版本不存在或尚未发布');
     const items = await this.resolvePublicManifestItems(version.id);
+    // Unified modern-first read: modern tables win; uncopied legacy rows are
+    // merged in and dependency target visibility is resolved by the projection.
     const [compatibilities, dependencies] = await Promise.all([
-      this.compatibilityRepo.find({ where: { resource_version_id: version.id } }),
+      this.dependencyRead.collectCompatibilities([version.id]).then((map) => map.get(version.id) || []),
       items.length
-        ? this.dependencyRepo.find({ where: items.map((item) => ({ resource_version_id: item.version.id })), order: { sort_order: 'ASC', id: 'ASC' } })
-        : Promise.resolve([]),
+        // Pack keeps suppressing dependency targets filed under a deactivated
+        // topic, just like it does for its pinned members.
+        ? this.dependencyRead.collectDependencies(
+            items.map((item) => item.version.id),
+            { requireActiveTargetCategory: true },
+          ).then((map) => [...map.values()].flat())
+        : Promise.resolve([] as UnifiedDependency[]),
     ]);
-    const dependencyTargetIds = [...new Set(dependencies.map((item) => item.target_resource_id).filter((id): id is number => Number.isInteger(id)))];
-    const targetResources = dependencyTargetIds.length
-      ? await this.resourceRepo.find({ where: { id: In(dependencyTargetIds) } })
-      : [];
-    const targetCategoryIds = [...new Set(targetResources
-      .map((resource) => Number(resource.category_id))
-      .filter((id) => Number.isInteger(id) && id > 0))];
-    const activeTargetCategoryIds = targetCategoryIds.length
-      ? new Set((await this.categoryRepo.find({ where: { id: In(targetCategoryIds), is_active: 1 } }))
-        .filter((category) => Number(category.is_active) === 1)
-        .map((category) => Number(category.id)))
-      : new Set<number>();
-    const targetPublicIds = new Map<number, string | null>();
-    targetResources.forEach((resource) => {
-      let publicId: string | null = null;
-      const visible = Number(resource.is_public) === 1
-        && PUBLIC_RESOURCE_STATUSES.has(resource.status || '')
-        && (resource.visibility == null || resource.visibility === 'public')
-        && resource.merged_into_resource_id == null
-        && Boolean(resource.public_id);
-      if (visible && resource.category_id) {
-        if (activeTargetCategoryIds.has(Number(resource.category_id))) publicId = resource.public_id;
-      } else if (visible) {
-        publicId = resource.public_id;
-      }
-      targetPublicIds.set(resource.id, publicId);
-    });
 
     return {
       schema_version: 1,
@@ -295,7 +265,7 @@ export class PacksService {
           .filter((dependency) => dependency.resource_version_id === memberVersion.id)
           .map((dependency) => ({
             type: dependency.dependency_type,
-            resource_public_id: dependency.target_resource_id ? targetPublicIds.get(dependency.target_resource_id) || null : null,
+            resource_public_id: dependency.target_public_id,
             external_identifier: dependency.external_identifier,
             version_constraint: dependency.version_constraint,
             notes: dependency.notes,
