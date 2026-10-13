@@ -186,12 +186,12 @@ describe('ResourcesController internal file access', () => {
     try {
       const file = join(folder, 'legacy-root.msav');
       await writeFile(file, Buffer.from('legacy root bytes'));
-      // The root file is streamed, but a published version with its own file row
-      // also exists. Recording `stored` would hang the completion on the file
-      // that was never sent.
+      // The root file is streamed while a published version with its own file
+      // row exists under a different path. Recording `stored` would hang the
+      // completion on the file that was never sent.
       const { controller, domain } = setup({ id: 12, file_path: file, file_name: 'legacy-root.msav', mime_type: 'application/octet-stream' });
       Object.assign(domain, {
-        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31 }, file: { id: 42 } }),
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31, file_path: join(folder, 'published-but-not-streamed.msav') }, file: { id: 42 } }),
       });
       const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
       Object.defineProperty(controller, 'downloadEvents', { value: events });
@@ -217,7 +217,7 @@ describe('ResourcesController internal file access', () => {
       await writeFile(file, Buffer.from('v3 bytes'));
       const { controller, domain } = setup({ id: 12, file_path: null });
       Object.assign(domain, {
-        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31 }, file: { id: 42 } }),
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31, file_path: file }, file: { id: 42 } }),
       });
       Object.defineProperty(controller, 'versionService', {
         value: { getDownloadTarget: jest.fn().mockResolvedValue({ id: 31, file_path: file, mime_type: 'application/octet-stream', file_name: 'v3.msav' }) },
@@ -234,6 +234,68 @@ describe('ResourcesController internal file access', () => {
       expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
         resource_id: 12, version_id: 31, file_id: 42,
       }), 'user:9');
+      (download as any).getStream?.();
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
+  it('attributes a bare-request completion to the published version whose bytes were streamed', async () => {
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-bare-published-'));
+    try {
+      const file = join(folder, 'published-v3.msav');
+      await writeFile(file, Buffer.from('published v3 bytes'));
+      // `getForFileAccess` has already swapped the resource's own path for the
+      // latest published version's, so a request that named no version still
+      // streams the version's bytes and must be recorded against it.
+      const { controller, domain } = setup({ id: 12, file_path: file, file_name: 'published-v3.msav', mime_type: 'application/octet-stream' });
+      Object.assign(domain, {
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31, file_path: file }, file: { id: 42 } }),
+      });
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      Object.defineProperty(controller, 'downloadEvents', { value: events });
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn();
+      const download = await controller.download(12, undefined, response as any, { user: null, headers: {} });
+      response.emit('finish');
+      await Promise.resolve();
+
+      // Nulling both ids here would give this request a different dedup key from
+      // `/download?version_id=31` for the same bytes, counting one visitor twice.
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        resource_id: 12, version_id: 31, file_id: 42,
+      }), expect.any(String));
+      (download as any).getStream?.();
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
+  it('attributes an explicit download of an older version to that version row', async () => {
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-old-version-'));
+    try {
+      const oldFile = join(folder, 'v2.msav');
+      await writeFile(oldFile, Buffer.from('v2 bytes'));
+      // `/download?version_id=31` naming an older version whose path differs
+      // from the resource's current path: the older version is what streamed.
+      const { controller, domain } = setup({ id: 12, file_path: join(folder, 'v4.msav'), file_name: 'v4.msav', mime_type: 'application/octet-stream' });
+      Object.assign(domain, {
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31, file_path: oldFile }, file: { id: 42 } }),
+      });
+      Object.defineProperty(controller, 'versionService', {
+        value: { getDownloadTarget: jest.fn().mockResolvedValue({ id: 31, file_path: oldFile, mime_type: 'application/octet-stream', file_name: 'v2.msav' }) },
+      });
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      Object.defineProperty(controller, 'downloadEvents', { value: events });
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn();
+      const download = await controller.download(12, '31', response as any, { user: null, headers: {} });
+      response.emit('finish');
+      await Promise.resolve();
+
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        resource_id: 12, version_id: 31, file_id: 42,
+      }), expect.any(String));
       (download as any).getStream?.();
     } finally { await rm(folder, { recursive: true, force: true }); }
   });

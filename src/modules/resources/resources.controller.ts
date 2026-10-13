@@ -706,12 +706,16 @@ export class ResourcesController {
       'Content-Disposition': attachmentContentDisposition(target.file_name || 'file'),
     });
 
-    // The recorded version/file must be the pair the bytes actually came from:
-    // a version row when the request named one (its primary file is `stored.file`),
-    // otherwise the resource's own legacy root file, which has no version or file
-    // row at all — never the newest published version, which was not streamed.
-    const streamedVersionId = versionId ? Number(versionId) : null;
-    const streamedFileId = streamedVersionId === null ? null : stored?.file.id ?? null;
+    // The recorded version/file pair must be the one the bytes actually came from.
+    // Deciding that by whether the request carried `?version_id` is wrong: a bare
+    // request streams a published version's bytes too, because `getForFileAccess`
+    // swaps `file_path` for the latest published version's own path before the
+    // stream is opened. Match the streamed path against the resolved version row
+    // instead — a stream whose path matches no version row (the legacy root file)
+    // records neither a version nor a file.
+    const streamedPair = stored && target.file_path === stored.version.file_path ? stored : null;
+    const streamedVersionId = streamedPair?.version.id ?? null;
+    const streamedFileId = streamedPair?.file.id ?? null;
 
     const stream = createReadStream(filePath);
     if (this.downloadEvents) {
