@@ -8,15 +8,26 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageClientService } from '../resource-storage-client.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { ResourceSubscriptionsService } from '../resource-subscriptions.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
-type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; status?: string; is_public?: number; visibility?: string };
+type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; title?: string; status?: string; is_public?: number; visibility?: string };
 type VersionRow = {
   id: number; public_id: string; status: string; version?: string; release_channel?: string;
   file_path?: string | null; file_name?: string | null; file_size?: number | null;
   mime_type?: string | null; content_hash?: string | null; renderer_preview_object_id?: string | null; renderer_preview_binding_id?: string | null;
 };
 type AnalysisRunRow = { id: number; parser_version: string; findings_json: unknown };
+
+// Internal transaction outcome: the public response is this shape minus the notification scaffolding,
+// which is why the two internal fields are split out into their own type.
+type ReviewOutcome = {
+  resource_public_id: string; version_public_id: string; action: string; status: string;
+  published_at: string | null; recommended: boolean;
+  subscriber_notification: { id: number; user_id: number; title?: string } | null;
+  notify_user_ids: number[];
+};
+type ReviewResponse = Omit<ReviewOutcome, 'subscriber_notification' | 'notify_user_ids'>;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ANALYZERS: Record<string, string> = {
@@ -35,6 +46,7 @@ export class ResourceV2ReviewService {
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly resClient?: ResourceStorageClientService,
     @Optional() private readonly previews?: ResourcePreviewService,
+    @Optional() private readonly subscriptions?: ResourceSubscriptionsService,
   ) {}
 
   async reviewVersion(resourcePublicId: string, versionPublicId: string, actorId: number, input: {
@@ -77,7 +89,7 @@ export class ResourceV2ReviewService {
 
     const changedBindings: Array<{ objectId: string; ownerId: string }> = [];
     let changedPreview: { resource: Resource; version: ResourceVersion } | null = null;
-    let outcome: any;
+    let outcome: ReviewOutcome;
     try {
     outcome = await this.dataSource.transaction(async (manager) => {
       const resource = await this.getResource(manager, resourcePublicId, true);
@@ -194,6 +206,8 @@ export class ResourceV2ReviewService {
          WHERE resource_id=? AND role IN ('owner','maintainer') AND status='active' AND user_id IS NOT NULL`,
         [resource.id],
       ) as Array<{ user_id: number }>;
+      const isPubliclyVisible = Boolean(action === 'approve' && resource.status === 'approved'
+        && Number(resource.is_public) === 1 && resource.visibility !== 'private');
       return {
         resource_public_id: resource.public_id,
         version_public_id: version.public_id,
@@ -201,6 +215,9 @@ export class ResourceV2ReviewService {
         status: nextStatus,
         published_at: action === 'approve' ? new Date().toISOString() : null,
         recommended: Boolean(isRecommended),
+        subscriber_notification: action === 'approve' && isPubliclyVisible
+          ? { id: Number(resource.id), user_id: Number(resource.user_id), title: resource.title }
+          : null,
         notify_user_ids: [...new Set([Number(resource.user_id), ...maintainers.map((member) => Number(member.user_id))])],
       };
     });
@@ -241,7 +258,26 @@ export class ResourceV2ReviewService {
         deduplicationKey: `resource-version-review:${action}:${outcome.version_public_id}:${userId}`,
       }).catch((error) => this.logger.warn(`Failed to notify Resource members after version review: ${(error as Error).message}`))));
     }
-    const { notify_user_ids: _notifyUserIds, ...response } = outcome;
+
+    // Subscribers hear about a version only after the approval transaction committed and the
+    // resource is actually public. Reuse the existing subscription semantics rather than
+    // building a second notification model. The deduplication key makes a retried or
+    // re-approved version idempotent.
+    if (this.subscriptions && outcome.subscriber_notification) {
+      await this.subscriptions.notifyResourceUpdate(
+        outcome.subscriber_notification as Resource,
+        { deduplicationKey: `resource-version-published:${outcome.version_public_id}` },
+      ).catch((error) => this.logger.warn(`Failed to notify Resource subscribers after version review: ${(error as Error).message}`));
+    }
+
+    const response: ReviewResponse = {
+      resource_public_id: outcome.resource_public_id,
+      version_public_id: outcome.version_public_id,
+      action: outcome.action,
+      status: outcome.status,
+      published_at: outcome.published_at,
+      recommended: outcome.recommended,
+    };
     return response;
   }
 
@@ -422,7 +458,7 @@ export class ResourceV2ReviewService {
   private async getResource(executor: SqlExecutor, publicId: string, lock: boolean): Promise<ResourceRow> {
     this.assertUuid(publicId, 'Resource');
     const rows = await executor.query(
-      `SELECT id,public_id,user_id,resource_kind,status,is_public,visibility FROM resources
+      `SELECT id,public_id,user_id,resource_kind,title,status,is_public,visibility FROM resources
        WHERE public_id=? AND deleted_at IS NULL LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
       [publicId],
     ) as ResourceRow[];
