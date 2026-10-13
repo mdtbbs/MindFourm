@@ -479,27 +479,37 @@ describe('ResourcesService', () => {
   // rows visible, and show a migrated mirror exactly once. The list filter is a
   // SQL guard (asserted on the query), the filter options and the detail rows
   // read through the shared modern-first projection.
-  // The list filter is a SQL guard. These assertions pin the *schema-level*
-  // branch set (table and column names) rather than alias names, so removing a
-  // whole data source goes red while a self-consistent alias rename — which is
-  // behaviourally identical SQL — does not produce a false alarm. The
-  // placeholder/parameter bind check below is what catches a partial rename,
-  // the only rename that would actually break the query.
+  //
+  // The assertions below pin the *schema-level* branch set (table names, then
+  // the columns read through each table's own alias) rather than the alias
+  // spelling, so removing a whole data source goes red while a self-consistent
+  // alias rename — behaviourally identical SQL — does not. Renaming a *column*
+  // does stay red: that is a behaviour change, not a cosmetic one.
   it('matches the supported_version filter against every compatibility source so a modern-only release stays visible', async () => {
     const { service, defaultQb } = createService();
     await service.getList({ limit: 20, supported_version: 'v8' } as any, { scope: 'public' });
     const sql = defaultQb.andWhere.mock.calls.map(([clause]) => String(clause)).find((clause) => clause.includes('supportedVersion')) as string;
+    // Read each table through the alias the query itself chose: the branch has
+    // to exist and read the right columns, but its alias is free.
+    const aliasOf = (table: string) =>
+      sql.match(new RegExp(`JOIN ${table} (\\w+) ON \\1\\.resource_version_id = rv\\.id`))?.[1];
     // Modern table: new releases write here (resource-versions.service.ts:491).
-    expect(sql).toContain('INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id');
-    expect(sql).toContain('rc.min_game_version');
-    expect(sql).toContain('rc.max_game_version');
+    const modernAlias = aliasOf('resource_compatibilities');
+    expect(modernAlias).toBeDefined();
+    expect(sql).toContain(`${modernAlias}.min_game_version`);
+    expect(sql).toContain(`${modernAlias}.max_game_version`);
     // Legacy table: rows the migration has not mirrored stay searchable.
-    expect(sql).toContain('INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id');
-    expect(sql).toContain('rvc.min_version_value');
-    expect(sql).toContain('rvc.max_version_value');
+    const legacyAlias = aliasOf('resource_version_compatibilities');
+    expect(legacyAlias).toBeDefined();
+    expect(sql).toContain(`${legacyAlias}.min_version_value`);
+    expect(sql).toContain(`${legacyAlias}.max_version_value`);
     // Version-bounded releases that never got a compatibility row, same branch
     // the search provider has (mdtbbs-search.providers.ts:87).
-    expect(sql).toContain('FROM resource_versions rvg WHERE rvg.resource_id = resource.id AND rvg.status = \'published\' AND (rvg.game_version_min = :supportedVersion OR rvg.game_version_max = :supportedVersion)');
+    const releaseAlias = sql.match(/FROM resource_versions (\w+) WHERE \1\.resource_id = resource\.id/)?.[1];
+    expect(releaseAlias).toBeDefined();
+    expect(sql).toContain(`${releaseAlias}.status = 'published'`);
+    expect(sql).toContain(`${releaseAlias}.game_version_min = :supportedVersion`);
+    expect(sql).toContain(`${releaseAlias}.game_version_max = :supportedVersion`);
     // Metadata fallback is unchanged.
     expect(sql).toContain("JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions')");
     expect(defaultQb.andWhere).toHaveBeenCalledWith(sql, { supportedVersion: 'v8' });
@@ -745,6 +755,47 @@ describe('ResourcesService', () => {
     const detail = await service.getByIdWithVersions(27);
     expect(detail.versions[0].compatibility).toHaveLength(1);
     expect(detail.versions[0].compatibility[0]).toMatchObject({ min_version_value: '145', provenance: 'user_declared' });
+  });
+
+  // Same collapse, but the two modern rows do not agree on what is known about
+  // the constraint: one carries the analyzer's evidence, the other only the
+  // writer's defaults. Folding them must keep the row that actually knows
+  // something — the renderer `confidence` and the `analyzer` provenance are the
+  // whole point of surfacing this section, and a writer default must not be
+  // allowed to overwrite them.
+  it('keeps the analyzer evidence when two modern rows restate one constraint with different confidence', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'schematic', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          return [
+            // The submitter's double-write: channel only, nothing learned.
+            { id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '145', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+            // The analyzer's own row for the same bounds (`analyzer` is what the
+            // Resource Center migration derives from `inferred`).
+            { id: 2, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '145', max_game_version: null, channel: null, platform_key: null, status: 'declared', source: 'analyzer', confidence: 'high', notes: null },
+          ];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) return [];
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+
+    expect(detail.versions[0].compatibility).toHaveLength(1);
+    expect(detail.versions[0].compatibility[0]).toMatchObject({
+      min_version_value: '145', provenance: 'inferred', confidence: 'high',
+    });
   });
 
   // Two `dto.compatibility` entries can share bounds and still be separate
