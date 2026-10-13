@@ -22,6 +22,13 @@ interface ResourceLoadMoreProps {
   resourceKind?: string;
   /** Validated map/blueprint conditions; absent for every other resource kind. */
   mapFilters?: MapFilterValues;
+  /**
+   * Version-level Mod dependency conditions, already normalised by the page.
+   * Forwarded verbatim: a continuation that dropped them would silently widen
+   * the result set, and the cursor belongs to the filtered list.
+   */
+  requiredMods?: string;
+  excludedMods?: string;
   /** Request locale, so card counters render in the visitor's language. */
   locale?: Locale;
 }
@@ -38,6 +45,8 @@ export default function ResourceLoadMore({
   compatibility,
   resourceKind,
   mapFilters,
+  requiredMods,
+  excludedMods,
   locale,
 }: ResourceLoadMoreProps) {
   const [resources, setResources] = useState<Resource[]>(initialResources);
@@ -68,6 +77,8 @@ export default function ResourceLoadMore({
         block: structured.block,
         width: structured.width,
         height: structured.height,
+        required_mods: requiredMods,
+        excluded_mods: excludedMods,
       });
       setResources((prev) => [...prev, ...result.data]);
       setCursor(result.next_cursor);

@@ -1309,10 +1309,10 @@ export const resourceApi = {
     request<{ exact: boolean; structure: boolean; normalized: boolean; existing_resources: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }>; similar_resources?: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }> }>('/api/resources/duplicates/check', {
       method: 'POST', body: JSON.stringify(input), skipCache: true,
     }),
-  getFilterOptions: () => request<{ supported_versions: string[]; compatibility: string[]; planets: string[] }>('/api/resources/filter-options'),
-  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string; planet?: string; block?: string; width?: number; height?: number }) =>
+  getFilterOptions: () => request<{ supported_versions: string[]; compatibility: string[]; planets: string[]; required_mods: string[] }>('/api/resources/filter-options'),
+  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string; planet?: string; block?: string; width?: number; height?: number; required_mods?: string; excluded_mods?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort, tag: params?.tag, supported_version: params?.supported_version, compatibility: params?.compatibility, resource_kind: params?.resource_kind, planet: params?.planet, block: params?.block, width: params?.width, height: params?.height })}`
+      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort, tag: params?.tag, supported_version: params?.supported_version, compatibility: params?.compatibility, resource_kind: params?.resource_kind, planet: params?.planet, block: params?.block, width: params?.width, height: params?.height, required_mods: params?.required_mods, excluded_mods: params?.excluded_mods })}`
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),

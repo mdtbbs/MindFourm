@@ -9,17 +9,23 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { RESOURCE_KINDS } from '@/lib/display-labels';
 import {
   MAP_FILTER_KEYS,
+  MOD_FILTER_KEYS,
   MAX_BLOCK_LENGTH,
+  MAX_MOD_FILTER_LENGTH,
   MAX_MAP_DIMENSION,
   MIN_MAP_DIMENSION,
   blockInvalid,
   isBlockFilterKind,
   isMapFilterKind,
+  isModFilterKind,
   mapDimensionInvalid,
   mapFilterKeys,
   mapTextFilterKeys,
   mergeResourceQuery,
+  modListValue,
   normalizeResourceFilterParams,
+  parseModList,
+  type ModFilterKey,
 } from '@/lib/resources/query';
 import { useI18n } from '@/i18n/provider';
 
@@ -27,7 +33,11 @@ interface ResourceFiltersProps {
   categories: ResourceCategory[]; initialCategory?: string; initialSearch?: string; initialSort?: string;
   initialTag?: string; initialSupportedVersion?: string; initialCompatibility?: string; initialResourceKind?: string;
   initialPlanet?: string; initialBlock?: string; initialWidth?: string; initialHeight?: string;
+  /** Normalised version-level Mod dependency conditions; map/blueprint only. */
+  initialRequiredMods?: string; initialExcludedMods?: string;
   supportedVersions: string[]; compatibilityOptions: string[]; planets: string[];
+  /** Publicly required Mod IDs a map/blueprint can be filtered by. */
+  modOptions: string[];
 }
 
 /** Text conditions kept local while typing; the URL only ever holds committed values. */
@@ -37,13 +47,14 @@ type MapTextKey = (typeof ALL_MAP_TEXT_KEYS)[number];
 /** Every URL condition this component owns; Clear removes exactly these. */
 const OWNED_FILTER_KEYS = [
   'category_id', 'search', 'sort', 'tag', 'supported_version', 'compatibility', 'resource_kind',
-  ...MAP_FILTER_KEYS,
+  ...MAP_FILTER_KEYS, ...MOD_FILTER_KEYS,
 ] as const;
 
 export default function ResourceFilters({
   categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion,
   initialCompatibility, initialResourceKind, initialPlanet, initialBlock, initialWidth, initialHeight,
-  supportedVersions, compatibilityOptions, planets,
+  initialRequiredMods, initialExcludedMods,
+  supportedVersions, compatibilityOptions, planets, modOptions,
 }: ResourceFiltersProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -65,6 +76,12 @@ export default function ResourceFilters({
   const urlBlock = showBlockFilter ? searchParams.get('block') || initialBlock || '' : '';
   const urlWidth = showMapFilters ? searchParams.get('width') || initialWidth || '' : '';
   const urlHeight = showMapFilters ? searchParams.get('height') || initialHeight || '' : '';
+  // Same rule as the map conditions: only the kind that carries version-level
+  // dependency evidence renders the Mod controls, and the server has already
+  // dropped these keys from the URL for every other kind.
+  const showModFilters = isModFilterKind(resourceKind);
+  const urlRequiredMods = showModFilters ? searchParams.get('required_mods') || initialRequiredMods || '' : '';
+  const urlExcludedMods = showModFilters ? searchParams.get('excluded_mods') || initialExcludedMods || '' : '';
   // The submit path reads the same rule as the render path (`mapTextFilterKeys`
   // is `mapFilterKeys` filtered to text values), so a kind that stops rendering
   // a field also stops committing it.
@@ -72,6 +89,7 @@ export default function ResourceFilters({
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
   const [localMapValues, setLocalMapValues] = useState<Record<MapTextKey, string>>({ block: urlBlock, width: urlWidth, height: urlHeight });
+  const [localMods, setLocalMods] = useState<Record<ModFilterKey, string>>({ required_mods: urlRequiredMods, excluded_mods: urlExcludedMods });
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterTrigger = useRef<HTMLButtonElement>(null);
   const mobilePanel = useRef<HTMLElement>(null);
@@ -111,6 +129,10 @@ export default function ResourceFilters({
   useEffect(() => setLocalMapValues((current) => ({ ...current, block: urlBlock })), [urlBlock]);
   useEffect(() => setLocalMapValues((current) => ({ ...current, width: urlWidth })), [urlWidth]);
   useEffect(() => setLocalMapValues((current) => ({ ...current, height: urlHeight })), [urlHeight]);
+  // Each Mod field syncs only from its own URL value, exactly like the map
+  // fields, so committing one never discards text typed into the other.
+  useEffect(() => setLocalMods((current) => ({ ...current, required_mods: urlRequiredMods })), [urlRequiredMods]);
+  useEffect(() => setLocalMods((current) => ({ ...current, excluded_mods: urlExcludedMods })), [urlExcludedMods]);
 
   /**
    * A commit chains off the last query this component navigated to, not off the
@@ -149,7 +171,21 @@ export default function ResourceFilters({
     if (key === 'search') setLocalSearch('');
     if (key === 'tag') setLocalTag('');
     if ((ALL_MAP_TEXT_KEYS as readonly string[]).includes(key)) setLocalMapValues((current) => ({ ...current, [key]: '' }));
+    if ((MOD_FILTER_KEYS as readonly string[]).includes(key)) setLocalMods((current) => ({ ...current, [key]: '' }));
     updateFilters({ [key]: null });
+  };
+
+  /**
+   * Removing one Mod keeps the rest of its condition. The remaining tokens are
+   * re-serialised through the same normaliser the commits use, so a chip removal
+   * cannot leave a value shape the URL normaliser would rewrite.
+   */
+  const removeModToken = (key: ModFilterKey, token: string) => {
+    const committed = key === 'required_mods' ? urlRequiredMods : urlExcludedMods;
+    const remaining = parseModList(committed).filter((item) => item !== token);
+    const value = modListValue(remaining);
+    setLocalMods((current) => ({ ...current, [key]: value || '' }));
+    updateFilters({ [key]: value });
   };
 
   useEffect(() => {
@@ -170,6 +206,26 @@ export default function ResourceFilters({
       if (key === 'block' && blockInvalid(value)) continue;
       const committed = key === 'block' ? urlBlock : key === 'width' ? urlWidth : urlHeight;
       if (value !== committed) updates[key] = value || null;
+    }
+    if (!Object.keys(updates).length) return;
+    updateFilters(updates);
+  };
+
+  /**
+   * Mod conditions commit on blur, on Enter or when the mobile sheet applies.
+   * The value is normalised through the same parser the URL normaliser uses, so
+   * the query a visitor commits is byte-identical to the one SSR would derive
+   * from it: whitespace and duplicates drop, and an empty field removes the key.
+   * A list longer than the backend accepts is not committed at all — it would
+   * turn the whole page into a 400 error state.
+   */
+  const commitModFields = (keys: readonly ModFilterKey[]) => {
+    const updates: Record<string, string | null> = {};
+    for (const key of keys) {
+      const committed = key === 'required_mods' ? urlRequiredMods : urlExcludedMods;
+      const value = modListValue(parseModList(localMods[key]));
+      if (value === (committed || null)) continue;
+      updates[key] = value;
     }
     if (!Object.keys(updates).length) return;
     updateFilters(updates);
@@ -202,6 +258,7 @@ export default function ResourceFilters({
     setLocalSearch('');
     setLocalTag('');
     setLocalMapValues({ block: '', width: '', height: '' });
+    setLocalMods({ required_mods: '', excluded_mods: '' });
     // Same outlet as every other navigation — it reads and updates the pending
     // chain too, so a commit in the same render window chains off what Clear
     // left behind instead of reviving a condition Clear just removed.
@@ -212,13 +269,16 @@ export default function ResourceFilters({
 
   const applyMobileFilters = () => {
     if (showMapFilters) commitMapFields(mapTextKeys);
+    if (showModFilters) commitModFields(MOD_FILTER_KEYS);
     closeMobileFilters();
   };
 
+  // One count per URL condition, so the badge matches the chips below it.
+  const activeModCount = parseModList(urlRequiredMods).length + parseModList(urlExcludedMods).length;
   const activeFilters = [
     selectedCategory, urlSearch, tag, supportedVersion, compatibility, resourceKind,
     planet, urlBlock, urlWidth, urlHeight,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + activeModCount;
   const hasFilters = activeFilters > 0 || sort !== 'created_at';
   const chipClass = (active: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? 'bg-[var(--primary-button)] text-white' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'}`;
   const inputClass = 'min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]';
@@ -236,9 +296,11 @@ export default function ResourceFilters({
     const translated = t(`resourceList.resourceKind.${value}`);
     return translated === `resourceList.resourceKind.${value}` ? fallback : translated;
   };
-  const removableChip = (key: string, label: string) => <button key={key} type="button" onClick={() => removeFilter(key)} aria-label={t('resourceList.removeFilter', { filter: label })} className="inline-flex min-h-9 max-w-full items-center gap-1.5 border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"><span className="truncate">{label}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></button>;
+  // `onRemove` defaults to the whole-key removal; a Mod chip passes its own
+  // handler because removing one token keeps the rest of the condition.
+  const removableChip = (key: string, label: string, onRemove?: () => void) => <button key={key} type="button" onClick={onRemove ?? (() => removeFilter(key))} aria-label={t('resourceList.removeFilter', { filter: label })} className="inline-flex min-h-9 max-w-full items-center gap-1.5 border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"><span className="truncate">{label}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></button>;
 
-  const fieldId = (scope: string, key: string) => `resource-${scope}-map-${key}`;
+  const fieldId = (scope: string, key: string) => `resource-${scope}-filter-${key}`;
 
   /** Shared by the desktop menu and the mobile sheet, so both expose the same controls. */
   const mapFilterFields = (scope: string) => <div role="group" aria-label={t('resourceList.mapFilters')} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
@@ -295,6 +357,39 @@ export default function ResourceFilters({
     })}
   </div>;
 
+  /**
+   * Mod conditions, rendered by the desktop menu, the mobile sheet — one
+   * definition, so both surfaces expose the same controls and the same hint.
+   * The field mirrors the map text fields: local while typing, committed on
+   * blur/Enter/Apply.
+   */
+  const modFilterFields = (scope: string) => <div role="group" aria-label={t('resourceList.modFilters')} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+    {MOD_FILTER_KEYS.map((key) => {
+      const invalid = localMods[key].trim().length > MAX_MOD_FILTER_LENGTH;
+      const errorId = `${fieldId(scope, key)}-message`;
+      return <label key={key} className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, key)}>
+        {key === 'required_mods' ? t('resourceList.requiredMods') : t('resourceList.excludedMods')}
+        <input
+          id={fieldId(scope, key)}
+          value={localMods[key]}
+          autoComplete="off"
+          aria-invalid={invalid || undefined}
+          aria-describedby={errorId}
+          list={key === 'required_mods' && modOptions.length ? `${fieldId(scope, key)}-options` : undefined}
+          onChange={(event) => setLocalMods((current) => ({ ...current, [key]: event.target.value }))}
+          onBlur={() => commitModFields([key])}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitModFields([key]); } }}
+          placeholder={t('resourceList.modsPlaceholder')}
+          className={`${inputClass} ${invalid ? 'input-error' : ''}`}
+        />
+        <span id={errorId} role={invalid ? 'alert' : undefined} className={`text-[11px] ${invalid ? 'input-error-message' : 'text-[var(--text-muted)]'}`}>
+          {invalid ? t('resourceList.modsTooLong', { max: MAX_MOD_FILTER_LENGTH }) : t('resourceList.modsHint', { max: MAX_MOD_FILTER_LENGTH })}
+        </span>
+        {key === 'required_mods' && modOptions.length ? <datalist id={`${fieldId(scope, key)}-options`}>{modOptions.map((value) => <option key={value} value={value} />)}</datalist> : null}
+      </label>;
+    })}
+  </div>;
+
   const topicField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'topic')}>{t('resourceList.topic')}<select id={fieldId(scope, 'topic')} value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allTopics')}</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>;
   const platformField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'platform')}>{t('resourceList.platform')}<select id={fieldId(scope, 'platform')} value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlatforms')}</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>;
   const tagField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)] sm:col-span-2" htmlFor={fieldId(scope, 'tag')}>{t('resourceList.tag')}<input id={fieldId(scope, 'tag')} value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder={t('resourceList.enterTag')} className={inputClass} /></label>;
@@ -316,6 +411,7 @@ export default function ResourceFilters({
             {topicField('desktop')}
             {platformField('desktop')}
             {showMapFilters ? mapFilterFields('desktop') : null}
+            {showModFilters ? modFilterFields('desktop') : null}
             {tagField('desktop')}
           </div>
         </details>
@@ -330,6 +426,7 @@ export default function ResourceFilters({
           {topicField('mobile')}
           {platformField('mobile')}
           {showMapFilters ? mapFilterFields('mobile') : null}
+          {showModFilters ? modFilterFields('mobile') : null}
           {tagField('mobile')}
         </div>
         <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { clearAll(); closeMobileFilters(); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">{t('resourceList.clear')}</button><button type="button" onClick={applyMobileFilters} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{t('resourceList.apply')}</button></div>
@@ -352,6 +449,8 @@ export default function ResourceFilters({
       {showBlockFilter && urlBlock && removableChip('block', t('resourceList.blockChip', { value: urlBlock }))}
       {showMapFilters && urlWidth && removableChip('width', t('resourceList.widthChip', { value: urlWidth }))}
       {showMapFilters && urlHeight && removableChip('height', t('resourceList.heightChip', { value: urlHeight }))}
+      {showModFilters && parseModList(urlRequiredMods).map((token) => removableChip(`required-${token}`, t('resourceList.requiredModChip', { value: token }), () => removeModToken('required_mods', token)))}
+      {showModFilters && parseModList(urlExcludedMods).map((token) => removableChip(`excluded-${token}`, t('resourceList.excludedModChip', { value: token }), () => removeModToken('excluded_mods', token)))}
       {sort !== 'created_at' && removableChip('sort', t('resourceList.sortChip', { value: sortLabel }))}
       <button type="button" onClick={clearAll} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 hover:text-[var(--primary-text)]"><X className="h-3.5 w-3.5" />{t('resourceList.clear')}</button>
     </div>}

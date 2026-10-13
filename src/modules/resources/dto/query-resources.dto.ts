@@ -77,6 +77,29 @@ export class QueryResourcesDto {
   @MaxLength(80)
   compatibility?: string;
 
+  /**
+   * Comma-separated canonical Mod identifiers a Map/Schematic's selected
+   * published version must all depend on (AND). Only `map`/`schematic` answer
+   * this condition; any other kind ignores it. Unresolvable tokens, repeated
+   * keys and values past the length limit follow the existing DTO behaviour
+   * (400 / empty result).
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  required_mods?: string;
+
+  /**
+   * Comma-separated canonical Mod identifiers the selected published version
+   * must be proven NOT to depend on (NOT ANY across values, AND with
+   * `required_mods`). A version whose unresolved dependency rows cannot prove
+   * the omission does not match.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  excluded_mods?: string;
+
   @IsOptional()
   @IsString()
   @IsIn(RESOURCE_KIND_VALUES)

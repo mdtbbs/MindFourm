@@ -40,7 +40,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
   let ResourceFilters: typeof import('./resource-list-filters-client').default;
   const globals = globalThis as any;
 
-  const field = (scope: string, key: string) => container.querySelector<HTMLInputElement>(`#resource-${scope}-map-${key}`)!;
+  const field = (scope: string, key: string) => container.querySelector<HTMLInputElement>(`#resource-${scope}-filter-${key}`)!;
   const pushQuery = () => {
     const call = mockPush.mock.calls[mockPush.mock.calls.length - 1];
     if (!call) throw new Error('router.push was not called');
@@ -60,7 +60,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
     await act(async () => {
       root!.render(createElement(ResourceFilters, {
         categories: [], initialResourceKind: mockCurrentQuery.includes('schematic') ? 'schematic' : 'map',
-        supportedVersions: [], compatibilityOptions: [], planets: ['serpulo', 'erekir'],
+        supportedVersions: [], compatibilityOptions: [], planets: ['serpulo', 'erekir'], modOptions: [],
       }));
     });
   };
@@ -78,12 +78,12 @@ describe('ResourceFilters map and blueprint conditions', () => {
     return button;
   };
   const trigger = () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
-  const mount = async (query: string, kind: string) => {
+  const mount = async (query: string, kind: string, modOptions: string[] = []) => {
     mockCurrentQuery = query;
     await act(async () => {
       root = require('react-dom/client').createRoot(container);
       root!.render(createElement(ResourceFilters, {
-        categories: [], initialResourceKind: kind, supportedVersions: [], compatibilityOptions: [], planets: ['serpulo', 'erekir'],
+        categories: [], initialResourceKind: kind, supportedVersions: [], compatibilityOptions: [], planets: ['serpulo', 'erekir'], modOptions,
       }));
     });
   };
@@ -149,15 +149,15 @@ describe('ResourceFilters map and blueprint conditions', () => {
     // A map's renderer metadata has no block_types, so a map block control
     // could only ever produce an empty list.
     await mount('resource_kind=map', 'map');
-    for (const key of ['planet', 'width', 'height']) expect(container.querySelector(`#resource-desktop-map-${key}`)).not.toBeNull();
-    expect(container.querySelector('#resource-desktop-map-block')).toBeNull();
+    for (const key of ['planet', 'width', 'height']) expect(container.querySelector(`#resource-desktop-filter-${key}`)).not.toBeNull();
+    expect(container.querySelector('#resource-desktop-filter-block')).toBeNull();
     expect(container.textContent).not.toContain('resourceList.blockChip');
     await unmount();
 
     // No blueprint-side planet source exists, so a blueprint has no planet field.
     await mount('resource_kind=schematic', 'schematic');
-    for (const key of ['block', 'width', 'height']) expect(container.querySelector(`#resource-desktop-map-${key}`)).not.toBeNull();
-    expect(container.querySelector('#resource-desktop-map-planet')).toBeNull();
+    for (const key of ['block', 'width', 'height']) expect(container.querySelector(`#resource-desktop-filter-${key}`)).not.toBeNull();
+    expect(container.querySelector('#resource-desktop-filter-planet')).toBeNull();
     await unmount();
   });
 
@@ -165,7 +165,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
     // The sheet shares `mapFilterFields`, so a blueprint must not show a planet
     // control there either — and a map must not show a block one.
     const openSheet = async () => { await act(async () => { trigger().click(); }); };
-    const sheetField = (key: string) => container.querySelector(`#resource-mobile-map-${key}`);
+    const sheetField = (key: string) => container.querySelector(`#resource-mobile-filter-${key}`);
 
     await mount('resource_kind=schematic&block=router', 'schematic');
     await openSheet();
@@ -183,7 +183,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
     // A hand-edited blueprint planet URL is canonicalised away on the server;
     // the client must not put it back on the next navigation.
     await mount('resource_kind=schematic&planet=erekir', 'schematic');
-    expect(container.querySelector('#resource-desktop-map-planet')).toBeNull();
+    expect(container.querySelector('#resource-desktop-filter-planet')).toBeNull();
     await setValue(field('desktop', 'width'), '64');
     await commit(field('desktop', 'width'));
     const pushed = pushQuery();
@@ -205,7 +205,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
   it('drops a hand-edited map block condition as soon as any condition is committed', async () => {
     // SSR already canonicalises this URL; the client must not re-introduce it.
     await mount('resource_kind=map&block=router&planet=serpulo', 'map');
-    expect(container.querySelector('#resource-desktop-map-block')).toBeNull();
+    expect(container.querySelector('#resource-desktop-filter-block')).toBeNull();
     await setValue(field('desktop', 'width'), '128');
     await commit(field('desktop', 'width'));
     const pushed = pushQuery();
@@ -229,7 +229,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
   it('hides the map controls and their chips for every other kind', async () => {
     await mount('resource_kind=mod&planet=serpulo&block=router&width=128', 'mod');
     for (const key of ['planet', 'block', 'width', 'height']) {
-      expect(container.querySelector(`#resource-desktop-map-${key}`)).toBeNull();
+      expect(container.querySelector(`#resource-desktop-filter-${key}`)).toBeNull();
     }
     expect(container.textContent).not.toContain('resourceList.blockChip');
     expect(container.textContent).not.toContain('resourceList.planetChip');
@@ -464,13 +464,13 @@ describe('ResourceFilters map and blueprint conditions', () => {
   it('reopens the mobile sheet from the URL instead of a rejected draft', async () => {
     await mount('resource_kind=map&width=128', 'map');
     await act(async () => { trigger().click(); });
-    const sheetWidth = container.querySelector<HTMLInputElement>('#resource-mobile-map-width')!;
+    const sheetWidth = container.querySelector<HTMLInputElement>('#resource-mobile-filter-width')!;
     await setValue(sheetWidth, '0');
     await act(async () => { container.querySelector<HTMLButtonElement>('#resource-mobile-filters button[type="button"]:last-child')!.click(); });
     // Apply was called with a rejected value: the URL is untouched.
     expect(mockPush).not.toHaveBeenCalled();
     await act(async () => { trigger().click(); });
-    expect(container.querySelector<HTMLInputElement>('#resource-mobile-map-width')!.value).toBe('128');
+    expect(container.querySelector<HTMLInputElement>('#resource-mobile-filter-width')!.value).toBe('128');
   });
 
   it('clears every owned filter through the shared canonical outlet', async () => {
@@ -491,5 +491,122 @@ describe('ResourceFilters map and blueprint conditions', () => {
       .find((button) => button.textContent === 'resourceList.clear')!;
     await act(async () => { clear.click(); });
     expect(mockPush).toHaveBeenLastCalledWith('/resources');
+  });
+
+  /**
+   * Issue #70: version-level Mod dependency conditions.
+   *
+   * The component owns the client half of the rule: which kind renders the
+   * controls, what value a commit is allowed to produce, and how a token is
+   * removed. The URL normaliser is exercised in `lib/resources/query.spec.ts`.
+   */
+  it('renders the Mod controls only for the kinds that carry dependency evidence', async () => {
+    await mount('resource_kind=map', 'map');
+    expect(container.querySelector('#resource-desktop-filter-required_mods')).not.toBeNull();
+    expect(container.querySelector('#resource-desktop-filter-excluded_mods')).not.toBeNull();
+    await unmount();
+
+    await mount('resource_kind=schematic', 'schematic');
+    expect(container.querySelector('#resource-desktop-filter-required_mods')).not.toBeNull();
+    await unmount();
+
+    // A kind without version-level dependency evidence gets neither control, and
+    // the server has already dropped the keys from its URL.
+    for (const kind of ['mod', 'pack']) {
+      await mount(`resource_kind=${kind}`, kind);
+      expect(container.querySelector('#resource-desktop-filter-required_mods')).toBeNull();
+      expect(container.querySelector('#resource-desktop-filter-excluded_mods')).toBeNull();
+      await unmount();
+    }
+    await mount('', '');
+    expect(container.querySelector('#resource-desktop-filter-required_mods')).toBeNull();
+  });
+
+  it('commits a normalised Mod list and removes the key when the field empties', async () => {
+    await mount('resource_kind=map', 'map');
+    const required = container.querySelector<HTMLInputElement>('#resource-desktop-filter-required_mods')!;
+
+    await setValue(required, ' alpha.mod , beta.mod ,, alpha.mod ');
+    await commit(required);
+    // Trimmed, de-duplicated, and the same shape SSR would derive from the URL.
+    expect(pushQuery().get('required_mods')).toBe('alpha.mod,beta.mod');
+    expect(mockPush).toHaveBeenLastCalledWith('/resources?resource_kind=map&required_mods=alpha.mod%2Cbeta.mod');
+
+    await render();
+    await setValue(required, '   ');
+    await commit(required);
+    // An empty field is not a condition: the key leaves the URL entirely.
+    expect(pushQuery().has('required_mods')).toBe(false);
+  });
+
+  it('refuses a Mod list longer than the backend accepts instead of sending a 400', async () => {
+    await mount('resource_kind=schematic', 'schematic');
+    const excluded = container.querySelector<HTMLInputElement>('#resource-desktop-filter-excluded_mods')!;
+    await setValue(excluded, 'a'.repeat(601));
+    expect(excluded.getAttribute('aria-invalid')).toBe('true');
+    expect(excluded.getAttribute('aria-describedby')).toBe('resource-desktop-filter-excluded_mods-message');
+    await commit(excluded);
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // Coming back to an untouched URL can only offer what the URL holds.
+    await setValue(excluded, '');
+    await commit(excluded);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('removes one Mod token without dropping the rest of its condition', async () => {
+    await mount('resource_kind=map&required_mods=alpha.mod,beta.mod&excluded_mods=rival.mod', 'map');
+    const requiredChips = () => Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
+      .filter((button) => (button.getAttribute('aria-label') || '').includes('requiredModChip'));
+    expect(requiredChips()).toHaveLength(2);
+
+    await act(async () => { requiredChips()[0].click(); });
+
+    const pushed = pushQuery();
+    expect(pushed.get('required_mods')).toBe('beta.mod');
+    // The sibling condition is untouched: one chip removes one token, not a group.
+    expect(pushed.get('excluded_mods')).toBe('rival.mod');
+  });
+
+  it('removing the last token of a Mod condition removes the key', async () => {
+    await mount('resource_kind=map&excluded_mods=rival.mod', 'map');
+    const chip = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
+      .find((button) => (button.getAttribute('aria-label') || '').includes('excludedModChip'))!;
+    await act(async () => { chip.click(); });
+    expect(pushQuery().has('excluded_mods')).toBe(false);
+  });
+
+  it('offers publicly required Mods as suggestions without inventing options', async () => {
+    await mount('resource_kind=map', 'map', ['alpha.mod', 'beta.mod']);
+    const list = container.querySelector('#resource-desktop-filter-required_mods-options')!;
+    expect(Array.from(list.querySelectorAll('option')).map((option) => option.getAttribute('value')))
+      .toEqual(['alpha.mod', 'beta.mod']);
+    // Exclusions are typed by the author: matching them against a "requires"
+    // catalog would suggest the opposite of what the field means.
+    expect(container.querySelector('#resource-desktop-filter-excluded_mods-options')).toBeNull();
+  });
+
+  it('counts each Mod token as one active filter and clears them all', async () => {
+    await mount('resource_kind=map&required_mods=alpha.mod,beta.mod&excluded_mods=rival.mod', 'map');
+    const triggerLabel = trigger().textContent || '';
+    // Four conditions: resource_kind plus three Mod tokens, one per token.
+    expect(triggerLabel).toContain('4');
+    const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'resourceList.clear')!;
+    await act(async () => { clear.click(); });
+    const pushed = pushQuery();
+    expect(pushed.has('required_mods')).toBe(false);
+    expect(pushed.has('excluded_mods')).toBe(false);
+  });
+
+  it('commits Mod fields from the mobile sheet through the same normaliser', async () => {
+    await mount('resource_kind=map', 'map');
+    await act(async () => { trigger().click(); });
+    const sheetRequired = container.querySelector<HTMLInputElement>('#resource-mobile-filter-required_mods')!;
+    await setValue(sheetRequired, 'alpha.mod,alpha.mod');
+    const apply = Array.from(container.querySelectorAll<HTMLButtonElement>('#resource-mobile-filters button'))
+      .find((button) => button.textContent === 'resourceList.apply')!;
+    await act(async () => { apply.click(); });
+    expect(pushQuery().get('required_mods')).toBe('alpha.mod');
   });
 });
