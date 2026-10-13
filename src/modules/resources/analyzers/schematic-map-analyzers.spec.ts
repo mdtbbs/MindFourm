@@ -202,6 +202,23 @@ describe('schematic and map metadata analyzers', () => {
     ]));
   });
 
+  it('merges renderer and author Mod declarations instead of letting an empty renderer list mask them', () => {
+    const merged = analyzeSchematicMetadata(
+      { mod_dependencies: ['alpha-mod', 'beta-mod'] },
+      { required_mods: ['beta-mod', 'gamma-mod'] },
+    );
+    expect(merged.metadata.dependencies_json).toEqual(['alpha-mod', 'beta-mod', 'gamma-mod']);
+
+    // An empty renderer list is "no evidence", not a retraction of the author's declaration.
+    expect(analyzeSchematicMetadata({ mod_dependencies: [] }, { required_mods: ['author-mod'] }).metadata.dependencies_json)
+      .toEqual(['author-mod']);
+    expect(analyzeSchematicMetadata({ mod_dependencies: ['renderer-mod'] }, { required_mods: [] }).metadata.dependencies_json)
+      .toEqual(['renderer-mod']);
+    // The legacy author key stays a source too.
+    expect(analyzeSchematicMetadata({}, { dependencies: ['legacy-mod'] }).metadata.dependencies_json).toEqual(['legacy-mod']);
+    expect(analyzeSchematicMetadata({}, {}).metadata.dependencies_json).toEqual([]);
+  });
+
   it('bounds malformed, oversized, cyclic, and excessive-array metadata', () => {
     const malformed = analyzeSchematicMetadata('{bad json');
     expect(malformed.analysis.status).toBe('partial');
