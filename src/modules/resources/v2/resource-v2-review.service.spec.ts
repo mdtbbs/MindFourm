@@ -17,6 +17,8 @@ type HarnessOptions = {
   staffRole?: string;
   versionStatus?: string;
   kind?: string;
+  resourceStatus?: string;
+  visibility?: string;
   findingSeverity?: string;
   versionChannel?: string;
   versionFilePath?: string | null;
@@ -26,7 +28,9 @@ type HarnessOptions = {
 
 function createHarness(options: HarnessOptions = {}) {
   const ownerId = options.ownerId ?? 10;
-  const state = { versionStatus: options.versionStatus ?? 'published', reviewEvents: 0, operationLogs: 0 };
+  // `committed` only flips to true once the transaction callback resolves, so tests can tell
+  // "inside the transaction" apart from "after commit".
+  const state = { versionStatus: options.versionStatus ?? 'published', reviewEvents: 0, operationLogs: 0, committed: false };
   const payload = Buffer.from('release payload');
   let transactionTail: Promise<void> = Promise.resolve();
   const managerQuery = jest.fn(async (sql: string, parameters: any[] = []) => execute(sql, parameters));
@@ -40,8 +44,11 @@ function createHarness(options: HarnessOptions = {}) {
       transactionTail = new Promise<void>((resolve) => { unlock = resolve; });
       await previous;
       const snapshot = { ...state };
-      try { return await callback(manager); }
-      catch (error) { Object.assign(state, snapshot); throw error; }
+      try {
+        const result = await callback(manager);
+        state.committed = true;
+        return result;
+      } catch (error) { Object.assign(state, snapshot); state.committed = false; throw error; }
       finally { unlock(); }
     }),
   };
@@ -65,7 +72,13 @@ function createHarness(options: HarnessOptions = {}) {
 
   function execute(sql: string, parameters: any[] = []): any {
     if (sql.includes('FROM resources') && sql.includes('WHERE public_id=?')) {
-      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', title: 'A Mod Release', status: 'approved', is_public: options.publicResource === false ? 0 : 1, visibility: 'public' }] : [];
+      // Mirror the production column set exactly: the mock row may only carry columns that the
+      // real SELECT asks for, so a column that exists here but not in the SQL fails loudly.
+      // The subscriber notification renders `title`, so a mock-only `title` would hide a
+      // production "undefined" regression (see the accept-side assertion below).
+      const full = { id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', title: 'A Mod Release', status: options.resourceStatus || 'approved', is_public: options.publicResource === false ? 0 : 1, visibility: options.visibility || 'public' };
+      if (parameters[0] !== ids.resource) return [];
+      return [Object.fromEntries(Object.entries(full).filter(([column]) => new RegExp(`(?:SELECT|,)\\s*${column}\\s*(?:,|FROM)`).test(sql)))];
     }
     if (sql.includes('FROM resource_members')) {
       return options.memberRole ? [{ role: options.memberRole }] : [];
@@ -470,16 +483,29 @@ describe('Resource V2 RES review publication', () => {
   it('notifies subscribers with the published version only after the approval transaction commits', async () => {
     const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
     harness.subscriptions.notifyResourceUpdate.mockImplementation(async () => {
-      // Subscribers must not be reached before every transactional write has completed.
+      // Subscribers must not be reached before the transaction has actually committed.
+      // `committed` only flips after the callback resolves, unlike the state counters which
+      // are mutated while the callback is still running.
+      expect(harness.state.committed).toBe(true);
       expect(harness.state.versionStatus).toBe('published');
       expect(harness.state.reviewEvents).toBe(1);
     });
 
-    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
-      .resolves.toMatchObject({ status: 'published' });
+    const result = await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(result).toMatchObject({ status: 'published' });
 
     expect(harness.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    // The response body must not leak the internal notification scaffolding.
+    expect(result).not.toHaveProperty('subscriber_notification');
+    expect(result).not.toHaveProperty('notify_user_ids');
     const [resource, options] = harness.subscriptions.notifyResourceUpdate.mock.calls[0] as [any, any];
+    // `title` must come from the production SELECT, not from a mock-only column.
+    expect(harness.managerQuery).toHaveBeenCalledWith(
+      expect.stringContaining('title'), expect.anything(),
+    );
+    expect(harness.managerQuery.mock.calls.some(([sql]) => (
+      sql.includes('FROM resources') && /SELECT[\s\S]*\btitle\b/.test(sql)
+    ))).toBe(true);
     expect(resource).toMatchObject({ id: 7, user_id: 10, title: 'A Mod Release' });
     expect(options).toEqual({ deduplicationKey: `resource-version-published:${ids.version}` });
   });
@@ -498,12 +524,32 @@ describe('Resource V2 RES review publication', () => {
     expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
   });
 
+  it('does not notify subscribers for a private resource that is flagged public', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', visibility: 'private' });
+    await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not notify subscribers when the resource status is not approved', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', resourceStatus: 'pending_review' });
+    await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
+  });
+
   it('does not notify subscribers when the approval transaction rolls back', async () => {
     const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
-    harness.managerQuery.mockImplementationOnce(async () => { throw new Error('operation log insert failed'); });
+    // Target the operation log write, i.e. the last transaction step before the callback
+    // returns; failing on the first SQL would only prove "nothing ran".
+    const base = harness.managerQuery.getMockImplementation()!;
+    harness.managerQuery.mockImplementation(async (sql: string, parameters: any[] = []) => {
+      if (sql.startsWith('INSERT INTO operation_logs')) throw new Error('operation log insert failed');
+      return base(sql, parameters);
+    });
 
     await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
       .rejects.toThrow('operation log insert failed');
+    expect(harness.state.committed).toBe(false);
+    expect(harness.state.operationLogs).toBe(0);
     expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
   });
 
@@ -535,7 +581,6 @@ describe('Resource V2 RES review publication', () => {
 
   it('restores private binding after a downstream database failure', async () => {
     const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true });
-    harness.managerQuery.mockImplementationOnce(async () => [{ id: 7, public_id: ids.resource, user_id: 10, resource_kind: 'mod', status: 'approved', is_public: 1 }]);
     const execute = harness.managerQuery.getMockImplementation()!;
     harness.managerQuery.mockImplementation(async (sql, parameters) => {
       if (sql.startsWith('INSERT INTO operation_logs')) throw new Error('audit failed');

@@ -441,7 +441,7 @@ export class ResourceV2ReviewService {
   private async getResource(executor: SqlExecutor, publicId: string, lock: boolean): Promise<ResourceRow> {
     this.assertUuid(publicId, 'Resource');
     const rows = await executor.query(
-      `SELECT id,public_id,user_id,resource_kind,status,is_public,visibility FROM resources
+      `SELECT id,public_id,user_id,resource_kind,title,status,is_public,visibility FROM resources
        WHERE public_id=? AND deleted_at IS NULL LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
       [publicId],
     ) as ResourceRow[];
