@@ -16,6 +16,9 @@ jest.mock('@nestjs/common', () => ({
 
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
+  // `ResourcesService` value-imports the shared projection, so evaluating it
+  // now reaches `@InjectDataSource()` — the mock has to answer for it.
+  InjectDataSource: () => () => undefined,
 }));
 
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));

@@ -22,4 +22,27 @@ describe('ResourceSubscriptionsService', () => {
     expect(notifications.create).toHaveBeenCalledWith(expect.objectContaining({ user_id: 2, actor_id: 7, type: 'system', emailEvent: false }));
     expect(notifications.create).toHaveBeenCalledTimes(1);
   });
+
+  it('passes a per-subscriber deduplication key when the caller scopes an update event', async () => {
+    const repository = {
+      findOne: jest.fn(),
+      create: jest.fn((value) => value),
+      save: jest.fn(),
+      find: jest.fn().mockResolvedValue([{ user_id: 2 }, { user_id: 3 }]),
+    };
+    const notifications = { create: jest.fn().mockResolvedValue(undefined) };
+    const service = new ResourceSubscriptionsService(repository as any, notifications as any);
+
+    await service.notifyResourceUpdate(
+      { id: 15, user_id: 9, title: '新版本' } as any,
+      { deduplicationKey: 'resource-version-published:abc' },
+    );
+
+    expect(notifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 2, deduplicationKey: 'resource-version-published:abc:2' }),
+    );
+    expect(notifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 3, deduplicationKey: 'resource-version-published:abc:3' }),
+    );
+  });
 });
