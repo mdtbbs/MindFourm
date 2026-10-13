@@ -72,7 +72,9 @@ export function analyzeSchematicMetadata(rendererInput: unknown, publisherInput?
   const { blocks, logicProcessors } = normalizeBlocks(renderer, warnings);
   const materials = normalizeMaterials(renderer.requirements ?? publisher.requirements, warnings);
   const compatibility = record(renderer.compatibility);
-  const dependencies = normalizeStringList(renderer.mod_dependencies ?? publisher.required_mods ?? publisher.dependencies, warnings, 'DEPENDENCIES_TRUNCATED');
+  // Renderer output and author declarations are independent evidence sources:
+  // merge them so an empty renderer list never masks the author's required Mods.
+  const dependencies = normalizeDependencyList([renderer.mod_dependencies, publisher.required_mods, publisher.dependencies], warnings, 'DEPENDENCIES_TRUNCATED');
   const production = normalizeProduction(renderer.production, warnings);
   const bottlenecks = production ? findBottlenecks(production) : [];
   const complete = production?.complete === true;
@@ -361,10 +363,18 @@ function findBottlenecks(production: Record<string, unknown>): Array<Record<stri
   return findings;
 }
 
-function normalizeStringList(value: unknown, warnings: AnalyzerWarning[], code: string): string[] {
-  const source = Array.isArray(value) ? list(value) : typeof value === 'string' ? list(value.split(/[\s,]+/)) : { values: [], truncated: false };
-  if (source.truncated) warnings.push(warning(code, 'The dependency list exceeded the analysis limit.'));
-  return [...new Set(source.values.map(blockName).filter((item): item is string => item !== null))].slice(0, 500);
+function normalizeDependencyList(sources: unknown[], warnings: AnalyzerWarning[], code: string): string[] {
+  const values: unknown[] = [];
+  let truncated = false;
+  for (const source of sources) {
+    const parsed = list(Array.isArray(source) ? source : typeof source === 'string' ? source.split(/[\s,]+/) : []);
+    if (parsed.truncated) truncated = true;
+    values.push(...parsed.values);
+  }
+  const merged = [...new Set(values.map(blockName).filter((item): item is string => item !== null))];
+  if (merged.length > 500) truncated = true;
+  if (truncated) warnings.push(warning(code, 'The dependency list exceeded the analysis limit.'));
+  return merged.slice(0, 500);
 }
 
 function blockName(value: unknown): string | null {
