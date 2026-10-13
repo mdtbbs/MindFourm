@@ -20,6 +20,16 @@ function createManager(aliasRows: Array<{ mod_id: string; resource_id: number; c
       saved.push({ entity, rows: Array.isArray(rows) ? rows : [rows] });
       return rows;
     }),
+    delete: jest.fn(async (entity: unknown, criteria: { resource_version_id?: number }) => {
+      if (entity === ResourceDependency && criteria.resource_version_id !== undefined) {
+        for (const item of saved) {
+          if (item.entity === ResourceDependency) {
+            item.rows = item.rows.filter(row => row.resource_version_id !== criteria.resource_version_id);
+          }
+        }
+      }
+      return { affected: 0 };
+    }),
   };
   const dependencies = () => saved.filter(item => item.entity === ResourceDependency).flatMap(item => item.rows);
   return { manager, saved, dependencies };
@@ -73,6 +83,34 @@ describe('structured renderer analysis persistence', () => {
       .toEqual(['gamma-mod']);
   });
 
+  it('replaces prior dependencies on re-analysis, including when the new result is empty', async () => {
+    const manager = createManager();
+    await persistRendererAnalysis(manager.manager as any, {
+      ...base, versionId: 251, kind: 'map',
+      rendererMetadata: { width: 12, height: 12, mod_dependencies: ['old-mod'] },
+      publisherMetadata: {},
+    });
+    await persistRendererAnalysis(manager.manager as any, {
+      ...base, versionId: 251, kind: 'map',
+      rendererMetadata: { width: 12, height: 12, mod_dependencies: ['new-mod'] },
+      publisherMetadata: {},
+    });
+
+    expect(manager.dependencies()).toHaveLength(1);
+    expect(manager.dependencies()[0]).toMatchObject({
+      resource_version_id: 251, external_identifier: 'new-mod', resolution_status: 'unresolved',
+    });
+
+    await persistRendererAnalysis(manager.manager as any, {
+      ...base, versionId: 251, kind: 'map',
+      rendererMetadata: { width: 12, height: 12, mod_dependencies: [] },
+      publisherMetadata: {},
+    });
+
+    expect(manager.dependencies()).toEqual([]);
+    expect(manager.manager.delete).toHaveBeenCalledWith(ResourceDependency, { resource_version_id: 251 });
+  });
+
   it('collapses an alias and its canonical Mod into one resolved record (AC 3)', async () => {
     // `alpha-mod` is the profile name; `alpha-alias` is a second spelling of the same resource.
     const manager = createManager([
@@ -89,6 +127,9 @@ describe('structured renderer analysis persistence', () => {
     expect(rows[0]).toMatchObject({
       target_resource_id: 55, resolution_status: 'resolved', external_identifier: 'alpha-mod', dependency_type: 'required',
     });
+    const query = manager.manager.query.mock.calls.find(([sql]) => String(sql).includes('FROM mod_profiles'))?.[0] as string;
+    expect(query).toMatch(/SELECT LOWER\(mod_id\) AS mod_id, resource_id, 1 AS canonical FROM mod_profiles/);
+    expect(query).toMatch(/SELECT LOWER\(alias\) AS mod_id, resource_id, 0 AS canonical FROM mod_id_aliases/);
   });
 
   it('retains unresolved declarations without inventing a Mod ID (AC 4, 6)', async () => {
