@@ -709,10 +709,11 @@ export class ResourcesController {
     // The recorded version/file pair must be the one the bytes actually came from.
     // Deciding that by whether the request carried `?version_id` is wrong: a bare
     // request streams a published version's bytes too, because `getForFileAccess`
-    // swaps `file_path` for the latest published version's own path before the
-    // stream is opened. Match the streamed path against the resolved version row
-    // instead — a stream whose path matches no version row (the legacy root file)
-    // records neither a version nor a file.
+    // swaps `file_path` for the row `latest_published_version_id` points at before
+    // the stream is opened, and a bare `findStoredDownloadFile` resolves that same
+    // row. Credit the row only when its path is the one that streamed; every other
+    // case — the resource's own legacy root file, or a resolved row whose path is
+    // not the streamed one — records neither a version nor a file.
     const streamedPair = stored && target.file_path === stored.version.file_path ? stored : null;
     const streamedVersionId = streamedPair?.version.id ?? null;
     const streamedFileId = streamedPair?.file.id ?? null;

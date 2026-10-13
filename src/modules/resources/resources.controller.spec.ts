@@ -1,5 +1,7 @@
 import type { Response } from 'express';
 import { ResourcesController } from './resources.controller';
+import { ResourcesService } from './resources.service';
+import { DownloadEventsService } from '../downloads/download-events.service';
 import { RESOURCE_TRANSFER_FORMAT } from './resource-transfer.util';
 import { mkdtemp, writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -314,5 +316,86 @@ describe('ResourcesController internal file access', () => {
     await controller.retryPreview(12, { user });
     expect(domain.getForFileAccess).toHaveBeenCalledWith(12, user);
     expect(previews.enqueue).toHaveBeenCalledWith(resource);
+  });
+
+  it('counts one completion when a bare request and ?version_id meet a forked pointer state', async () => {
+    // Forked state: `latest_published_version_id` names v31 — the row whose path
+    // `getForFileAccess` rewrote the streamed path from — while a merged-in v9
+    // carries a newer `published_at`. Resolving the bare request to the
+    // newest-published row would name v9, a file whose bytes never left the
+    // server: the path check would drop the pair, the completion would fall back
+    // to the resource-wide dedup key, and the same visitor hitting both entry
+    // points within a minute would be counted twice. Reverting the bare-request
+    // resolution to a plain newest-published query must fail this test.
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-forked-'));
+    // Pin the clock: both completions must land in one dedup bucket for the
+    // "counted once" half of this test to be about the key, not the minute.
+    jest.useFakeTimers({ now: new Date('2026-10-13T08:00:00.000Z') });
+    try {
+      const file = join(folder, 'pointer-v31.msav');
+      await writeFile(file, Buffer.from('pointer v31 bytes'));
+
+      const controller = Object.create(ResourcesController.prototype) as ResourcesController;
+      const service = Object.assign(Object.create(ResourcesService.prototype), {
+        // Simulates `getForFileAccess` handing back the resource with the
+        // pointer's path already swapped in for the stream.
+        getForFileAccess: jest.fn().mockResolvedValue({ id: 12, file_path: file, file_name: 'pointer-v31.msav', mime_type: 'application/octet-stream', latest_published_version_id: 31 }),
+        incrementDownload: jest.fn().mockResolvedValue(undefined),
+        resourceRepository: { findOne: jest.fn().mockResolvedValue({ id: 12, latest_published_version_id: 31 }) },
+        versionRepository: {
+          findOne: jest.fn().mockResolvedValue({ id: 31, resource_id: 12, status: 'published', file_path: file }),
+          // The fallback resolution: present, but the pointer wins, so it must
+          // never be consulted for this bare request.
+          find: jest.fn().mockResolvedValue([{ id: 9, resource_id: 12, status: 'published', file_path: join(folder, 'merged-v9.msav') }]),
+        },
+        resourceFileRepository: { findOne: jest.fn().mockResolvedValue({ id: 42 }) },
+      }) as ResourcesService & Record<string, any>;
+      Object.defineProperty(controller, 'resourcesService', { value: service });
+      Object.defineProperty(controller, 'downloadPolicy', { value: { assertDownloadAuthentication: jest.fn().mockResolvedValue(undefined) } });
+      Object.defineProperty(controller, 'versionService', {
+        value: { getDownloadTarget: jest.fn().mockResolvedValue({ id: 31, file_path: file, mime_type: 'application/octet-stream', file_name: 'pointer-v31.msav' }) },
+      });
+
+      // Real completion service, backed by a repository that enforces the
+      // `(dedup_key, dedup_bucket)` unique index the way MySQL does.
+      const seen = new Set<string>();
+      const inserted: any[] = [];
+      const insert = jest.fn(async (value: any) => {
+        const key = `${value.dedup_key}:${value.dedup_bucket}`;
+        if (seen.has(key)) { const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error; }
+        seen.add(key);
+        inserted.push(value);
+      });
+      Object.defineProperty(controller, 'downloadEvents', { value: new DownloadEventsService({ insert } as any) });
+
+      const req = { user: null, headers: { 'user-agent': 'jest-forked-download-probe' }, ip: '203.0.113.9' };
+      const finish = async (response: any) => { response.emit('finish'); for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
+
+      const bare = new EventEmitter() as any;
+      bare.statusCode = 200; bare.writableFinished = true; bare.set = jest.fn();
+      await controller.download(12, undefined, bare, req);
+      await finish(bare);
+
+      // The bare request streamed the pointer row's bytes, so it must be
+      // recorded against v31/42 — not v9, and not a pair of nulls.
+      expect(service.versionRepository.find).not.toHaveBeenCalled();
+      expect(inserted).toHaveLength(1);
+      expect(inserted[0]).toMatchObject({ event_type: 'completed', resource_id: 12, version_id: 31, file_id: 42 });
+
+      const versioned = new EventEmitter() as any;
+      versioned.statusCode = 200; versioned.writableFinished = true; versioned.set = jest.fn();
+      await controller.download(12, '31', versioned, req);
+      await finish(versioned);
+
+      // Both requests derive the same dedup key, so the second is a replay of
+      // the first within the minute and the visitor is counted once.
+      expect(insert).toHaveBeenCalledTimes(2);
+      expect(new Set(insert.mock.calls.map(([value]: any[]) => value.dedup_key)).size).toBe(1);
+      expect(inserted).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+      await rm(folder, { recursive: true, force: true });
+    }
   });
 });
