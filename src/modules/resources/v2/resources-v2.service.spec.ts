@@ -1,6 +1,48 @@
 import { DataSource } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
+import { ResourceDependencyReadService } from '../resource-dependency-read.service';
 import { ResourcesV2Service } from './resources-v2.service';
+
+/**
+ * Builds ResourcesV2Service around a real ResourceDependencyReadService backed
+ * by a mocked DataSource, so these specs exercise the shared modern-first
+ * projection through the V2 entry points instead of stubbing it away.
+ */
+function createServiceWithSharedRead(
+  dependencyRead: ResourceDependencyReadService,
+  overrides: { previews?: any; write?: any } = {},
+) {
+  return new ResourcesV2Service(
+    {} as DataSource,
+    {} as any,
+    overrides.previews || ({} as any),
+    dependencyRead,
+    overrides.write,
+  );
+}
+
+function dependencyReadFromRows(opts: {
+  tables: string[];
+  modernDependencies?: Record<string, unknown>[];
+  legacyDependencies?: Record<string, unknown>[];
+}) {
+  const dataSource = {
+    query: jest.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('information_schema.tables')) {
+        return opts.tables.includes(String(params?.[0])) ? [{ present: 1 }] : [];
+      }
+      if (sql.includes('FROM resource_version_dependencies')) {
+        const legacy = opts.legacyDependencies || [];
+        if (!sql.includes('NOT EXISTS')) return legacy;
+        const copied = new Set((opts.modernDependencies || []).map(row => row.legacy_source_id).filter(Boolean));
+        return legacy.filter(row => !copied.has(row.id));
+      }
+      if (sql.includes('FROM resource_dependencies')) return opts.modernDependencies || [];
+      return [];
+    }),
+  };
+  return { service: new ResourceDependencyReadService(dataSource as any), dataSource };
+}
 
 describe('ResourcesV2Service relation projection', () => {
   it('does not advertise a Resource preview before any binary version is published', () => {
@@ -171,6 +213,203 @@ describe('ResourcesV2Service map analysis projection', () => {
   });
 });
 
+
+describe('ResourcesV2Service mod dependency reads (shared projection)', () => {
+  const PUBLIC_VERSION = { id: 70, public_id: '84b37577-d086-4897-a866-658e29e0bd09', version: '1.0.0', status: 'published' };
+  const ROOT_UUID = '4ab5d671-8af6-4d16-8238-7b6fd4b0a240';
+
+  function modernRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 1, resource_version_id: 70, dependency_type: 'required', target_resource_id: 8,
+      target_public_id: '9b1f5c2a-7d3e-4a61-8f0b-2c6d5e8a1b47', legacy_source_id: null, external_identifier: null,
+      upstream_url: null, version_constraint: '>=1.0', resolution_status: 'resolved', notes: null, sort_order: 0,
+      ...overrides,
+    };
+  }
+
+  function legacyRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 11, resource_version_id: 70, dependency_type: 'optional', target_resource_id: null,
+      target_public_id: null, external_identifier: 'mirrored.mod', upstream_url: null,
+      version_constraint: null, notes: 'legacy note', sort_order: 1,
+      ...overrides,
+    };
+  }
+
+  function seedPublicMod(service: ResourcesV2Service) {
+    jest.spyOn(service as any, 'getPublicResource').mockResolvedValue({ entity: { id: 7, resource_kind: 'mod', title: 'Root', is_public: 1, status: 'published' } });
+    jest.spyOn(service as any, 'selectedVersion').mockResolvedValue(PUBLIC_VERSION);
+  }
+
+  it('modern-only: getDependencies reads the modern table and keeps ordering/kind/constraint semantics', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies'],
+      modernDependencies: [
+        modernRow({ id: 3, sort_order: 2, dependency_type: 'optional', version_constraint: '^2.0', resolution_status: 'unresolved', upstream_url: 'https://example.test/a', notes: 'second' }),
+        modernRow({ id: 1, sort_order: 1, dependency_type: 'required', version_constraint: '>=1.0', notes: 'first' }),
+      ],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const page = await service.getDependencies(ROOT_UUID, 'mod', { limit: 20 });
+
+    expect(page.items.map((item: any) => item.sort_order)).toEqual([1, 2]);
+    expect(page.items.map((item: any) => item.dependency_type)).toEqual(['required', 'optional']);
+    expect(page.items[1]).toMatchObject({ version_constraint: '^2.0', resolution_status: 'unresolved', upstream_url: 'https://example.test/a' });
+    expect(page.items[1]).not.toHaveProperty('notes');
+    expect(page.pagination.has_more).toBe(false);
+  });
+
+  it('legacy-only: getDependencies still returns rows when only the legacy table exists', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_version_dependencies'],
+      legacyDependencies: [legacyRow({ dependency_type: 'embedded', external_identifier: 'legacy.only', sort_order: 0 })],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const page = await service.getDependencies(ROOT_UUID, 'mod', { limit: 20 });
+
+    expect(page.items).toMatchObject([{ dependency_type: 'embedded', external_identifier: 'legacy.only', resource_public_id: null }]);
+  });
+
+  it('mixed: a migration-mirrored legacy row is not duplicated by getDependencies', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies', 'resource_version_dependencies'],
+      modernDependencies: [modernRow({ id: 5, legacy_source_id: 11, external_identifier: 'mirrored.mod', dependency_type: 'optional', sort_order: 1 })],
+      legacyDependencies: [legacyRow({ id: 11, external_identifier: 'mirrored.mod', dependency_type: 'optional', sort_order: 1 })],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const page = await service.getDependencies(ROOT_UUID, 'mod', { limit: 20 });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].external_identifier).toBe('mirrored.mod');
+  });
+
+  it('mixed: an unmirrored legacy row survives alongside a distinct modern row', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies', 'resource_version_dependencies'],
+      modernDependencies: [modernRow({ id: 5, legacy_source_id: null, target_resource_id: 8, target_public_id: '9b1f5c2a-7d3e-4a61-8f0b-2c6d5e8a1b47', sort_order: 0 })],
+      legacyDependencies: [legacyRow({ id: 12, external_identifier: 'legacy.extra', sort_order: 1 })],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const page = await service.getDependencies(ROOT_UUID, 'mod', { limit: 20 });
+
+    expect(page.items.map((item: any) => item.resource_public_id ?? item.external_identifier)).toEqual(['9b1f5c2a-7d3e-4a61-8f0b-2c6d5e8a1b47', 'legacy.extra']);
+  });
+
+  it('does not emit a target public_id that the shared projection suppressed (private/deleted/unpublished/merged/unknown)', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies'],
+      // The projection itself nulls target_public_id for every non-visible or
+      // unknown target state; the V2 mapper must not resurrect the raw id.
+      modernDependencies: [
+        modernRow({ id: 1, target_resource_id: 8, target_public_id: null, external_identifier: null, sort_order: 0 }),
+        modernRow({ id: 2, target_resource_id: 9, target_public_id: null, external_identifier: 'declared.string', sort_order: 1 }),
+      ],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const page = await service.getDependencies(ROOT_UUID, 'mod', { limit: 20 });
+
+    expect(page.items.every((item: any) => item.resource_public_id === null)).toBe(true);
+    expect(JSON.stringify(page)).not.toContain('9b1f5c2a-7d3e-4a61-8f0b-2c6d5e8a1b47');
+  });
+
+  it('paginates repeated sort_order values with an opaque composite cursor', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies'],
+      modernDependencies: [
+        modernRow({ id: 1, sort_order: 0, external_identifier: 'a.mod' }),
+        modernRow({ id: 2, sort_order: 0, external_identifier: 'b.mod' }),
+        modernRow({ id: 3, sort_order: 1, external_identifier: 'c.mod' }),
+      ],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    const first = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1 });
+    expect(first.items.map((item: any) => item.external_identifier)).toEqual(['a.mod']);
+    expect(first.pagination.has_more).toBe(true);
+    expect(typeof first.pagination.next_cursor).toBe('string');
+
+    const second = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1, cursor: first.pagination.next_cursor as string });
+    expect(second.items.map((item: any) => item.external_identifier)).toEqual(['b.mod']);
+    expect(second.pagination.has_more).toBe(true);
+
+    const third = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1, cursor: second.pagination.next_cursor as string });
+    expect(third.items.map((item: any) => item.external_identifier)).toEqual(['c.mod']);
+    expect(third.pagination.has_more).toBe(false);
+  });
+
+  it('rejects a legacy timestamp cursor instead of silently returning an empty page', async () => {
+    const { service: shared } = dependencyReadFromRows({ tables: ['resource_dependencies'], modernDependencies: [modernRow()] });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+    const legacyCursor = Buffer.from(JSON.stringify({ sort_at: '2026-10-12T10:00:00.000Z', id: 1 }), 'utf8').toString('base64url');
+
+    await expect(service.getDependencies(ROOT_UUID, 'mod', { limit: 20, cursor: legacyCursor }))
+      .rejects.toMatchObject({ code: 'INVALID_CURSOR' });
+  });
+
+  it('rejects a malformed cursor instead of silently returning the first page', async () => {
+    const { service: shared } = dependencyReadFromRows({ tables: ['resource_dependencies'], modernDependencies: [modernRow()] });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+
+    await expect(service.getDependencies(ROOT_UUID, 'mod', { limit: 20, cursor: 'not-a-cursor' })).rejects.toThrow();
+  });
+
+  it('resolveDependencies merges modern+legacy rows through the shared projection', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies', 'resource_version_dependencies'],
+      modernDependencies: [modernRow({ id: 5, legacy_source_id: null, target_resource_id: 8, target_public_id: 'library-uuid', dependency_type: 'required', sort_order: 0 })],
+      legacyDependencies: [legacyRow({ id: 12, external_identifier: 'legacy.extra', dependency_type: 'optional', sort_order: 1 })],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+    jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (table: string) => table === 'mod_profiles'
+      ? [{ mod_id: 'root.mod' }, { resource_id: 8, mod_id: 'library.mod' }]
+      : []);
+    jest.spyOn(service as any, 'findPublicModsByIdentifiers').mockImplementation(async (ids: string[]) => ids.map(id => ({
+      resource_id: id === 'library.mod' ? 8 : 9, public_id: 'x', title: id, mod_id: id, requested_identifier: id,
+    })));
+    jest.spyOn(service as any, 'latestPublicModVersions').mockResolvedValue([]);
+
+    const result = await service.resolveDependencies(ROOT_UUID, {});
+
+    // The modern dependency resolves via its public target; the legacy row with
+    // no target keeps its external identifier as an unresolved upstream entry.
+    expect(result.direct.map(item => item.mod_id)).toContain('library.mod');
+    expect(result.unresolved.map(item => item.mod_id)).toContain('legacy.extra');
+  });
+
+  it('fail-closed: a hidden target never contributes its declared identifier to the graph', async () => {
+    const { service: shared } = dependencyReadFromRows({
+      tables: ['resource_dependencies'],
+      // Target 8 exists but is private/merged: the projection suppresses the
+      // public_id, so the row must not surface as a resolvable node.
+      modernDependencies: [modernRow({ id: 1, target_resource_id: 8, target_public_id: null, external_identifier: 'hidden.target.mod', sort_order: 0 })],
+    });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+    jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (table: string) => table === 'mod_profiles' ? [{ mod_id: 'root.mod' }] : []);
+    const findPublic = jest.spyOn(service as any, 'findPublicModsByIdentifiers').mockResolvedValue([]);
+
+    const result = await service.resolveDependencies(ROOT_UUID, {});
+
+    expect(result.root_mod_id).toBe('root.mod');
+    expect(result.direct).toEqual([]);
+    expect(result.unresolved).toEqual([]);
+    expect(findPublic).not.toHaveBeenCalled();
+  });
+});
 
 describe('ResourcesV2Service RES version previews', () => {
   it('advertises the selected version RES preview rather than the root renderer path', async () => {

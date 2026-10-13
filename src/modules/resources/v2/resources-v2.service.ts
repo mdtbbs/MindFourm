@@ -46,6 +46,9 @@ const PUBLIC_REPORT_STATUSES = ['approved', 'published', 'verified', 'confirmed'
 const PUBLIC_CONFLICT_STATUSES = ['unverified', 'verified', 'confirmed', 'cannot_reproduce', 'fixed', 'not_mod_issue', 'resolved'];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Upper bound on dependency rows loaded for a resolution graph. */
+const DEPENDENCY_READ_LIMIT = 5000;
+
 @Injectable()
 export class ResourcesV2Service {
   private readonly legacyEditorMetadata = new Map<string, { expires: number; metadata: Record<string, unknown> }>();
@@ -987,26 +990,43 @@ export class ResourcesV2Service {
     if (!version) return this.emptyPage(query);
     const limit = this.pageLimit(query);
     const cursor = this.decodeCursor(query.cursor);
-    const params: unknown[] = [version.id];
-    const clauses = ['d.resource_version_id = ?'];
-    if (cursor) {
-      clauses.push('(d.created_at < ? OR (d.created_at = ? AND d.id < ?))');
-      params.push(cursor.sort_at, cursor.sort_at, cursor.id);
-    }
-    params.push(limit + 1);
-    const modern = await this.tableExists('resource_dependencies');
-    const table = modern ? 'resource_dependencies' : 'resource_version_dependencies';
-    const rows = await this.rowsFrom(table,
-      `SELECT d.*, d.created_at AS v2_sort_at, CASE WHEN target.is_public = 1 AND target.deleted_at IS NULL AND target.status IN ('approved','published') THEN target.public_id ELSE NULL END AS target_public_id FROM ${table} d LEFT JOIN resources target ON target.id = d.target_resource_id WHERE ${clauses.join(' AND ')} ORDER BY d.sort_order ASC, d.created_at DESC, d.id DESC LIMIT ?`, params);
-    return this.pageFromRows(rows, query, row => ({
-      dependency_type: String(row.dependency_type || 'required'),
-      resource_public_id: this.isUuid(row.target_public_id) ? String(row.target_public_id) : null,
-      external_identifier: row.external_identifier || null,
-      upstream_url: row.upstream_url || null,
-      version_constraint: row.version_constraint || null,
-      resolution_status: row.resolution_status || null,
-      sort_order: this.numberValue(row.sort_order),
+    if (cursor && !Number.isSafeInteger(Number(cursor.sort_at))) this.invalidCursor();
+    const versionId = this.numberValue(version.id);
+    // The shared modern-first projection owns the modern/legacy merge and the
+    // target visibility predicate, so this entry point no longer picks a single
+    // table by `tableExists` nor emits a private/merged target's public_id.
+    const rows = (await this.dependencyRead.collectDependencies([versionId])).get(versionId) || [];
+    const ordered = rows.map((row, index) => ({ row, cursor: this.encodeCursor({ sort_at: String(row.sort_order), id: index + 1 }) }));
+    const start = cursor
+      ? ordered.findIndex((entry, index) => this.isAfterCursor(entry.row.sort_order, index + 1, cursor))
+      : 0;
+    const visible = start < 0 ? [] : ordered.slice(start, start + limit + 1);
+    const hasMore = visible.length > limit;
+    const page = visible.slice(0, limit);
+    const items = page.map(({ row }) => ({
+      dependency_type: row.dependency_type,
+      resource_public_id: this.isUuid(row.target_public_id) ? row.target_public_id : null,
+      external_identifier: row.external_identifier,
+      upstream_url: row.upstream_url,
+      version_constraint: row.version_constraint,
+      resolution_status: row.resolution_status,
+      sort_order: row.sort_order,
     } satisfies ResourceV2DependencyDto));
+    return {
+      items,
+      pagination: { next_cursor: hasMore && page.length ? page[page.length - 1].cursor : null, has_more: hasMore },
+    };
+  }
+
+  /**
+   * Cursor position for the shared projection's opaque cursor. The projection
+   * page is ordered by `sort_order ASC` (stable, ties keep the projection
+   * order), so the cursor uses the one-based position within that ordered
+   * projection as a tie-breaker.
+   */
+  private isAfterCursor(sortOrder: number, position: number, cursor: CursorPayload): boolean {
+    const cursorSortOrder = Number(cursor.sort_at);
+    return sortOrder > cursorSortOrder || (sortOrder === cursorSortOrder && position > cursor.id);
   }
 
   async resolveDependencies(publicId: string, query: ResourceV2DependencyResolveQueryDto): Promise<ResourceV2DependencyResolutionDto> {
@@ -1023,10 +1043,7 @@ export class ResourcesV2Service {
 
     const maxDepth = Math.min(12, Math.max(1, this.numberValue(query.max_depth, 12)));
     const maxNodes = Math.min(200, Math.max(1, this.numberValue(query.max_nodes, 200)));
-    const dependencyTable = await this.tableExists('resource_dependencies')
-      ? 'resource_dependencies'
-      : 'resource_version_dependencies';
-    const rootDependencies = await this.loadModDependencies([this.numberValue(rootVersion.id)], dependencyTable);
+    const rootDependencies = await this.loadModDependencies([this.numberValue(rootVersion.id)]);
     const root: ModRelease = {
       mod_id: rootModId,
       title: String(entity.title || rootModId),
@@ -1058,7 +1075,7 @@ export class ResourcesV2Service {
       if (!resourceIds.length) { frontier = []; continue; }
       const versions = await this.latestPublicModVersions(resourceIds);
       const versionIds = versions.map(item => this.numberValue(item.id));
-      const dependencyMap = await this.loadModDependencies(versionIds, dependencyTable);
+      const dependencyMap = await this.loadModDependencies(versionIds);
       if ((dependencyMap as Map<number, ModDependency[]> & { truncated?: boolean }).truncated) {
         dependencyRowsTruncated = true;
         truncated = true;
@@ -1138,37 +1155,62 @@ export class ResourcesV2Service {
     return [...selected.values()];
   }
 
-  private async loadModDependencies(versionIds: number[], table: string): Promise<Map<number, ModDependency[]> & { truncated?: boolean }> {
-    if (!versionIds.length || !await this.tableExists(table)) return new Map();
-    const placeholders = versionIds.map(() => '?').join(',');
-    const upstreamUrl = table === 'resource_dependencies' ? 'd.upstream_url' : 'NULL AS upstream_url';
-    const rows = await this.rows(
-      `SELECT d.resource_version_id, d.dependency_type, d.external_identifier, ${upstreamUrl}, d.version_constraint,
-              m.mod_id AS target_mod_id
-       FROM ${table} d
-       LEFT JOIN resources r ON r.id = d.target_resource_id AND r.is_public = 1 AND r.deleted_at IS NULL AND r.status IN ('approved','published')
-       LEFT JOIN mod_profiles m ON m.resource_id = r.id
-       WHERE d.resource_version_id IN (${placeholders}) ORDER BY d.sort_order ASC, d.id ASC LIMIT 5000`,
-      versionIds,
-    );
+  private async loadModDependencies(versionIds: number[]): Promise<Map<number, ModDependency[]> & { truncated?: boolean }> {
+    if (!versionIds.length) return new Map();
+    // Same modern-first projection as /mods/:id/dependencies: modern table
+    // first, mirrored legacy rows filtered out, and the target visibility
+    // predicate applied once. `table` no longer selects a single source.
+    const unified = await this.dependencyRead.collectDependencies(versionIds);
+    const flattened = [...unified.entries()].flatMap(([versionId, rows]) => rows.map(row => ({ versionId, row })));
+    // Keep the previous 5000-row read guard: the shared projection has no
+    // LIMIT, so the resolver still needs an explicit bound to stay honest about
+    // a truncated read instead of silently dropping rows.
+    const truncated = flattened.length > DEPENDENCY_READ_LIMIT;
+    const modIds = await this.modIdsForTargets(flattened.map(({ row }) => row.target_resource_id));
     const mapped = new Map<number, ModDependency[]>();
-    (mapped as Map<number, ModDependency[]> & { truncated?: boolean }).truncated = rows.length >= 5000;
-    for (const row of rows) {
-      const versionId = this.numberValue(row.resource_version_id);
-      const dependency: ModDependency = {
-        mod_id: String(row.target_mod_id || row.external_identifier || ''),
-        kind: ['required', 'optional', 'incompatible', 'embedded'].includes(String(row.dependency_type))
-          ? row.dependency_type
-          : 'required',
-        version_constraint: row.version_constraint || null,
-        upstream_url: row.upstream_url || null,
-      };
-      if (!dependency.mod_id) continue;
+    (mapped as Map<number, ModDependency[]> & { truncated?: boolean }).truncated = truncated;
+    for (const { versionId, row } of flattened.slice(0, DEPENDENCY_READ_LIMIT)) {
+      // A row with a target resource that is private/deleted/unpublished/
+      // merged (unknown state included) must fail closed: it may still carry
+      // an `external_identifier`, but resolving that string to a node would
+      // expose the hidden target's identity. Only rows without a target, or
+      // with a publicly visible one, contribute a mod_id.
+      const targetVisible = row.target_resource_id !== null && row.target_public_id !== null;
+      const targetModId = targetVisible ? modIds.get(row.target_resource_id as number) : undefined;
+      const modId = String(targetModId || (row.target_resource_id === null ? row.external_identifier : '') || '');
+      if (!modId) continue;
       const list = mapped.get(versionId) || [];
-      list.push(dependency);
+      list.push({
+        mod_id: modId,
+        kind: row.dependency_type,
+        version_constraint: row.version_constraint,
+        upstream_url: row.upstream_url,
+      });
       mapped.set(versionId, list);
     }
     return mapped;
+  }
+
+  /**
+   * `mod_id` for each public target resource, used to build the resolution
+   * graph. Visibility is already enforced by the shared projection; this lookup
+   * only translates the surviving target IDs to their catalog identifiers.
+   */
+  private async modIdsForTargets(targetIds: Array<number | null>): Promise<Map<number, string>> {
+    const ids = [...new Set(targetIds.filter((id): id is number => typeof id === 'number' && id > 0))];
+    if (!ids.length) return new Map();
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = await this.rowsFrom(
+      'mod_profiles',
+      `SELECT resource_id, mod_id FROM mod_profiles WHERE resource_id IN (${placeholders})`,
+      ids,
+    );
+    const map = new Map<number, string>();
+    for (const row of rows) {
+      const modId = String(row.mod_id || '');
+      if (modId) map.set(this.numberValue(row.resource_id), modId);
+    }
+    return map;
   }
 
   async getCompatibility(publicId: string, kind: string, query: ResourceV2VersionQueryDto) {
