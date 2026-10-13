@@ -1388,7 +1388,7 @@ export class ResourcesService {
       // Aggregate each event window once, instead of rescanning it for each card.
       const trendScore = '(COALESCE(download_trend.score, 0) + COALESCE(like_trend.score, 0) + COALESCE(favorite_trend.score, 0))';
       if (options.trendingOnly) {
-        qb.leftJoin("(SELECT resource_id, COUNT(*) * 3 AS score FROM download_events WHERE event_type = 'granted' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)", 'download_trend', 'download_trend.resource_id = resource.id')
+        qb.leftJoin("(SELECT resource_id, COUNT(*) * 3 AS score FROM download_events WHERE event_type = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)", 'download_trend', 'download_trend.resource_id = resource.id')
           .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_likes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'like_trend', 'like_trend.resource_id = resource.id')
           .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_favorites WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'favorite_trend', 'favorite_trend.resource_id = resource.id')
           .addSelect(trendScore, 'trending_score');
@@ -2914,10 +2914,15 @@ export class ResourcesService {
     await this.resourcePreviewService?.setResPreviewVisibility(resource, visibility, manager);
   }
 
+  /**
+   * Resolve the stored file a download request actually serves: the named
+   * version when the request carried `?version_id`, otherwise the row a bare
+   * request streams from (see `resolveBareDownloadVersion`).
+   */
   async findStoredDownloadFile(resourceId: number, versionId?: number, viewer?: { id: number; role: string }): Promise<{ version: ResourceVersion; file: ResourceFile } | null> {
     const version = versionId
       ? await this.versionRepository.findOne({ where: { id: versionId, resource_id: resourceId } })
-      : (await this.versionRepository.find({ where: { resource_id: resourceId, status: 'published' }, order: { published_at: 'DESC', revision: 'DESC', id: 'DESC' }, take: 1 }))[0];
+      : await this.resolveBareDownloadVersion(resourceId);
     if (!version) return null;
     if (version.status !== 'published') {
       const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
@@ -2932,6 +2937,38 @@ export class ResourcesService {
     }
     const file = await this.resourceFileRepository.findOne({ where: { resource_version_id: version.id, role: 'primary' }, order: { sort_order: 'ASC', id: 'ASC' } });
     return file ? { version, file } : null;
+  }
+
+  /**
+   * The version row a bare (no `?version_id`) download streams its bytes from.
+   *
+   * `getForFileAccess` rewrites the resource's own path from the
+   * `latest_published_version_id` pointer before the stream opens, so a bare
+   * request serves that pointer's bytes. Resolving "newest `published_at`"
+   * here instead would name a different row whenever the pointer and the
+   * newest published row diverge (a merged-in version can carry a later
+   * `published_at` than the pointer), and the completion would be attributed
+   * to a file that never left the server. The newest published row stays as
+   * the fallback for the states where the pointer yields no published row —
+   * unchanged from the previous resolution, so the caller's path check still
+   * refuses to credit a row whose bytes did not flow.
+   */
+  private async resolveBareDownloadVersion(resourceId: number): Promise<ResourceVersion | null> {
+    const resource = await this.resourceRepository.findOne({ where: { id: resourceId }, select: ['id', 'latest_published_version_id'] });
+    if (resource?.latest_published_version_id) {
+      // Same query as `getForFileAccess` uses to rewrite the path: the pointer
+      // only counts when it points at a published row of this resource.
+      const pointed = await this.versionRepository.findOne({
+        where: { id: resource.latest_published_version_id, resource_id: resourceId, status: 'published' },
+      });
+      if (pointed) return pointed;
+    }
+    const newest = await this.versionRepository.find({
+      where: { resource_id: resourceId, status: 'published' },
+      order: { published_at: 'DESC', revision: 'DESC', id: 'DESC' },
+      take: 1,
+    });
+    return newest[0] ?? null;
   }
 
   async updateStatus(

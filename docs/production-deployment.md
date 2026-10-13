@@ -60,7 +60,14 @@ cp frontend/.env.local.example frontend/.env.production
 | `LANLINK_ENABLED` / `LANLINK_URL` | LanLink 集成开关和控制面地址 |
 | `EASYMANAGER_ENABLED` | 当前默认 `false`，除非已恢复 EasyManager |
 
-`download_events` 保存 requested、granted、started、completed、failed 生命周期事件；新 grant 通过数据库去重表按短窗口去重。管理仪表盘按数据库事件聚合 downloads 与 failed counts。它是业务统计数据，不包含完整客户端 IP 审计记录。
+`download_events` 保存 requested、granted、started、completed、failed 生命周期事件。`granted` 只表示授权：用户可见的“完成下载数”一律统计 `completed`（文件流成功结束），断流、读错误或非 2xx 响应不计完成。
+
+两类去重窗口不同，是**有意**的取舍：
+
+- **grant** 用 `download_grant_dedup` 锁行做**滚动 60 秒**（同一 (file, actor) 60 秒内只授权一次）；
+- **completed** 用**自然分钟桶**（`download_events.dedup_bucket` = `floor(created_at / 60s)`）去重，不跟随 grant 的滚动窗口：同一 (file, actor) 在 10:00:59 与 10:01:01 各结束一次会落在两个桶、计两次（约 1/60 的临界重试会轻微高估）。选择自然分钟桶是因为完成写入发生在响应收尾路径上，只做一次无事务的追加插入（best-effort 遥测，失败只记 warn 不打断下载）；改真滚动窗口就要给每条完成的流加一次事务 + `SELECT ... FOR UPDATE`，成本高于它挡掉的临界重复。唯一索引 `uq_download_events_dedup_bucket` 仍保证单桶内并发回调只落一条。
+
+`resources.download_count` 保持**授权**口径（ADR-009「public download count is effective granted delivery」）：公开面的卡片/榜单展示的是授权次数，与仪表盘的“完成下载”不是同一个数。管理仪表盘按数据库事件聚合 downloads（completed）与 failed counts。它是业务统计数据，不包含完整客户端 IP 审计记录。
 
 生产环境不要使用 `.env.example` 中的 `change-me` 值。
 

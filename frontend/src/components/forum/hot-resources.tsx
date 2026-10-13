@@ -3,12 +3,15 @@
 import Link from 'next/link';
 import { Resource } from '@/types';
 import { Download, Star } from 'lucide-react';
+import { translate, type Locale } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
 interface HotResourcesProps {
   resources: Resource[];
+  locale?: Locale;
 }
 
-export default function HotResources({ resources }: HotResourcesProps) {
+export default function HotResources({ resources, locale = siteProfile.localization.defaultLocale }: HotResourcesProps) {
   if (resources.length === 0) return null;
 
   return (
@@ -34,7 +37,7 @@ export default function HotResources({ resources }: HotResourcesProps) {
                 <div className="mt-1 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span className="flex items-center gap-1">
                     <Download className="h-3 w-3" />
-                    {resource.download_count}
+                    {translate(locale, 'resourceDetail.downloads', { count: Number(resource.download_count || 0).toLocaleString(locale) })}
                   </span>
                   {(resource.rating_average ?? 0) > 0 && (
                     <span className="flex items-center gap-1">

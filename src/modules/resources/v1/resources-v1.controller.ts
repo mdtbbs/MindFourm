@@ -19,7 +19,10 @@ import { RESOURCE_KINDS } from '../resource-kind-registry';
 import { ResourceCategoryService } from '../resource-categories.service';
 import { DownloadGrantService } from '../../downloads/download-grant.service';
 import { DownloadPolicyService } from '../../downloads/download-policy.service';
+import { DownloadEventsService } from '../../downloads/download-events.service';
+import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { ResourceFileProviderService } from '../resource-file-provider.service';
 
 /**
@@ -44,6 +47,7 @@ export class ResourcesV1Controller {
     @Optional() private readonly downloadGrantService?: DownloadGrantService,
     @Optional() private readonly downloadPolicyService?: DownloadPolicyService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() private readonly downloadEvents?: DownloadEventsService,
   ) {}
 
   @Get()
@@ -154,7 +158,24 @@ export class ResourcesV1Controller {
       'Content-Type': target.file.mime_type || 'application/octet-stream',
       'Content-Disposition': attachmentContentDisposition(target.file.original_filename || target.file.display_name || 'file'),
     });
-    return new StreamableFile(createReadStream(filePath));
+    const stream = createReadStream(filePath);
+    if (this.downloadEvents) {
+      // The shared util keeps this identity identical to the grant ledger's, so
+      // one anonymous visitor downloading one file through two routes counts once.
+      const actorKey = downloadActorKey(req?.user?.id, getClientIp(req), req?.headers?.['user-agent']);
+      observeStreamCompletion(stream, res, (event) => {
+        if (event !== 'completed') return;
+        void this.downloadEvents!.recordCompletion({
+          event_type: 'completed', resource_id: target.resource.id, version_id: target.version.id,
+          file_id: target.file.id, user_id: Number(req?.user?.id) || null, client_type: 'public-v1',
+          client_version: String(req?.headers?.['x-client-version'] || '').slice(0, 80) || null,
+          platform: String(req?.headers?.['x-platform'] || '').slice(0, 40) || null,
+          backend: String(target.file.storage_backend || target.file.delivery_mode || 'managed').slice(0, 32),
+          created_at: new Date(),
+        }, actorKey).catch(() => undefined);
+      });
+    }
+    return new StreamableFile(stream);
   }
 
   private async recordDownloadGrant(target: { resource: any; version: any; file: any }, req: any): Promise<void> {
@@ -163,10 +184,7 @@ export class ResourcesV1Controller {
       return;
     }
     const userId = Number(req?.user?.id);
-    const userAgent = String(req?.headers?.['user-agent'] || '');
-    const actorKey = Number.isInteger(userId) && userId > 0
-      ? `user:${userId}`
-      : `ipua:${getClientIp(req) || 'unknown'}:${userAgent}`;
+    const actorKey = downloadActorKey(userId, getClientIp(req), req?.headers?.['user-agent']);
     await this.downloadGrantService.recordGrant({
       resourceId: target.resource.id,
       versionId: target.version.id,

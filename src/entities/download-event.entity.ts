@@ -10,6 +10,11 @@ export class DownloadEvent {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: string;
 
+  /**
+   * `requested` (attempt) -> `granted` (authorization, drives the per-resource
+   * counter) -> `started` -> `completed` (the byte stream ended successfully;
+   * every "downloads" panel counts this) or `failed`.
+   */
   @Column({ type: 'varchar', length: 16 })
   event_type: 'requested' | 'granted' | 'started' | 'completed' | 'failed';
 

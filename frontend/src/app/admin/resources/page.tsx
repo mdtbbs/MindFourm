@@ -114,7 +114,7 @@ export default function AdminResourcesPage() {
         </div>
         <div className="grid border-t border-surface-200 lg:grid-cols-2">
           <ResourceRanking title="浏览榜" items={operations?.top_viewed || []} metric={(resource) => `${Number(resource.view_count) || 0} 浏览`} />
-          <ResourceRanking title="下载榜" items={operations?.top_downloaded || []} metric={(resource) => `${resource.download_count || 0} 下载`} bordered />
+          <ResourceRanking title="授权榜" items={operations?.top_downloaded || []} metric={(resource) => `${resource.download_count || 0} 次授权`} bordered />
         </div>
       </section>
 

@@ -861,6 +861,7 @@ The Legacy Resource dirty-data matrix includes root-only files, Version-only fil
 - **ADR-007:** MediaAsset and ResourceFile are distinct domains.
 - **ADR-008:** split Storage Provider from Delivery Strategy.
 - **ADR-009:** public download count is effective granted delivery.
+  - *Annotation (2026-10-13, Issue #60 / PR #67):* `resources.download_count` keeps this authorization semantics (it is incremented on grant only). User-visible "completed downloads" figures — admin range metrics, resource analytics conversion, trending — now count `completed` download events (a stream that finished writing its body) and are therefore a different number. Public surfaces that render `download_count` (cards, rankings, hot list, workbench stats) must label it as authorizations, not downloads.
 - **ADR-010:** preserve historical download baseline.
 - **ADR-011:** new managed files require hash verification; legacy files support explicit unknown integrity.
 - **ADR-012:** create Outbox only when the first real cross-module event requires it.

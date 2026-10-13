@@ -149,6 +149,9 @@ describe('ResourceViewsService', () => {
     expect(dataSource.query).toHaveBeenCalledTimes(4);
     expect(dataSource.query.mock.calls[3][1]).toHaveLength(10);
     expect(dataSource.query.mock.calls[3][0]).toContain('INNER JOIN resources resource ON resource.discussion_thread_id = reply.post_id');
+    // Download conversion must read the same canonical completed event as the other panels.
+    expect(dataSource.query.mock.calls[3][0]).toContain("event_type = 'completed'");
+    expect(dataSource.query.mock.calls[3][0]).not.toContain("event_type = 'granted'");
     expect(dataSource.query.mock.calls[3][0]).toContain("reply.status = 'published'");
   });
 });

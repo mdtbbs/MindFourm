@@ -350,7 +350,7 @@ export default async function UserProfilePage({
           ) : (
             <div className="space-y-3">
               {resourcesResult.data.map((resource) => (
-                <ResourceCard key={resource.id} resource={resource} />
+                <ResourceCard key={resource.id} resource={resource} locale={locale} />
               ))}
             </div>
           )}

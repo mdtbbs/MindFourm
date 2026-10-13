@@ -174,6 +174,48 @@ describe('ResourcesV1Controller', () => {
     expect(grants.recordGrant).toHaveBeenCalledTimes(1);
   });
 
+  it('counts a completed V1 stream once and ignores an aborted response', async () => {
+    const { EventEmitter } = await import('events');
+    const fsPromises = await import('fs/promises');
+    const path = await import('path');
+    const os = await import('os');
+    const folder = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'v1-complete-'));
+    const filePath = path.join(folder, 'mod.jar');
+    await fsPromises.writeFile(filePath, Buffer.from('jar-bytes'));
+    try {
+      const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+      const target = {
+        resource: { id: 7, resource_kind: 'mod', status: 'approved', is_public: 1, visibility: 'public' },
+        version: { id: 12, status: 'published' },
+        file: { id: 30, storage_backend: 'managed', availability_status: 'available', storage_key: filePath, mime_type: 'application/java-archive', original_filename: 'mod.jar' },
+      };
+      const adapter = { getPublicFileByPublicIds: jest.fn().mockResolvedValue(target), incrementDownload: jest.fn() };
+      const grants = { recordGrant: jest.fn().mockResolvedValue(true) };
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      const controller = new ResourcesV1Controller(capabilities as any, adapter as any, undefined, undefined, grants as any, undefined, undefined, events as any);
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn(); response.setHeader = jest.fn();
+      const stream = await controller.downloadFile('resource', 'version', 'file', response as any, { headers: {}, user: { id: 22 } });
+      response.emit('finish');
+      await Promise.resolve();
+      expect(events.recordCompletion).toHaveBeenCalledTimes(1);
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        event_type: 'completed', resource_id: 7, version_id: 12, file_id: 30, client_type: 'public-v1',
+      }), 'user:22');
+      (stream as any).getStream?.();
+
+      const aborted = new EventEmitter() as any;
+      aborted.statusCode = 200; aborted.writableFinished = false; aborted.set = jest.fn(); aborted.setHeader = jest.fn();
+      await controller.downloadFile('resource', 'version', 'file', aborted as any, { headers: {}, user: { id: 22 } });
+      aborted.emit('close');
+      await Promise.resolve();
+      expect(events.recordCompletion).toHaveBeenCalledTimes(1);
+    } finally {
+      await fsPromises.rm(folder, { recursive: true, force: true });
+    }
+  });
+
   it('does not treat a pending file on a published version as publicly downloadable', async () => {
     const caps = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
     const target = {

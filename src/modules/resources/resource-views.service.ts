@@ -216,7 +216,7 @@ export class ResourceViewsService implements OnModuleInit, OnModuleDestroy {
     const discussionResourceClause = resourceId ? ' AND resource.id = ?' : '';
     const interactionRows = await this.dataSource.query(`
       SELECT
-        (SELECT COUNT(*) FROM download_events WHERE event_type = 'granted' AND created_at >= ?${interactionResourceClause}) AS downloads,
+        (SELECT COUNT(*) FROM download_events WHERE event_type = 'completed' AND created_at >= ?${interactionResourceClause}) AS downloads,
         (SELECT COUNT(*) FROM resource_favorites WHERE created_at >= ?${interactionResourceClause}) AS favorites,
         (SELECT COUNT(*) FROM resource_likes WHERE created_at >= ?${interactionResourceClause}) AS likes,
         (SELECT COUNT(*) FROM resource_ratings WHERE created_at >= ?${interactionResourceClause}) AS ratings,

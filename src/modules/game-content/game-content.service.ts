@@ -21,6 +21,7 @@ import { DownloadPolicyService } from '../downloads/download-policy.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
 import { DownloadEventsService } from '../downloads/download-events.service';
 import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -272,27 +273,21 @@ export class GameContentService {
       const location = providerTarget?.kind === 'managed' ? { path: providerTarget.path, size: providerTarget.size } : externalUrl ? null : await this.storage.statManagedFile(file.storage_key || version.file_path || '');
       if (externalUrl) assertSafeRedirectUrl(externalUrl);
       const now = new Date();
-      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: file.id, grantedAt: now, userId, clientType, clientVersion, platform, backend: file.storage_backend }, this.downloadActorKey(userId, clientIp));
+      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: file.id, grantedAt: now, userId, clientType, clientVersion, platform, backend: file.storage_backend }, downloadActorKey(userId, clientIp, clientVersion));
       return { resource, version, file, path: location?.path || null, size: location?.size || file.size_bytes || null, externalUrl, counted: granted };
     }
     if (version?.file_path) {
       const location = await this.storage.statManagedFile(version.file_path);
-      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, this.downloadActorKey(userId, clientIp));
+      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, downloadActorKey(userId, clientIp, clientVersion));
       return { resource, version, file: null, path: location.path, size: location.size, counted: granted };
     }
     if (resource.file_path) {
       if (this.isQuarantinedPath(resource.file_path)) throw new NotFoundException('地图文件暂不可用');
       const location = await this.storage.statManagedFile(resource.file_path);
-      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: null, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, this.downloadActorKey(userId, clientIp));
+      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: null, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, downloadActorKey(userId, clientIp, clientVersion));
       return { resource, version: null, file: null, path: location.path, size: location.size, counted: granted };
     }
     throw new NotFoundException('地图文件暂不可用');
-  }
-
-  private downloadActorKey(userId: number | null, clientIp: string): string {
-    if (userId !== null) return `user:${userId}`;
-    const secret = this.config.get<string>('mobileAuth.refreshHmacSecret') || 'development-only-game-content-view-secret';
-    return `anon:${createHmac('sha256', secret).update(clientIp.trim() || 'unknown').digest('hex')}`;
   }
 
   async recordDownloadLifecycle(target: { resource: Resource; version: ResourceVersion | null; file: ResourceFile | null }, eventType: 'started' | 'completed' | 'failed', userId: number | null, clientType: string, platform: string | null, clientVersion: string | null): Promise<void> {
@@ -301,6 +296,23 @@ export class GameContentService {
       file_id: target.file?.id ?? null, user_id: userId, client_type: clientType,
       client_version: clientVersion, platform, backend: target.file?.storage_backend || 'local', created_at: new Date(),
     });
+  }
+
+  /**
+   * The canonical "completed download" for this route. It goes through the
+   * shared completion writer (deduplicated by the events unique index) rather
+   * than `recordDownloadLifecycle`, so a replayed or resumed stream cannot
+   * count the same file twice inside the window.
+   */
+  async recordDownloadCompletion(
+    target: { resource: Resource; version: ResourceVersion | null; file: ResourceFile | null },
+    userId: number | null, clientIp: string, clientType: string, platform: string | null, clientVersion: string | null,
+  ): Promise<boolean> {
+    return this.downloadEvents.recordCompletion({
+      event_type: 'completed', resource_id: target.resource.id, version_id: target.version?.id ?? null,
+      file_id: target.file?.id ?? null, user_id: userId, client_type: clientType,
+      client_version: clientVersion, platform, backend: target.file?.storage_backend || 'local', created_at: new Date(),
+    }, downloadActorKey(userId, clientIp, clientVersion));
   }
 
   async recordDownloadFailure(value: string, userId: number | null, clientType: string, platform: string | null, clientVersion: string | null): Promise<void> {

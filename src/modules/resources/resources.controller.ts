@@ -3,6 +3,7 @@ import { CapabilitiesService } from '../capabilities/capabilities.service';
 import {
   Controller,
   Get,
+  Logger,
   Header,
   Post,
   Put,
@@ -51,6 +52,7 @@ import * as path from 'path';
 import { ResourceStorageService } from './resource-storage.service';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
@@ -67,6 +69,8 @@ import { DownloadPolicyService } from '../downloads/download-policy.service';
 import { ResourceDirectUploadService } from './resource-direct-upload.service';
 import { ResourceFileProviderService } from './resource-file-provider.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
+import { DownloadEventsService } from '../downloads/download-events.service';
+import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { ResourceOperationsService } from './resource-operations.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
@@ -149,6 +153,8 @@ export async function cleanupUploadedFile(file?: Express.Multer.File): Promise<v
 
 @Controller('resources')
 export class ResourcesController {
+  private readonly logger = new Logger(ResourcesController.name);
+
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly categoryService: ResourceCategoryService,
@@ -168,6 +174,7 @@ export class ResourcesController {
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly downloadGrants?: DownloadGrantService,
+    @Optional() private readonly downloadEvents?: DownloadEventsService,
     @Optional() private readonly editorCapabilities?: CapabilitiesService,
   ) {}
 
@@ -651,7 +658,7 @@ export class ResourcesController {
       await this.downloadGrants.recordGrant({
         resourceId: id, versionId: stored.version.id, fileId: stored.file.id, userId,
         grantedAt: new Date(), clientType: 'web', clientVersion: null, platform: null, backend: 'res',
-      }, userId ? `user:${userId}` : `ipua:${getClientIp(req || {}) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`);
+      }, downloadActorKey(userId, getClientIp(req || {}), req?.headers?.['user-agent']));
       return res.redirect(302, downloadTarget.url);
     }
 
@@ -699,7 +706,37 @@ export class ResourcesController {
       'Content-Disposition': attachmentContentDisposition(target.file_name || 'file'),
     });
 
-    return new StreamableFile(createReadStream(filePath));
+    // The recorded version/file pair must be the one the bytes actually came from.
+    // Deciding that by whether the request carried `?version_id` is wrong: a bare
+    // request streams a published version's bytes too, because `getForFileAccess`
+    // swaps `file_path` for the row `latest_published_version_id` points at before
+    // the stream is opened, and a bare `findStoredDownloadFile` resolves that same
+    // row. Credit the row only when its path is the one that streamed; every other
+    // case — the resource's own legacy root file, or a resolved row whose path is
+    // not the streamed one — records neither a version nor a file.
+    const streamedPair = stored && target.file_path === stored.version.file_path ? stored : null;
+    const streamedVersionId = streamedPair?.version.id ?? null;
+    const streamedFileId = streamedPair?.file.id ?? null;
+
+    const stream = createReadStream(filePath);
+    if (this.downloadEvents) {
+      // The streamed branch is the only web path that can prove the bytes were
+      // delivered: a finished body counts once, disconnects and read errors do not.
+      const userId = req?.user?.id || null;
+      // Same actor identity as the grant path above: a visitor who downloads the
+      // same file through another route is one download, not two (the grant and
+      // completion dedup keys both derive from this string).
+      const actorKey = downloadActorKey(userId, getClientIp(req || {}), req?.headers?.['user-agent']);
+      observeStreamCompletion(stream, res, (event) => {
+        if (event !== 'completed') return;
+        void this.downloadEvents!.recordCompletion({
+          event_type: 'completed', resource_id: id, version_id: streamedVersionId,
+          file_id: streamedFileId, user_id: userId, client_type: 'web',
+          client_version: null, platform: null, backend: 'managed', created_at: new Date(),
+        }, actorKey).catch((error) => this.logger.warn(`Download completion persistence failed: ${(error as Error).message}`));
+      });
+    }
+    return new StreamableFile(stream);
   }
 
   @Get(':id/versions')

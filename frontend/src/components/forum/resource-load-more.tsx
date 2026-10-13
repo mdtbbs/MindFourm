@@ -6,6 +6,7 @@ import ResourceRow from "./resource-row";
 import { resourceApi } from "@/lib/api/client";
 import ErrorState from "@/components/ui/error-state";
 import InlineLoading from "@/components/ui/inline-loading";
+import type { Locale } from "@/i18n";
 import type { MapFilterValues } from "@/lib/resources/query";
 
 interface ResourceLoadMoreProps {
@@ -21,6 +22,8 @@ interface ResourceLoadMoreProps {
   resourceKind?: string;
   /** Validated map/blueprint conditions; absent for every other resource kind. */
   mapFilters?: MapFilterValues;
+  /** Request locale, so card counters render in the visitor's language. */
+  locale?: Locale;
 }
 
 export default function ResourceLoadMore({
@@ -35,6 +38,7 @@ export default function ResourceLoadMore({
   compatibility,
   resourceKind,
   mapFilters,
+  locale,
 }: ResourceLoadMoreProps) {
   const [resources, setResources] = useState<Resource[]>(initialResources);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
@@ -80,7 +84,7 @@ export default function ResourceLoadMore({
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {resources.map((resource) => (
-          <ResourceRow key={resource.id} resource={resource} />
+          <ResourceRow key={resource.id} resource={resource} locale={locale} />
         ))}
       </div>
 

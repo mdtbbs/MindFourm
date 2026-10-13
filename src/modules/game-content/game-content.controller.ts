@@ -15,6 +15,7 @@ import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
+import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { getClientIp } from '@common/utils/client-context.util';
 import { GameContentAuthGuard, GameContentRequiredAuthGuard } from './game-content-auth.guard';
 import { OAuthScopeDocumentation, OAuthScopeIfBearer } from '@common/decorators/oauth-protected.decorator';
@@ -106,17 +107,24 @@ export class GameContentController {
   async mapDownloadFile(@Param('id') id: string, @Req() req: any, @Res({ passthrough: true }) res: Response) {
     const userAgent = typeof req.headers?.['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 80) : null;
     const platform = typeof req.headers?.['x-client-platform'] === 'string' ? req.headers['x-client-platform'].slice(0, 40) : null;
+    const clientIp = getClientIp(req);
     const context = { userId: req.user?.id || null, clientType: 'game-content', platform, clientVersion: userAgent };
     let target: Awaited<ReturnType<GameContentService['prepareMapDownload']>>;
     try {
-      target = await this.gameContent.prepareMapDownload(id, context.userId, context.clientType, getClientIp(req), context.clientVersion, platform);
+      target = await this.gameContent.prepareMapDownload(id, context.userId, context.clientType, clientIp, context.clientVersion, platform);
     } catch (error) {
       await this.gameContent.recordDownloadFailure(id, context.userId, context.clientType, platform, context.clientVersion)
         .catch((persistError) => this.logger.warn(`Download failed analytics persistence failed: ${(persistError as Error).message}`));
       throw error;
     }
-    const logLifecycle = (event: 'started' | 'completed' | 'failed') => this.gameContent.recordDownloadLifecycle(target, event, context.userId, context.clientType, platform, context.clientVersion)
-      .catch((error) => this.logger.warn(`Download ${event} analytics persistence failed: ${(error as Error).message}`));
+    const logLifecycle = (event: 'started' | 'completed' | 'failed') => {
+      // `completed` is written through the deduplicated completion ledger; the
+      // other phases stay plain lifecycle facts.
+      const record = event === 'completed'
+        ? this.gameContent.recordDownloadCompletion(target, context.userId, clientIp, context.clientType, platform, context.clientVersion)
+        : this.gameContent.recordDownloadLifecycle(target, event, context.userId, context.clientType, platform, context.clientVersion);
+      return record.catch((error) => this.logger.warn(`Download ${event} analytics persistence failed: ${(error as Error).message}`));
+    };
     await logLifecycle('started');
     if (target.externalUrl) {
       // Each request must pass through the forum's grant ledger, including
@@ -134,15 +142,7 @@ export class GameContentController {
     const hash = target.file?.content_hash || target.version?.content_hash || target.resource.content_hash;
     if (hash) res.setHeader('ETag', `"${hash}"`);
     const stream = createReadStream(target.path);
-    let lifecycleFinished = false;
-    const finishLifecycle = (event: 'completed' | 'failed') => {
-      if (lifecycleFinished) return;
-      lifecycleFinished = true;
-      void logLifecycle(event);
-    };
-    stream.once('error', () => finishLifecycle('failed'));
-    res.once('finish', () => finishLifecycle(res.statusCode < 400 ? 'completed' : 'failed'));
-    res.once('close', () => { if (!res.writableFinished) finishLifecycle('failed'); });
+    observeStreamCompletion(stream, res, (event) => void logLifecycle(event));
     return new StreamableFile(stream);
   }
 

@@ -90,6 +90,8 @@ describe('ResourceDiscoveryService', () => {
     expect(result.sections.rising.pagination).toEqual(expect.objectContaining({ page: 1, limit: 1, items_in_window: 2, candidate_window_size: 400 }));
     expect(result.sections.rising.items[0].recent_views).toBe(4);
     expect(result.sections.rising.items[0].recent_downloads).toBe(2);
+    // The recent-downloads signal is completed streams, not the grant ledger.
+    expect(downloadBuilder.andWhere).toHaveBeenCalledWith("event.event_type = 'completed'");
   });
 
   it('returns the bounded download ranking with public visibility filters and pagination', async () => {

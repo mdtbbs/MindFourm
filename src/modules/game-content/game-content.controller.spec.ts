@@ -12,6 +12,45 @@ describe('GameContentController feed', () => {
     expect(response.redirect).toHaveBeenCalledWith('https://res.example/o/object/map.msav');
   });
 
+  it('counts a completed stream once and never records a disconnect as completed', async () => {
+    const { EventEmitter } = await import('events');
+    const file = await (await import('fs/promises')).mkdtemp((await import('path')).join((await import('os')).tmpdir(), 'gc-complete-'));
+    const path = (await import('path')).join(file, 'map.msav');
+    await (await import('fs/promises')).writeFile(path, Buffer.from('map-bytes'));
+    try {
+      const target = { resource: { id: 1 }, version: { id: 2 }, file: { id: 3, storage_backend: 'managed' }, externalUrl: null, path, size: 9 };
+      const gameContent = {
+        prepareMapDownload: jest.fn().mockResolvedValue(target),
+        recordDownloadLifecycle: jest.fn().mockResolvedValue(undefined),
+        recordDownloadCompletion: jest.fn().mockResolvedValue(true),
+      };
+      const controller = new GameContentController(gameContent as any, {} as any);
+
+      // Successful body: `finish` with a 2xx status records exactly one completion.
+      const res = new EventEmitter() as any;
+      res.statusCode = 200; res.writableFinished = true;
+      res.set = jest.fn(); res.setHeader = jest.fn();
+      await controller.mapDownloadFile('map-id', { headers: {}, user: { id: 5 } } as any, res as any);
+      res.emit('finish'); res.emit('close');
+      await Promise.resolve();
+      expect(gameContent.recordDownloadCompletion).toHaveBeenCalledTimes(1);
+      expect(gameContent.recordDownloadCompletion).toHaveBeenCalledWith(target, 5, expect.anything(), 'game-content', null, null);
+      expect(gameContent.recordDownloadLifecycle).toHaveBeenCalledWith(target, 'started', 5, 'game-content', null, null);
+
+      // Aborted body: `close` before the response finished must not count.
+      const aborted = new EventEmitter() as any;
+      aborted.statusCode = 200; aborted.writableFinished = false;
+      aborted.set = jest.fn(); aborted.setHeader = jest.fn();
+      await controller.mapDownloadFile('map-id', { headers: {}, user: { id: 5 } } as any, aborted as any);
+      aborted.emit('close');
+      await Promise.resolve();
+      expect(gameContent.recordDownloadCompletion).toHaveBeenCalledTimes(1);
+      expect(gameContent.recordDownloadLifecycle).toHaveBeenLastCalledWith(target, 'failed', 5, 'game-content', null, null);
+    } finally {
+      await (await import('fs/promises')).rm(file, { recursive: true, force: true });
+    }
+  });
+
   it('redirects RES previews while leaving legacy buffer responses available', async () => {
     const gameContent = { preview: jest.fn().mockResolvedValue({ redirectUrl: 'https://res.example/o/preview/preview.png' }) };
     const controller = new GameContentController(gameContent as any, {} as any);

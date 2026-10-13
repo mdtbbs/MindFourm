@@ -382,7 +382,7 @@ describe('ResourcesService', () => {
     expect(defaultQb.andWhere).toHaveBeenCalledWith('resource.is_featured = 1');
   });
 
-  it('orders trending public resources from the last seven days of persisted grants, likes, and favorites', async () => {
+  it('orders trending public resources from the last seven days of completed downloads, likes, and favorites', async () => {
     const { service, defaultQb } = createService();
     await service.getList({ limit: 20 } as any, { scope: 'public', trendingOnly: true });
     expect(defaultQb.leftJoin).toHaveBeenCalledWith(expect.stringContaining("DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id"), 'download_trend', 'download_trend.resource_id = resource.id');
@@ -1412,6 +1412,44 @@ describe('RES unpublished version download authorization', () => {
     await expect(service.findStoredDownloadFile(7, 11)).rejects.toThrow('资源版本不存在');
     expect((service as any).resourceFileRepository.findOne).not.toHaveBeenCalled();
     await expect(service.findStoredDownloadFile(7, 11, { id: 10, role: 'member' })).resolves.toEqual({ version, file });
+  });
+});
+
+describe('bare download version resolution', () => {
+  it('follows the latest_published pointer when it diverges from the newest published row', async () => {
+    // Forked state: the pointer names v31 while a merged-in v9 carries a newer
+    // published_at, so "newest published row" is v9. A bare request streams the
+    // pointer row's bytes (getForFileAccess rewrote the path from that same
+    // pointer), so the resolution must name v31 — not v9, whose file never left
+    // the server. Reverting to a plain "newest published_at" query must fail here.
+    const service = Object.create(ResourcesService.prototype) as ResourcesService;
+    const pointed = { id: 31, resource_id: 7, status: 'published', file_path: '/files/pointer-v31.msav' };
+    const newest = { id: 9, resource_id: 7, status: 'published', file_path: '/files/merged-v9.msav' };
+    (service as any).resourceRepository = { findOne: jest.fn().mockResolvedValue({ id: 7, latest_published_version_id: 31 }) };
+    (service as any).versionRepository = {
+      findOne: jest.fn().mockResolvedValue(pointed),
+      find: jest.fn().mockResolvedValue([newest]),
+    };
+    (service as any).resourceFileRepository = { findOne: jest.fn().mockResolvedValue({ id: 42 }) };
+
+    await expect(service.findStoredDownloadFile(7)).resolves.toEqual({ version: pointed, file: { id: 42 } });
+    // The pointer only counts when it names a published row of this resource —
+    // the same query getForFileAccess rewrites the streamed path from.
+    expect((service as any).versionRepository.findOne).toHaveBeenCalledWith({ where: { id: 31, resource_id: 7, status: 'published' } });
+    expect((service as any).versionRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the newest published row when the pointer names no published version', async () => {
+    const service = Object.create(ResourcesService.prototype) as ResourcesService;
+    const newest = { id: 9, resource_id: 7, status: 'published', file_path: '/files/merged-v9.msav' };
+    (service as any).resourceRepository = { findOne: jest.fn().mockResolvedValue({ id: 7, latest_published_version_id: 31 }) };
+    (service as any).versionRepository = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([newest]),
+    };
+    (service as any).resourceFileRepository = { findOne: jest.fn().mockResolvedValue({ id: 99 }) };
+
+    await expect(service.findStoredDownloadFile(7)).resolves.toEqual({ version: newest, file: { id: 99 } });
   });
 });
 

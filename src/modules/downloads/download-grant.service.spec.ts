@@ -1,5 +1,6 @@
 import { DownloadGrantService } from './download-grant.service';
 import { DownloadEvent } from '@entities/download-event.entity';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 
 
 describe('DownloadGrantService persistence and deduplication', () => {
@@ -112,15 +113,113 @@ describe('DownloadGrantService persistence and deduplication', () => {
 });
 
 describe('DownloadEventsService persistence', () => {
-  it('inserts lifecycle events and queries durable grant counts', async () => {
-    const repo = { insert: jest.fn().mockResolvedValue(undefined), count: jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(5) };
+  const completion = (at = new Date('2026-09-24T10:00:00.000Z')) => ({
+    event_type: 'completed' as const, resource_id: 1, version_id: 2, file_id: 3,
+    user_id: null, client_type: 'game-content' as const, platform: null, backend: 'local', created_at: at,
+  });
+
+  it('inserts plain lifecycle events without dedup keys', async () => {
+    const repo = { insert: jest.fn().mockResolvedValue(undefined), count: jest.fn() };
     const { DownloadEventsService } = await import('./download-events.service');
     const service = new DownloadEventsService(repo as any);
-    await service.recordEvent({ event_type: 'completed', resource_id: 1, version_id: 2, file_id: 3, user_id: null, client_type: 'game-content', platform: null, backend: 'local', created_at: new Date() });
-    expect(repo.insert).toHaveBeenCalledWith( expect.objectContaining({ event_type: 'completed', dedup_key: null, dedup_bucket: null }));
+    await service.recordEvent({ event_type: 'started', resource_id: 1, version_id: 2, file_id: 3, user_id: null, client_type: 'game-content', platform: null, backend: 'local', created_at: new Date() });
+    expect(repo.insert).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'started', dedup_key: null, dedup_bucket: null }));
+    expect(DownloadEvent).toBeDefined();
+  });
+
+  it('counts successful stream ends only, never bare grants, for both aggregates', async () => {
+    const repo = { insert: jest.fn(), count: jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(5) };
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService(repo as any);
     await expect(service.getAggregateCount(3)).resolves.toBe(4);
     await expect(service.getResourceAggregate(1)).resolves.toBe(5);
-    expect(repo.count).toHaveBeenNthCalledWith(1, { where: { file_id: 3, event_type: 'granted' } });
-    expect(DownloadEvent).toBeDefined();
+    expect(repo.count).toHaveBeenNthCalledWith(1, { where: { file_id: 3, event_type: 'completed' } });
+    expect(repo.count).toHaveBeenNthCalledWith(2, { where: { resource_id: 1, event_type: 'completed' } });
+  });
+
+  it('records a completion once per (file, actor) window and rejects concurrent replays', async () => {
+    const seen = new Set<string>();
+    // Repository.insert takes a single entity object (unlike manager.insert).
+    const insert = jest.fn(async (value: any) => {
+      const key = `${value.dedup_key}:${value.dedup_bucket}`;
+      if (seen.has(key)) { const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error; }
+      seen.add(key);
+    });
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+
+    const results = await Promise.all([
+      service.recordCompletion(completion(), 'user:7'),
+      service.recordCompletion(completion(), 'user:7'),
+      service.recordCompletion(completion(), 'user:8'),
+    ]);
+    expect(results).toEqual([true, false, true]);
+    expect(insert.mock.calls[0][0]).toMatchObject({ event_type: 'completed' });
+    // The completion namespace never collides with the grant row of the same request.
+    expect(String(insert.mock.calls[0][0].dedup_key)).not.toContain('user:7');
+
+    // A later window is a new download and must count again.
+    const later = new Date('2026-09-24T10:02:00.000Z');
+    await expect(service.recordCompletion(completion(later), 'user:7')).resolves.toBe(true);
+  });
+
+  it('deduplicates completions by natural minute, not a rolling 60 seconds', async () => {
+    // Documented trade-off (docs/production-deployment.md): the completion bucket
+    // is the calendar minute, so an end at 10:00:59 and a retry at 10:01:01 land
+    // in different buckets and both count. Replacing the bucket with a rolling
+    // window (or reusing grant's lock row) must fail this expectation.
+    const buckets = new Map<string, string>();
+    const insert = jest.fn(async (value: any) => {
+      const seen = `${value.dedup_key}:${value.dedup_bucket}`;
+      if (buckets.has(seen)) { const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error; }
+      buckets.set(seen, value.dedup_bucket);
+    });
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+
+    // Same calendar minute: the second completion is a replay and is rejected.
+    const withinMinute = new Date('2026-09-24T10:00:01.000Z');
+    await expect(service.recordCompletion(completion(withinMinute), 'user:7')).resolves.toBe(true);
+    await expect(service.recordCompletion(completion(new Date('2026-09-24T10:00:59.000Z')), 'user:7')).resolves.toBe(false);
+
+    // Across the minute boundary: a new bucket, so it counts again.
+    const nextMinute = new Date('2026-09-24T10:01:01.000Z');
+    await expect(service.recordCompletion(completion(nextMinute), 'user:7')).resolves.toBe(true);
+    // Completion buckets are calendar minutes since the epoch.
+    expect(insert.mock.calls[2][0].dedup_bucket).toBe(String(Math.floor(nextMinute.getTime() / 60_000)));
+    expect(insert.mock.calls[0][0].dedup_bucket).not.toBe(insert.mock.calls[2][0].dedup_bucket);
+  });
+
+  it('counts one anonymous visitor once across the web and game-content routes', async () => {
+    // Both routes funnel through downloadActorKey(), so the same visitor produces
+    // the same dedup key even though the web route passes the full header and the
+    // game-content route passes the 80-character value it also stores. Deriving
+    // either side differently (e.g. an HMAC of the IP alone) must fail this test.
+    const seen = new Set<string>();
+    const insert = jest.fn(async (value: any) => {
+      const key = `${value.dedup_key}:${value.dedup_bucket}`;
+      if (seen.has(key)) { const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error; }
+      seen.add(key);
+    });
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+
+    const fullAgent = `Mozilla/5.0 (${'long'.repeat(40)})`;
+    const webKey = downloadActorKey(null, '198.51.100.7', fullAgent);
+    const gameKey = downloadActorKey(null, '198.51.100.7', fullAgent.slice(0, 80));
+    expect(webKey).toBe(gameKey);
+
+    const results = await Promise.all([
+      service.recordCompletion(completion(), webKey),
+      service.recordCompletion(completion(), gameKey),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('propagates real insert failures instead of swallowing them as duplicates', async () => {
+    const insert = jest.fn().mockRejectedValue(new Error('connection lost'));
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+    await expect(service.recordCompletion(completion(), 'user:7')).rejects.toThrow('connection lost');
   });
 });
