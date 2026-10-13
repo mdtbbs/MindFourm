@@ -21,6 +21,7 @@ jest.mock('@nestjs/common', () => ({
 
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
+  InjectDataSource: () => () => undefined,
 }));
 
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
@@ -80,6 +81,7 @@ jest.mock('./resource-subscriptions.service', () => ({
 }));
 
 import { ResourcesService } from './resources.service';
+import { ResourceDependencyReadService } from './resource-dependency-read.service';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceReviewEvent } from '@entities/resource-center-v2.entity';
@@ -95,6 +97,7 @@ function createService(overrides: {
   resourceStorageService?: Record<string, jest.Mock>;
   resourcePreviewService?: Record<string, jest.Mock>;
   resourceDuplicateService?: Record<string, jest.Mock>;
+  dependencyRead?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
@@ -110,6 +113,7 @@ function createService(overrides: {
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
     getOne: jest.fn().mockResolvedValue(null),
+    getRawMany: jest.fn().mockResolvedValue([]),
     getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   };
 
@@ -192,6 +196,10 @@ function createService(overrides: {
     undefined,
     overrides.resourcePreviewService as any,
     overrides.resourceDuplicateService as any,
+    undefined,
+    undefined,
+    undefined,
+    overrides.dependencyRead as any,
   );
 
   return {
@@ -453,13 +461,183 @@ describe('ResourcesService', () => {
       { resourceTag: 'campaign' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
-      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
+      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rc.runtime = 'mindustry' AND (rc.game_version = :supportedVersion OR ((rc.min_game_version IS NULL OR rc.min_game_version <= :supportedVersion) AND (rc.max_game_version IS NULL OR rc.max_game_version >= :supportedVersion)))) OR EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
       { supportedVersion: 'v8' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
       "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceCompatibility), '$.compatibility')",
       { resourceCompatibility: 'desktop' },
     );
+  });
+
+  // Issue #58: the Web readers must see modern-only releases, keep legacy-only
+  // rows visible, and show a migrated mirror exactly once. The list filter is a
+  // SQL guard (asserted on the query), the filter options and the detail rows
+  // read through the shared modern-first projection.
+  it('matches the supported_version filter against both compatibility tables so a modern-only release stays visible', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ limit: 20, supported_version: 'v8' } as any, { scope: 'public' });
+    const sql = defaultQb.andWhere.mock.calls.map(([clause]) => String(clause)).find((clause) => clause.includes('supportedVersion'));
+    expect(sql).toContain("INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id");
+    expect(sql).toContain("rc.game_version = :supportedVersion");
+    expect(sql).toContain("rc.min_game_version <= :supportedVersion");
+    // Legacy rows not yet mirrored stay searchable (mixed-storage safe).
+    expect(sql).toContain("INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id");
+    expect(sql).toContain("JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions')");
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(sql, { supportedVersion: 'v8' });
+  });
+
+  it('offers filter options from both compatibility tables', async () => {
+    const { service, dataSource } = createService({
+      dataSource: {
+        query: jest.fn(async (sql: string) => (sql.includes('FROM resource_compatibilities rc')
+          ? [{ min_version: '147', max_version: null, platform_key: 'desktop' }]
+          : [{ min_version_value: null, max_version_value: '146', platform_key: null }])),
+      },
+    });
+
+    const options = await service.getFilterOptions();
+
+    const sqls = dataSource.query.mock.calls.map(([sql]) => String(sql));
+    expect(sqls.some((sql) => sql.includes('FROM resource_compatibilities rc'))).toBe(true);
+    expect(sqls.some((sql) => sql.includes('FROM resource_version_compatibilities rvc'))).toBe(true);
+    expect(options.supported_versions).toEqual(expect.arrayContaining(['147', '146']));
+    expect(options.compatibility).toContain('desktop');
+  });
+
+  it('keeps legacy filter options when the modern table query fails mid-migration', async () => {
+    const { service } = createService({
+      dataSource: {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('FROM resource_compatibilities rc')) throw new Error('Table does not exist');
+          return [{ min_version_value: '136', max_version_value: null, platform_key: null }];
+        }),
+      },
+    });
+
+    const options = await service.getFilterOptions();
+
+    expect(options.supported_versions).toContain('136');
+  });
+
+  it('surfaces a modern-only version compatibility in the resource detail', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 21, resource_id: 27, public_id: 'modern-version', version: '1.0.0', status: 'published' }];
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dependencyRead: {
+        collectCompatibilities: jest.fn(async () => new Map([[21, [{
+          resource_version_id: 21, runtime: 'mindustry', game_version: null,
+          min_version: '147', max_version: null, channel: 'release', platform_key: 'desktop',
+          status: 'declared', source: 'analyzer', confidence: 'medium', notes: null, origin: 'modern',
+        }]]])),
+      },
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+
+    expect(detail.versions[0].compatibility).toEqual([
+      expect.objectContaining({ runtime: 'mindustry', min_version_value: '147', max_version_value: null, provenance: 'inferred', confidence: 'medium' }),
+    ]);
+  });
+
+  it('keeps a legacy-only version compatibility visible and maps its provenance unchanged', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 21, resource_id: 27, public_id: 'legacy-version', version: '1.0.0', status: 'published' }];
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dependencyRead: {
+        collectCompatibilities: jest.fn(async () => new Map([[21, [{
+          resource_version_id: 21, runtime: 'mindustry', game_version: 'v7',
+          min_version: '136', max_version: '146', channel: null, platform_key: null,
+          status: null, source: 'user_declared', confidence: null, notes: 'legacy note', origin: 'legacy',
+        }]]])),
+      },
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+
+    expect(detail.versions[0].compatibility).toEqual([
+      expect.objectContaining({ min_version_value: '136', max_version_value: '146', notes: 'legacy note', provenance: 'user_declared', confidence: null }),
+    ]);
+  });
+
+  it('shows no duplicate row for a mixed dataset the projection already de-duplicated', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 21, resource_id: 27, public_id: 'mixed-version', version: '1.0.0', status: 'published' }];
+    // The shared projection collapses a double-written pair to one modern row.
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dependencyRead: {
+        collectCompatibilities: jest.fn(async () => new Map([[21, [{
+          resource_version_id: 21, runtime: 'mindustry', game_version: null,
+          min_version: '146', max_version: null, channel: 'release', platform_key: null,
+          status: 'declared', source: 'author', confidence: null, notes: null, origin: 'modern',
+        }]]])),
+      },
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+
+    expect(detail.versions[0].compatibility).toHaveLength(1);
+    expect(detail.versions[0].compatibility[0]).toMatchObject({ min_version_value: '146', provenance: 'user_declared' });
+  });
+
+  it('de-duplicates a mirrored legacy row through the real projection and keeps a distinct constraint', async () => {
+    // End-to-end over the actual shared projection: version 21 is modern-only,
+    // version 22 is a legacy-only row, version 23 is a double-written mirror
+    // plus one genuinely distinct legacy constraint. Acceptance #1/#2 read.
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) {
+          return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        }
+        if (sql.includes('FROM resource_compatibilities')) {
+          return [
+            { id: 1, resource_version_id: 21, runtime: 'mindustry', game_version: null, min_game_version: '147', max_game_version: null, channel: 'release', platform_key: 'desktop', status: 'declared', source: 'analyzer', confidence: 'medium', notes: null },
+            { id: 2, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+          ];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) {
+          const channel = new Map<number, string>([[23, 'release']]);
+          return [
+            { id: 3, resource_version_id: 22, runtime: 'mindustry', game_series: null, min_version_value: '136', max_version_value: '145', channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: null },
+            { id: 4, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: channel.get(23) },
+            { id: 5, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '148', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: channel.get(23) },
+          ];
+        }
+        return [];
+      }),
+    };
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [
+      { id: 21, resource_id: 27, public_id: 'modern-only', version: '1.0.0', status: 'published' },
+      { id: 22, resource_id: 27, public_id: 'legacy-only', version: '1.1.0', status: 'published' },
+      { id: 23, resource_id: 27, public_id: 'mirrored', version: '1.2.0', status: 'published' },
+    ];
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    const byPublicId = new Map<string, any[]>((detail.versions as any[]).map((version) => [version.public_id, version.compatibility]));
+
+    expect(byPublicId.get('modern-only')).toEqual([
+      expect.objectContaining({ min_version_value: '147', provenance: 'inferred' }),
+    ]);
+    expect(byPublicId.get('legacy-only')).toEqual([
+      expect.objectContaining({ min_version_value: '136', max_version_value: '145', provenance: 'user_declared' }),
+    ]);
+    // Mirror collapsed to one row; the distinct 148 constraint stays.
+    expect(byPublicId.get('mirrored')).toHaveLength(2);
+    expect(byPublicId.get('mirrored')?.map((item) => item.min_version_value)).toEqual(['146', '148']);
   });
 
   it('does not apply public map metadata filters to a quarantined initial binary', async () => {

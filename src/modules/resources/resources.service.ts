@@ -51,6 +51,8 @@ import {
 import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
 import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
+import type { ResourceDependencyReadService, UnifiedCompatibility } from './resource-dependency-read.service';
+import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance, V1CompatibilityConfidence, V1CompatibilityProvenance } from './compatibility-vocabulary';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -125,6 +127,7 @@ export class ResourcesService {
     @Optional() private siteConfig?: SiteConfigService,
     @Optional() private customEmojis?: CustomEmojisService,
     @Optional() private resClient?: ResourceStorageClientService,
+    @Optional() private dependencyRead?: ResourceDependencyReadService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -1452,11 +1455,15 @@ export class ResourcesService {
       }
 
       if (supported_version?.trim()) {
-        // New releases declare Mindustry builds in their compatibility rows.
-        // JSON metadata remains a legacy fallback until reconciliation proves
-        // every historical resource has been migrated.
+        // Releases declare Mindustry builds in one of two compatibility tables:
+        // the modern one (new releases) or the legacy one (rows the migration
+        // has not mirrored yet). Both must match or a modern-only release is
+        // invisible in the list. The modern-first guard mirrors
+        // `mdtbbsSearchProviders` so list and search agree. JSON metadata
+        // remains a legacy fallback until reconciliation proves every
+        // historical resource has been migrated.
         qb.andWhere(
-          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
+          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rc.runtime = 'mindustry' AND (rc.game_version = :supportedVersion OR ((rc.min_game_version IS NULL OR rc.min_game_version <= :supportedVersion) AND (rc.max_game_version IS NULL OR rc.max_game_version >= :supportedVersion)))) OR EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
           { supportedVersion: supported_version.trim() },
         );
       }
@@ -1727,22 +1734,41 @@ export class ResourcesService {
       }
     }
 
-    // A failed compatibility query must not hide legacy filter options during
-    // the additive migration. It becomes authoritative as backfill completes.
+    // Both compatibility tables feed the filters: new releases declare builds
+    // in the modern table, rows the migration has not mirrored yet stay in the
+    // legacy one. The two queries are independent so a table missing during the
+    // additive migration cannot hide the other's options; values land in Sets,
+    // so a mirrored row cannot offer a value twice.
+    const addStructuredOptions = (rows: Array<Record<string, unknown>>) => {
+      for (const row of rows) {
+        const min = row.min_version ?? row.min_version_value;
+        const max = row.max_version ?? row.max_version_value;
+        if (min) supportedVersions.add(String(min));
+        if (max) supportedVersions.add(String(max));
+        if (row.platform_key) compatibility.add(String(row.platform_key));
+      }
+    };
     try {
-      const structured = await this.dataSource.query(
+      addStructuredOptions(await this.dataSource.query(
+        `SELECT DISTINCT rc.min_game_version AS min_version, rc.max_game_version AS max_version, rc.platform_key
+         FROM resource_compatibilities rc
+         INNER JOIN resource_versions rv ON rv.id = rc.resource_version_id
+         INNER JOIN resources resource ON resource.id = rv.resource_id
+         WHERE rc.runtime = 'mindustry' AND resource.deleted_at IS NULL AND resource.status IN (?, ?) AND resource.is_public = 1`,
+        PUBLIC_RESOURCE_STATUSES,
+      ));
+    } catch {
+      // The modern table does not exist yet; the legacy query below still runs.
+    }
+    try {
+      addStructuredOptions(await this.dataSource.query(
         `SELECT DISTINCT rvc.min_version_value, rvc.max_version_value, rvc.platform_key
          FROM resource_version_compatibilities rvc
          INNER JOIN resource_versions rv ON rv.id = rvc.resource_version_id
          INNER JOIN resources resource ON resource.id = rv.resource_id
          WHERE rvc.runtime = 'mindustry' AND resource.deleted_at IS NULL AND resource.status IN (?, ?) AND resource.is_public = 1`,
         PUBLIC_RESOURCE_STATUSES,
-      );
-      for (const row of structured) {
-        if (row.min_version_value) supportedVersions.add(String(row.min_version_value));
-        if (row.max_version_value) supportedVersions.add(String(row.max_version_value));
-        if (row.platform_key) compatibility.add(String(row.platform_key));
-      }
+      ));
     } catch {
       // Legacy metadata continues to serve filters until the new tables exist.
     }
@@ -1869,11 +1895,7 @@ export class ResourcesService {
     const visibleVersions = canViewUnpublished
       ? versions
       : versions.filter((version) => version.status === 'published');
-    const compatibilities = visibleVersions.length ? await this.dataSource.query(
-      `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
-       FROM resource_version_compatibilities WHERE resource_version_id IN (${visibleVersions.map(() => '?').join(',')})
-       ORDER BY id ASC`, visibleVersions.map(({ id: versionId }) => versionId),
-    ) : [];
+    const compatibilities = visibleVersions.length ? await this.loadDetailCompatibilities(visibleVersions.map(({ id: versionId }) => versionId)) : [];
     const byVersion = new Map<number, any[]>();
     for (const item of compatibilities || []) {
       const versionId = Number(item.resource_version_id);
@@ -1885,6 +1907,68 @@ export class ResourcesService {
     return this.normalizeOneResource(resource, visibleVersions.map((version) => ({ ...version,
       compatibility: byVersion.get(version.id) || [],
     } as ResourceVersion)));
+  }
+
+  /**
+   * Detail compatibility rows for one resource's visible versions.
+   *
+   * Reads through the same modern-first projection as V2 / V1 Manifest / Search
+   * / Pack so a modern-only release is visible here too; the legacy table alone
+   * only ever saw rows the migration had copied. Output keeps the existing
+   * detail DTO shape (`min_version_value` / `max_version_value` / `provenance`)
+   * so the Web contract and its privacy guarantees are unchanged.
+   */
+  private async loadDetailCompatibilities(versionIds: number[]): Promise<Array<{
+    resource_version_id: number;
+    runtime: string;
+    min_version_value: string | null;
+    max_version_value: string | null;
+    channel: string | null;
+    notes: string | null;
+    provenance: V1CompatibilityProvenance;
+    confidence: V1CompatibilityConfidence;
+  }>> {
+    if (this.dependencyRead) {
+      const grouped = await this.dependencyRead.collectCompatibilities(versionIds);
+      const rows: Array<{
+        resource_version_id: number; runtime: string; min_version_value: string | null; max_version_value: string | null;
+        channel: string | null; notes: string | null; provenance: V1CompatibilityProvenance; confidence: V1CompatibilityConfidence;
+      }> = [];
+      for (const item of grouped.values()) {
+        for (const entry of item) rows.push(this.toDetailCompatibility(entry));
+      }
+      return rows;
+    }
+    // Fallback used only when the shared projection is absent (unit harnesses).
+    const legacy = await this.dataSource.query(
+      `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
+       FROM resource_version_compatibilities WHERE resource_version_id IN (${versionIds.map(() => '?').join(',')})
+       ORDER BY id ASC`, versionIds,
+    ) as Array<Record<string, unknown>>;
+    return legacy.map((row) => ({
+      resource_version_id: Number(row.resource_version_id),
+      runtime: String(row.runtime || 'mindustry'),
+      min_version_value: (row.min_version_value as string) ?? null,
+      max_version_value: (row.max_version_value as string) ?? null,
+      channel: (row.channel as string) ?? null,
+      notes: (row.notes as string) ?? null,
+      provenance: normalizeCompatibilityProvenance(row.provenance),
+      confidence: normalizeCompatibilityConfidence(row.confidence),
+    }));
+  }
+
+  /** One mapping for the shared projection → the existing detail DTO vocabulary. */
+  private toDetailCompatibility(item: UnifiedCompatibility) {
+    return {
+      resource_version_id: item.resource_version_id,
+      runtime: item.runtime,
+      min_version_value: item.min_version,
+      max_version_value: item.max_version,
+      channel: item.channel,
+      notes: item.notes,
+      provenance: normalizeCompatibilityProvenance(item.source),
+      confidence: normalizeCompatibilityConfidence(item.confidence),
+    };
   }
 
   private async canViewUnpublishedVersions(resource: Resource, viewer?: { id: number; role: string }): Promise<boolean> {
