@@ -6,8 +6,10 @@ jest.mock('@nestjs/common', () => ({
   Injectable: () => () => undefined,
   Global: () => () => undefined,
   Module: () => () => undefined,
-  Optional: () => () => undefined,
-  Inject: () => () => undefined,
+  // Real implementations: the DI-token assertion below inspects the metadata
+  // these two decorators record, so stubbing them out would make it vacuous.
+  Optional: jest.requireActual('@nestjs/common').Optional,
+  Inject: jest.requireActual('@nestjs/common').Inject,
   NotFoundException: class NotFoundException extends Error {},
   ForbiddenException: class ForbiddenException extends Error {},
   BadRequestException: class BadRequestException extends Error {},
@@ -504,7 +506,7 @@ describe('ResourcesService', () => {
     expect(sql).toContain(`${legacyAlias}.min_version_value`);
     expect(sql).toContain(`${legacyAlias}.max_version_value`);
     // Version-bounded releases that never got a compatibility row, same branch
-    // the search provider has (mdtbbs-search.providers.ts:87).
+    // the search provider has (mdtbbs-search.providers.ts:89).
     const releaseAlias = sql.match(/FROM resource_versions (\w+) WHERE \1\.resource_id = resource\.id/)?.[1];
     expect(releaseAlias).toBeDefined();
     expect(sql).toContain(`${releaseAlias}.status = 'published'`);
@@ -551,6 +553,28 @@ describe('ResourcesService', () => {
     const options = await service.getFilterOptions();
 
     expect(options.supported_versions).toContain('136');
+  });
+
+  // Issue #58 R1: `dependencyRead` is a constructor parameter typed by a class,
+  // so the import must be a *value* import. `emitDecoratorMetadata` can only
+  // emit the class reference if it survives to runtime; `import type` erases it
+  // and the emitted token degrades to `Function`, which Nest cannot resolve —
+  // `@Optional()` then swallows the failure and injects `undefined`, so the
+  // shared projection never runs in production while every mocked suite stays
+  // green (they hand the dependency in directly).
+  //
+  // Asserting on the *effective* token (explicit `@Inject` wins over the
+  // emitted type) is deliberate: it lets an equivalent fix — `import type` plus
+  // an explicit `@Inject(ResourceDependencyReadService)` — pass instead of
+  // reporting a false regression.
+  it('keeps a resolvable DI token for the shared compatibility projection', () => {
+    const design: unknown[] = Reflect.getMetadata('design:paramtypes', ResourcesService) || [];
+    const declared: Array<{ index: number; param: unknown }> = Reflect.getMetadata('self:paramtypes', ResourcesService) || [];
+    // Effective token per parameter, in the module order: an explicit `@Inject`
+    // overrides the type the compiler emitted.
+    const effective = design.map((token, index) => declared.find((entry) => entry.index === index)?.param ?? token);
+
+    expect(effective).toContain(ResourceDependencyReadService);
   });
 
   it('surfaces a modern-only version compatibility in the resource detail', async () => {
@@ -831,6 +855,53 @@ describe('ResourcesService', () => {
     const detail = await service.getByIdWithVersions(27);
     expect(detail.versions[0].compatibility).toHaveLength(2);
     expect(detail.versions[0].compatibility.map((item: any) => item.provenance).sort()).toEqual(['inferred', 'user_declared']);
+  });
+
+  // Issue #58 R2: the legacy table is read with `ORDER BY id ASC` and the page
+  // renders the array as it arrives, so collapsing must not regroup the rows it
+  // keeps. Two legacy rows sharing bounds with a different row between them is
+  // the shape that a group-then-emit implementation silently reorders.
+  it('keeps the detail row order the projection returned', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'ordered', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          // The projection returns modern rows first, then the legacy rows the
+          // modern table did not copy. Bound 146 shows up in all of them, so a
+          // group-then-emit collapse pulls the two 146 legacy rows together and
+          // pushes 136 behind them.
+          return [
+            { id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: null, platform_key: null, status: 'declared', source: 'analyzer', confidence: 'high', notes: null },
+            { id: 2, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+          ];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) {
+          return [
+            { id: 4, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: 'release' },
+            { id: 5, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '136', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: null },
+            { id: 6, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: 'release', platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: 'release' },
+          ];
+        }
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    const bounds = detail.versions[0].compatibility.map((item: any) => item.min_version_value);
+
+    // Modern row 2 restates legacy row 6 and drops out; modern row 1 keeps its
+    // position in front of the two legacy rows that survive.
+    expect(bounds).toEqual(['146', '136', '146']);
+    expect(detail.versions[0].compatibility.map((item: any) => item.provenance)).toEqual(['inferred', 'user_declared', 'user_declared']);
   });
 
   it('keeps both modern declarations when they differ by explicit channel', async () => {

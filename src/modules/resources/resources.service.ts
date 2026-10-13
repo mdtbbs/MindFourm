@@ -51,7 +51,7 @@ import {
 import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
 import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
-import type { ResourceDependencyReadService, UnifiedCompatibility } from './resource-dependency-read.service';
+import { ResourceDependencyReadService, type UnifiedCompatibility } from './resource-dependency-read.service';
 import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance, V1CompatibilityConfidence, V1CompatibilityProvenance } from './compatibility-vocabulary';
 
 export interface ResourceFileMeta {
@@ -1458,14 +1458,19 @@ export class ResourcesService {
         // Releases declare Mindustry builds in one of two compatibility tables:
         // the modern one (new releases) or the legacy one (rows the migration
         // has not mirrored yet). Both must match or a modern-only release is
-        // invisible in the list. The modern-first guard follows
-        // `mdtbbsSearchProviders` so list and search agree. JSON metadata
-        // remains a legacy fallback until reconciliation proves every
-        // historical resource has been migrated.
+        // invisible in the list. JSON metadata remains a legacy fallback until
+        // reconciliation proves every historical resource has been migrated.
         //
-        // The `resource_versions.game_version_min/max` branch is what keeps the
-        // two readers equivalent: `createInitialV2Aggregate` always writes those
-        // columns (`resources.service.ts:844`) but only writes a modern
+        // Same *shape* as `mdtbbsSearchProviders` (`:67-90`), not the same
+        // predicate: that guard also absorbs a legacy row already copied into
+        // the modern table (`NOT EXISTS ... legacy_source_id`, `:79-81`) and
+        // matches `game_series` (`:83`); this one does neither. It is left that
+        // way on purpose — see I3 in the PR description — so the comment here
+        // must not claim the two agree.
+        //
+        // The `resource_versions.game_version_min/max` branch is what keeps a
+        // bounded release findable: `createInitialV2Aggregate` always writes
+        // those columns (`resources.service.ts:844`) but only writes a modern
         // compatibility row when the submitter supplied a range (`:971`), so a
         // published release can be bounded there with no compatibility row at
         // all. Search already matches that column; without it the list would
@@ -1995,7 +2000,7 @@ export class ResourcesService {
    * not that contract: it renders a bound pair (`min_version_value` /
    * `max_version_value`), a provenance and a confidence, and it has no channel
    * dimension — `channel` is only the fallback text when a row declares neither
-   * bound (`frontend/src/components/forum/resource-kind-details.tsx:115`).
+   * bound (`frontend/src/components/forum/resource-kind-details.tsx:126`).
    *
    * The writers disagree on exactly the fields that are invisible here:
    * `channel` is what the submitter typed (NULL when they typed nothing) on the
@@ -2010,10 +2015,12 @@ export class ResourcesService {
    * version plus the declared bounds. Inside a group, every *legacy* row is
    * kept exactly as before this contract was unified — reading the legacy table
    * alone is what the Web page did historically, so legacy-only output must not
-   * change. A *modern* row is dropped when it merely restates a legacy row of
-   * the same group: same notes, and either that legacy row records no channel
-   * (so the modern channel is only the writer's release-channel default) or it
-   * records that same channel. Modern rows that restate nothing — including two
+   * change, order included. Surviving rows keep the order the projection
+   * returned, with a collapsed modern group printed where its first row sat. A
+   * *modern* row is dropped when it merely restates a legacy row of the same
+   * group: same notes, and either that legacy row records no channel (so the
+   * modern channel is only the writer's release-channel default) or it records
+   * that same channel. Modern rows that restate nothing — including two
    * modern writers recording the same bounds for one declaration — collapse to
    * a single row, preferring the one that carries a real confidence over a
    * writer default of NULL.
@@ -2027,30 +2034,42 @@ export class ResourcesService {
     max_version_value: string | null; channel: string | null; notes: string | null;
     confidence: V1CompatibilityConfidence; origin: 'modern' | 'legacy';
   }>(rows: T[]): T[] {
-    const byBounds = new Map<string, T[]>();
+    const groups = new Map<string, { legacy: T[]; modern: T[] }>();
     for (const row of rows) {
       const key = [row.resource_version_id, row.runtime, row.min_version_value, row.max_version_value].join('\u0000');
-      const group = byBounds.get(key);
-      if (group) group.push(row); else byBounds.set(key, [row]);
+      const group = groups.get(key) || { legacy: [], modern: [] };
+      (row.origin === 'legacy' ? group.legacy : group.modern).push(row);
+      groups.set(key, group);
     }
-    const out: T[] = [];
-    for (const group of byBounds.values()) {
-      const legacy = group.filter((row) => row.origin === 'legacy');
-      out.push(...legacy);
-      const modernSurvivors = group.filter((row) => row.origin === 'modern' && !legacy.some((item) => item.notes === row.notes
-        && (item.channel === null || item.channel === row.channel)));
+
+    // Decide which rows to print, and which row stands in for each collapsed
+    // declaration, then emit them in the order the projection returned. That
+    // order is the legacy table's `ORDER BY id ASC` and the frontend renders the
+    // array as it arrives, so grouping must not shuffle the rows it keeps.
+    const dropped = new Set<T>();
+    const representative = new Map<T, T>();
+    for (const { legacy, modern } of groups.values()) {
+      const restatesLegacy = (row: T) => legacy.some((item) => item.notes === row.notes
+        && (item.channel === null || item.channel === row.channel));
+      const survivors = modern.filter((row) => !restatesLegacy(row));
+      for (const row of modern) if (restatesLegacy(row)) dropped.add(row);
       // Modern writers can disagree on `channel` for one declaration; two
       // distinct explicit channels are separate declarations and both stay.
-      const explicitChannels = new Set(modernSurvivors.map((row) => row.channel).filter((channel): channel is string => channel !== null));
+      const explicitChannels = new Set(survivors.map((row) => row.channel).filter((channel): channel is string => channel !== null));
       const declarations = explicitChannels.size < 2
-        ? [modernSurvivors]
-        : [...explicitChannels].map((channel) => modernSurvivors.filter((row) => row.channel === channel));
+        ? [survivors]
+        : [...explicitChannels].map((channel) => survivors.filter((row) => row.channel === channel));
       for (const declaration of declarations) {
-        if (!declaration.length) continue;
-        out.push(declaration.reduce((best, row) => this.preferDetailCompatibility(row, best) ? row : best));
+        // `survivors` kept the input order, so the first row of a declaration is
+        // the earliest position it can be printed at.
+        const [first, ...rest] = declaration;
+        if (!first) continue;
+        for (const row of rest) dropped.add(row);
+        representative.set(first, declaration.reduce((best, row) => this.preferDetailCompatibility(row, best) ? row : best));
       }
     }
-    return out;
+
+    return rows.filter((row) => !dropped.has(row)).map((row) => representative.get(row) ?? row);
   }
 
   /** A real confidence beats a writer default of NULL. */
