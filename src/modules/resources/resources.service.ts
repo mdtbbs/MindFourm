@@ -51,6 +51,8 @@ import {
 import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
 import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
+import { ResourceDependencyReadService, type UnifiedCompatibility } from './resource-dependency-read.service';
+import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance, V1CompatibilityConfidence, V1CompatibilityProvenance } from './compatibility-vocabulary';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -135,6 +137,7 @@ export class ResourcesService {
     @Optional() private siteConfig?: SiteConfigService,
     @Optional() private customEmojis?: CustomEmojisService,
     @Optional() private resClient?: ResourceStorageClientService,
+    @Optional() private dependencyRead?: ResourceDependencyReadService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -1462,11 +1465,28 @@ export class ResourcesService {
       }
 
       if (supported_version?.trim()) {
-        // New releases declare Mindustry builds in their compatibility rows.
-        // JSON metadata remains a legacy fallback until reconciliation proves
-        // every historical resource has been migrated.
+        // Releases declare Mindustry builds in one of two compatibility tables:
+        // the modern one (new releases) or the legacy one (rows the migration
+        // has not mirrored yet). Both must match or a modern-only release is
+        // invisible in the list. JSON metadata remains a legacy fallback until
+        // reconciliation proves every historical resource has been migrated.
+        //
+        // Same *shape* as `mdtbbsSearchProviders` (`:67-90`), not the same
+        // predicate: that guard also absorbs a legacy row already copied into
+        // the modern table (`NOT EXISTS ... legacy_source_id`, `:79-81`) and
+        // matches `game_series` (`:83`); this one does neither. It is left that
+        // way on purpose — see I3 in the PR description — so the comment here
+        // must not claim the two agree.
+        //
+        // The `resource_versions.game_version_min/max` branch is what keeps a
+        // bounded release findable: `createInitialV2Aggregate` always writes
+        // those columns (`resources.service.ts:844`) but only writes a modern
+        // compatibility row when the submitter supplied a range (`:971`), so a
+        // published release can be bounded there with no compatibility row at
+        // all. Search already matches that column; without it the list would
+        // hide a resource that search can find.
         qb.andWhere(
-          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
+          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rc.runtime = 'mindustry' AND (rc.game_version = :supportedVersion OR ((rc.min_game_version IS NULL OR rc.min_game_version <= :supportedVersion) AND (rc.max_game_version IS NULL OR rc.max_game_version >= :supportedVersion)))) OR EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR EXISTS (SELECT 1 FROM resource_versions rvg WHERE rvg.resource_id = resource.id AND rvg.status = 'published' AND (rvg.game_version_min = :supportedVersion OR rvg.game_version_max = :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
           { supportedVersion: supported_version.trim() },
         );
       }
@@ -1737,22 +1757,41 @@ export class ResourcesService {
       }
     }
 
-    // A failed compatibility query must not hide legacy filter options during
-    // the additive migration. It becomes authoritative as backfill completes.
+    // Both compatibility tables feed the filters: new releases declare builds
+    // in the modern table, rows the migration has not mirrored yet stay in the
+    // legacy one. The two queries are independent so a table missing during the
+    // additive migration cannot hide the other's options; values land in Sets,
+    // so a mirrored row cannot offer a value twice.
+    const addStructuredOptions = (rows: Array<Record<string, unknown>>) => {
+      for (const row of rows) {
+        const min = row.min_version ?? row.min_version_value;
+        const max = row.max_version ?? row.max_version_value;
+        if (min) supportedVersions.add(String(min));
+        if (max) supportedVersions.add(String(max));
+        if (row.platform_key) compatibility.add(String(row.platform_key));
+      }
+    };
     try {
-      const structured = await this.dataSource.query(
+      addStructuredOptions(await this.dataSource.query(
+        `SELECT DISTINCT rc.min_game_version AS min_version, rc.max_game_version AS max_version, rc.platform_key
+         FROM resource_compatibilities rc
+         INNER JOIN resource_versions rv ON rv.id = rc.resource_version_id
+         INNER JOIN resources resource ON resource.id = rv.resource_id
+         WHERE rc.runtime = 'mindustry' AND resource.deleted_at IS NULL AND resource.status IN (?, ?) AND resource.is_public = 1`,
+        PUBLIC_RESOURCE_STATUSES,
+      ));
+    } catch {
+      // The modern table does not exist yet; the legacy query below still runs.
+    }
+    try {
+      addStructuredOptions(await this.dataSource.query(
         `SELECT DISTINCT rvc.min_version_value, rvc.max_version_value, rvc.platform_key
          FROM resource_version_compatibilities rvc
          INNER JOIN resource_versions rv ON rv.id = rvc.resource_version_id
          INNER JOIN resources resource ON resource.id = rv.resource_id
          WHERE rvc.runtime = 'mindustry' AND resource.deleted_at IS NULL AND resource.status IN (?, ?) AND resource.is_public = 1`,
         PUBLIC_RESOURCE_STATUSES,
-      );
-      for (const row of structured) {
-        if (row.min_version_value) supportedVersions.add(String(row.min_version_value));
-        if (row.max_version_value) supportedVersions.add(String(row.max_version_value));
-        if (row.platform_key) compatibility.add(String(row.platform_key));
-      }
+      ));
     } catch {
       // Legacy metadata continues to serve filters until the new tables exist.
     }
@@ -1879,11 +1918,7 @@ export class ResourcesService {
     const visibleVersions = canViewUnpublished
       ? versions
       : versions.filter((version) => version.status === 'published');
-    const compatibilities = visibleVersions.length ? await this.dataSource.query(
-      `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
-       FROM resource_version_compatibilities WHERE resource_version_id IN (${visibleVersions.map(() => '?').join(',')})
-       ORDER BY id ASC`, visibleVersions.map(({ id: versionId }) => versionId),
-    ) : [];
+    const compatibilities = visibleVersions.length ? await this.loadDetailCompatibilities(visibleVersions.map(({ id: versionId }) => versionId)) : [];
     const byVersion = new Map<number, any[]>();
     for (const item of compatibilities || []) {
       const versionId = Number(item.resource_version_id);
@@ -1895,6 +1930,161 @@ export class ResourcesService {
     return this.normalizeOneResource(resource, visibleVersions.map((version) => ({ ...version,
       compatibility: byVersion.get(version.id) || [],
     } as ResourceVersion)));
+  }
+
+  /**
+   * Detail compatibility rows for one resource's visible versions.
+   *
+   * Reads through the same modern-first projection as V2 / V1 Manifest / Search
+   * / Pack so a modern-only release is visible here too; the legacy table alone
+   * only ever saw rows the migration had copied.
+   *
+   * The projection is not a drop-in replacement for this DTO. It merges the two
+   * writers row by row and its content key deliberately keeps `channel` and
+   * `confidence`, because V2 exposes both and must not collapse genuinely
+   * different declarations. This detail DTO carries neither `platform_key` nor
+   * a channel dimension: it surfaces one provenance/confidence per constraint,
+   * and a NULL channel only ever means "the writer filled in the release
+   * channel". So the same constraint can arrive twice here — once as the
+   * legacy row with the user-facing `provenance`/`confidence` the renderer
+   * inference recorded, once as the modern twin with the writer's defaults.
+   * `collapseDetailCompatibilities` folds those into the single row this
+   * contract promises, keeping the legacy writer authoritative for
+   * `channel`/`confidence`/`notes`, and leaves genuinely different
+   * declarations (distinct explicit channels) separate.
+   */
+  private async loadDetailCompatibilities(versionIds: number[]): Promise<Array<{
+    resource_version_id: number;
+    runtime: string;
+    min_version_value: string | null;
+    max_version_value: string | null;
+    channel: string | null;
+    notes: string | null;
+    provenance: V1CompatibilityProvenance;
+    confidence: V1CompatibilityConfidence;
+  }>> {
+    if (this.dependencyRead) {
+      const grouped = await this.dependencyRead.collectCompatibilities(versionIds);
+      const rows = [...grouped.values()].flat().map((entry) => this.toDetailCompatibility(entry));
+      return this.collapseDetailCompatibilities(rows);
+    }
+    // Fallback used only when the shared projection is absent (unit harnesses).
+    const legacy = await this.dataSource.query(
+      `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
+       FROM resource_version_compatibilities WHERE resource_version_id IN (${versionIds.map(() => '?').join(',')})
+       ORDER BY id ASC`, versionIds,
+    ) as Array<Record<string, unknown>>;
+    return legacy.map((row) => ({
+      resource_version_id: Number(row.resource_version_id),
+      runtime: String(row.runtime || 'mindustry'),
+      min_version_value: (row.min_version_value as string) ?? null,
+      max_version_value: (row.max_version_value as string) ?? null,
+      channel: (row.channel as string) ?? null,
+      notes: (row.notes as string) ?? null,
+      provenance: normalizeCompatibilityProvenance(row.provenance),
+      confidence: normalizeCompatibilityConfidence(row.confidence),
+    }));
+  }
+
+  /** One mapping for the shared projection → the existing detail DTO vocabulary. */
+  private toDetailCompatibility(item: UnifiedCompatibility) {
+    return {
+      resource_version_id: item.resource_version_id,
+      runtime: item.runtime,
+      min_version_value: item.min_version,
+      max_version_value: item.max_version,
+      channel: item.channel,
+      notes: item.notes,
+      provenance: normalizeCompatibilityProvenance(item.source),
+      confidence: normalizeCompatibilityConfidence(item.confidence),
+      origin: item.origin,
+    };
+  }
+
+  /**
+   * One row per declaration for the Web detail contract.
+   *
+   * `collectCompatibilities` merges the two writers row by row and its content
+   * key deliberately keeps `channel` and `confidence`, because V2 exposes both
+   * and must not collapse genuinely different declarations. This detail DTO is
+   * not that contract: it renders a bound pair (`min_version_value` /
+   * `max_version_value`), a provenance and a confidence, and it has no channel
+   * dimension — `channel` is only the fallback text when a row declares neither
+   * bound (`frontend/src/components/forum/resource-kind-details.tsx:126`).
+   *
+   * The writers disagree on exactly the fields that are invisible here:
+   * `channel` is what the submitter typed (NULL when they typed nothing) on the
+   * legacy row but `dto.release_channel || 'release'` on the double-write of the
+   * same declaration (`resources.service.ts:946` vs `:991`), and the renderer
+   * `confidence` sits on the legacy row while the modern twin carries the
+   * writer's NULL. So reading the projection straight into this DTO prints one
+   * declaration several times — once per writer — and one of those copies shows
+   * a `confidence` nobody declared.
+   *
+   * Rows are grouped by what this DTO can actually tell apart: the resource
+   * version plus the declared bounds. Inside a group, every *legacy* row is
+   * kept exactly as before this contract was unified — reading the legacy table
+   * alone is what the Web page did historically, so legacy-only output must not
+   * change, order included. Surviving rows keep the order the projection
+   * returned, with a collapsed modern group printed where its first row sat. A
+   * *modern* row is dropped when it merely restates a legacy row of the same
+   * group: same notes, and either that legacy row records no channel (so the
+   * modern channel is only the writer's release-channel default) or it records
+   * that same channel. Modern rows that restate nothing — including two
+   * modern writers recording the same bounds for one declaration — collapse to
+   * a single row, preferring the one that carries a real confidence over a
+   * writer default of NULL.
+   *
+   * Remote `legacy_source_id` mirroring is unaffected: the projection already
+   * consumes a legacy row against its modern copy, and this only decides how
+   * the surviving rows are printed.
+   */
+  private collapseDetailCompatibilities<T extends {
+    resource_version_id: number; runtime: string; min_version_value: string | null;
+    max_version_value: string | null; channel: string | null; notes: string | null;
+    confidence: V1CompatibilityConfidence; origin: 'modern' | 'legacy';
+  }>(rows: T[]): T[] {
+    const groups = new Map<string, { legacy: T[]; modern: T[] }>();
+    for (const row of rows) {
+      const key = [row.resource_version_id, row.runtime, row.min_version_value, row.max_version_value].join('\u0000');
+      const group = groups.get(key) || { legacy: [], modern: [] };
+      (row.origin === 'legacy' ? group.legacy : group.modern).push(row);
+      groups.set(key, group);
+    }
+
+    // Decide which rows to print, and which row stands in for each collapsed
+    // declaration, then emit them in the order the projection returned. That
+    // order is the legacy table's `ORDER BY id ASC` and the frontend renders the
+    // array as it arrives, so grouping must not shuffle the rows it keeps.
+    const dropped = new Set<T>();
+    const representative = new Map<T, T>();
+    for (const { legacy, modern } of groups.values()) {
+      const restatesLegacy = (row: T) => legacy.some((item) => item.notes === row.notes
+        && (item.channel === null || item.channel === row.channel));
+      const survivors = modern.filter((row) => !restatesLegacy(row));
+      for (const row of modern) if (restatesLegacy(row)) dropped.add(row);
+      // Modern writers can disagree on `channel` for one declaration; two
+      // distinct explicit channels are separate declarations and both stay.
+      const explicitChannels = new Set(survivors.map((row) => row.channel).filter((channel): channel is string => channel !== null));
+      const declarations = explicitChannels.size < 2
+        ? [survivors]
+        : [...explicitChannels].map((channel) => survivors.filter((row) => row.channel === channel));
+      for (const declaration of declarations) {
+        // `survivors` kept the input order, so the first row of a declaration is
+        // the earliest position it can be printed at.
+        const [first, ...rest] = declaration;
+        if (!first) continue;
+        for (const row of rest) dropped.add(row);
+        representative.set(first, declaration.reduce((best, row) => this.preferDetailCompatibility(row, best) ? row : best));
+      }
+    }
+
+    return rows.filter((row) => !dropped.has(row)).map((row) => representative.get(row) ?? row);
+  }
+
+  /** A real confidence beats a writer default of NULL. */
+  private preferDetailCompatibility<T extends { confidence: V1CompatibilityConfidence }>(candidate: T, current: T): boolean {
+    return current.confidence === null && candidate.confidence !== null;
   }
 
   private async canViewUnpublishedVersions(resource: Resource, viewer?: { id: number; role: string }): Promise<boolean> {

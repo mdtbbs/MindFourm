@@ -9,6 +9,7 @@ import { ResourceVersionDependency } from '@entities/resource-version-dependency
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 import { ResourceMember } from '@entities/resource-center-v2.entity';
 import { ResourceLegacyProjectionService } from './resource-legacy-projection.service';
+import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance } from './compatibility-vocabulary';
 import { ResourceDependencyReadService } from './resource-dependency-read.service';
 import { escapeLike } from '@common/utils/search.util';
 import {
@@ -394,18 +395,11 @@ export class ResourceReadAdapterService {
    * `inferred` instead of silently degrading to `user_declared`.
    */
   private normalizeProvenance(value: unknown): 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified' {
-    switch (String(value)) {
-      case 'file_metadata': return 'file_metadata';
-      case 'inferred':
-      case 'analyzer': return 'inferred';
-      case 'verified': return 'verified';
-      case 'admin_verified': return 'admin_verified';
-      default: return 'user_declared';
-    }
+    return normalizeCompatibilityProvenance(value);
   }
 
   private normalizeConfidence(value: unknown): 'low' | 'medium' | 'high' | null {
-    return ['low', 'medium', 'high'].includes(String(value)) ? value as 'low' | 'medium' | 'high' : null;
+    return normalizeCompatibilityConfidence(value);
   }
 
   async getPublicFileByPublicIds(resourcePublicId: string, versionPublicId: string, filePublicId: string, viewer?: { id: number; role?: string }) {
