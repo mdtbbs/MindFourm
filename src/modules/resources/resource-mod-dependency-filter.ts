@@ -58,6 +58,23 @@ export function parseModFilterTokens(value?: string | null): string[] {
   return tokens;
 }
 
+/**
+ * The Mod conditions an admin-scope list cannot answer. That surface never
+ * selects a published version, so it has no version to prove a dependency
+ * against; answering the request without the condition would return exactly the
+ * widened set the caller asked to narrow — the one failure mode D-D forbids.
+ * The admin scope therefore refuses these two parameters instead of ignoring
+ * them. Only the two Mod conditions are listed; every other condition keeps its
+ * existing admin-scope behaviour. Empty values are not conditions anywhere, so
+ * there is nothing to refuse.
+ */
+export function unanswerableAdminModFilters(requiredMods?: string | null, excludedMods?: string | null): string[] {
+  const unanswerable: string[] = [];
+  if (parseModFilterTokens(requiredMods).length) unanswerable.push('required_mods');
+  if (parseModFilterTokens(excludedMods).length) unanswerable.push('excluded_mods');
+  return unanswerable;
+}
+
 /** The public statuses, rendered once so this file cannot drift from the constant. */
 const PUBLIC_STATUS_LIST = PUBLIC_RESOURCE_STATUSES.map((status) => `'${status}'`).join(',');
 

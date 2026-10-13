@@ -82,6 +82,7 @@ jest.mock('./resource-subscriptions.service', () => ({
   ResourceSubscriptionsService: class ResourceSubscriptionsService {},
 }));
 
+import { BadRequestException } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { ResourceDependencyReadService } from './resource-dependency-read.service';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
@@ -1967,6 +1968,50 @@ describe('ResourcesService Mod dependency filter', () => {
     expect(placeholders).toEqual(Object.keys(parameters).sort());
     expect(parameters[MOD_QUERY]).toBe('alpha.mod');
     expect(parameters[EXCLUDED_QUERY]).toBe('rival.mod');
+  });
+
+  /**
+   * Issue #70, admin scope: `GET /api/resources/admin` and the external
+   * `resources:moderate` list both funnel through this call with
+   * `scope: 'admin'`. That path never selects a published version, so it has no
+   * version to prove a dependency against — answering without the condition
+   * would return precisely the widened set the caller asked to narrow.
+   */
+  it('refuses the Mod conditions for the admin scope instead of silently dropping them', async () => {
+    const { service, resourceRepository } = createModFilterService();
+
+    await expect(service.getList(
+      { limit: 20, resource_kind: 'map', required_mods: 'alpha.mod' } as any,
+      { scope: 'admin' },
+    )).rejects.toThrow(BadRequestException);
+    // Refused, not answered: the widened admin query is never issued.
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+
+    await expect(service.getList(
+      { limit: 20, excluded_mods: 'rival.mod' } as any,
+      { scope: 'admin' },
+    )).rejects.toThrow(BadRequestException);
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('keeps every other admin-scope condition untouched by that refusal', async () => {
+    const { service, resourceRepository, defaultQb } = createModFilterService();
+    // Same request minus the two Mod keys: the documented admin behaviour, and
+    // an empty (whitespace-only) Mod value is not a condition anywhere.
+    await service.getList({ limit: 20, status: 'pending', required_mods: ' , ' } as any, { scope: 'admin' });
+
+    expect(resourceRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(resourceRepository.find).toHaveBeenCalled();
+    expect(defaultQb.andWhere).not.toHaveBeenCalledWith('1 = 0', {});
+  });
+
+  it('still answers the Mod conditions on the public scope', async () => {
+    const { service, resourceRepository } = createModFilterService({
+      resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }],
+    });
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod' } as any, { scope: 'public' });
+    // The refusal is scoped to admin; the public path keeps filtering.
+    expect(resourceRepository.find).not.toHaveBeenCalled();
   });
 
   it('offers only publicly resolvable Mod options, never an unresolved token', async () => {

@@ -548,10 +548,104 @@ describe('ResourceFilters map and blueprint conditions', () => {
     await commit(excluded);
     expect(mockPush).not.toHaveBeenCalled();
 
-    // Coming back to an untouched URL can only offer what the URL holds.
-    await setValue(excluded, '');
-    await commit(excluded);
+    // Coming back to an untouched URL can only offer what the URL holds: the
+    // field was never accepted, so it goes back to the applied (empty) value.
+    await focusField(excluded);
+    expect(excluded.value).toBe('');
+    expect(excluded.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  /**
+   * The two rules that matter when a draft cannot be committed: the already
+   * applied URL condition must survive (a refusal is not a removal), and the
+   * refused draft must not survive as if it had been applied.
+   */
+  it('keeps the applied Mod condition when an over-long draft is refused', async () => {
+    await mount('resource_kind=map&required_mods=alpha.mod&excluded_mods=rival.mod', 'map');
+    const required = container.querySelector<HTMLInputElement>('#resource-desktop-filter-required_mods')!;
+    expect(required.value).toBe('alpha.mod');
+
+    await setValue(required, 'a'.repeat(601));
+    // The invalid draft is visibly rejected while the visitor is in the field.
+    expect(required.getAttribute('aria-invalid')).toBe('true');
+    await commit(required);
+
+    // A refusal is not a removal: the applied condition is neither deleted nor
+    // widened. Committing `null` here would have dropped `required_mods` and
+    // returned the unfiltered list.
     expect(mockPush).not.toHaveBeenCalled();
+
+    // Returning to the field restores the value the URL actually holds.
+    await focusField(required);
+    expect(required.value).toBe('alpha.mod');
+    expect(required.getAttribute('aria-invalid')).toBeNull();
+
+    // And that restored value is a no-op, not a new navigation.
+    await commit(required);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('keeps the applied Mod condition when a rejected draft is applied from the mobile sheet', async () => {
+    await mount('resource_kind=schematic&excluded_mods=rival.mod', 'schematic');
+    const openSheet = async () => { await act(async () => { trigger().click(); }); };
+    await openSheet();
+    const sheetExcluded = container.querySelector<HTMLInputElement>('#resource-mobile-filter-excluded_mods')!;
+    expect(sheetExcluded.value).toBe('rival.mod');
+
+    await setValue(sheetExcluded, 'a'.repeat(601));
+    expect(sheetExcluded.getAttribute('aria-invalid')).toBe('true');
+    const apply = Array.from(container.querySelectorAll<HTMLButtonElement>('#resource-mobile-filters button'))
+      .find((button) => button.textContent === 'resourceList.apply')!;
+    await act(async () => { apply.click(); });
+
+    // Apply was rejected: the URL keeps its condition instead of losing it.
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // Reopening the sheet shows the applied value, not the refused draft.
+    await openSheet();
+    const reopened = container.querySelector<HTMLInputElement>('#resource-mobile-filter-excluded_mods')!;
+    expect(reopened.value).toBe('rival.mod');
+    expect(reopened.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('drops a refused sheet draft when the sheet is closed and reopened', async () => {
+    await mount('resource_kind=map&required_mods=alpha.mod', 'map');
+    const openSheet = async () => { await act(async () => { trigger().click(); }); };
+    const closeSheet = async () => {
+      const close = Array.from(container.querySelectorAll<HTMLButtonElement>('#resource-mobile-filters button[aria-label]'))
+        .find((button) => button.getAttribute('aria-label') === 'resourceList.closeFilters')!;
+      await act(async () => { close.click(); });
+    };
+
+    await openSheet();
+    await setValue(container.querySelector<HTMLInputElement>('#resource-mobile-filter-required_mods')!, 'a'.repeat(601));
+    // Closed without applying: the draft is refused, so nothing was committed.
+    await closeSheet();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(container.querySelector('#resource-mobile-filters')).toBeNull();
+
+    // Reopening starts from the URL, so the refused draft is gone rather than
+    // left looking like an applied condition.
+    await openSheet();
+    const reopened = container.querySelector<HTMLInputElement>('#resource-mobile-filter-required_mods')!;
+    expect(reopened.value).toBe('alpha.mod');
+    expect(reopened.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('restores the applied Mod value when a rejected sheet draft is revisited', async () => {
+    await mount('resource_kind=map&required_mods=alpha.mod', 'map');
+    await act(async () => { trigger().click(); });
+    const sheetRequired = container.querySelector<HTMLInputElement>('#resource-mobile-filter-required_mods')!;
+
+    await setValue(sheetRequired, 'a'.repeat(601));
+    await commit(sheetRequired);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(sheetRequired.getAttribute('aria-invalid')).toBe('true');
+
+    // Focusing the field again shows what the URL holds, like the map fields.
+    await focusField(sheetRequired);
+    expect(sheetRequired.value).toBe('alpha.mod');
+    expect(sheetRequired.getAttribute('aria-invalid')).toBeNull();
   });
 
   it('removes one Mod token without dropping the rest of its condition', async () => {

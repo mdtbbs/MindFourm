@@ -8,6 +8,7 @@ import {
   publicTargetVisibleSql,
   requiredDependencyProofSql,
   resolvePublicCanonicalModIds,
+  unanswerableAdminModFilters,
   unresolvedRequiredDependencySql,
 } from './resource-mod-dependency-filter';
 
@@ -148,6 +149,17 @@ describe('resource Mod dependency filter rule', () => {
       // Options are canonical Mod IDs: an unresolved row never becomes an option.
       expect(sql).not.toContain('external_identifier');
     }
+  });
+
+  it('names exactly the Mod conditions an admin-scope list cannot answer', () => {
+    // The admin scope has no selected published version to prove a dependency
+    // against, so both conditions are refused rather than ignored — and only
+    // these two; an empty value is not a condition anywhere.
+    expect(unanswerableAdminModFilters('alpha.mod', 'rival.mod')).toEqual(['required_mods', 'excluded_mods']);
+    expect(unanswerableAdminModFilters('alpha.mod', undefined)).toEqual(['required_mods']);
+    expect(unanswerableAdminModFilters(undefined, 'rival.mod')).toEqual(['excluded_mods']);
+    expect(unanswerableAdminModFilters(' , ', '')).toEqual([]);
+    expect(unanswerableAdminModFilters(undefined, undefined)).toEqual([]);
   });
 
   it('keeps the other table\'s options when one table cannot be read', async () => {

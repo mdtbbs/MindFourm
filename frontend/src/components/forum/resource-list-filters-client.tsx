@@ -212,17 +212,33 @@ export default function ResourceFilters({
   };
 
   /**
+   * One rule for "this draft is refused": the field has text but no commit can
+   * turn it into a condition the backend accepts, because its normalised token
+   * list exceeds the length limit. The renderer, the commit and the revisit
+   * resync all read this, so a value that cannot be committed can never be
+   * mistaken for one that was, and one that can never carries an error message.
+   */
+  const modDraftRejected = (value: string) => {
+    const tokens = parseModList(value);
+    return tokens.length > 0 && modListValue(tokens) === null;
+  };
+
+  /**
    * Mod conditions commit on blur, on Enter or when the mobile sheet applies.
    * The value is normalised through the same parser the URL normaliser uses, so
    * the query a visitor commits is byte-identical to the one SSR would derive
    * from it: whitespace and duplicates drop, and an empty field removes the key.
    * A list longer than the backend accepts is not committed at all — it would
-   * turn the whole page into a 400 error state.
+   * turn the whole page into a 400 error state. Refusing to commit is *not*
+   * removing the condition: committing `null` here would drop a Mod the URL
+   * already carries and widen the result set, so the field keeps the URL value
+   * instead, exactly like an out-of-range map dimension.
    */
   const commitModFields = (keys: readonly ModFilterKey[]) => {
     const updates: Record<string, string | null> = {};
     for (const key of keys) {
       const committed = key === 'required_mods' ? urlRequiredMods : urlExcludedMods;
+      if (modDraftRejected(localMods[key])) continue;
       const value = modListValue(parseModList(localMods[key]));
       if (value === (committed || null)) continue;
       updates[key] = value;
@@ -246,11 +262,20 @@ export default function ResourceFilters({
       }
       return next;
     });
+    setLocalMods((current) => {
+      const next = { ...current };
+      for (const key of MOD_FILTER_KEYS) {
+        if (modDraftRejected(current[key])) next[key] = key === 'required_mods' ? urlRequiredMods : urlExcludedMods;
+      }
+      return next;
+    });
   };
 
   const openMobileFilters = () => {
-    // Reopening the sheet starts from the URL, never from a rejected draft.
+    // Reopening the sheet starts from the URL, never from a rejected draft —
+    // the Mod fields follow the same rule as the map ones.
     setLocalMapValues({ block: urlBlock, width: urlWidth, height: urlHeight });
+    setLocalMods({ required_mods: urlRequiredMods, excluded_mods: urlExcludedMods });
     setMobileFiltersOpen(true);
   };
 
@@ -365,7 +390,7 @@ export default function ResourceFilters({
    */
   const modFilterFields = (scope: string) => <div role="group" aria-label={t('resourceList.modFilters')} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
     {MOD_FILTER_KEYS.map((key) => {
-      const invalid = localMods[key].trim().length > MAX_MOD_FILTER_LENGTH;
+      const invalid = modDraftRejected(localMods[key]);
       const errorId = `${fieldId(scope, key)}-message`;
       return <label key={key} className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, key)}>
         {key === 'required_mods' ? t('resourceList.requiredMods') : t('resourceList.excludedMods')}
@@ -377,6 +402,7 @@ export default function ResourceFilters({
           aria-describedby={errorId}
           list={key === 'required_mods' && modOptions.length ? `${fieldId(scope, key)}-options` : undefined}
           onChange={(event) => setLocalMods((current) => ({ ...current, [key]: event.target.value }))}
+          onFocus={resyncRejectedFields}
           onBlur={() => commitModFields([key])}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitModFields([key]); } }}
           placeholder={t('resourceList.modsPlaceholder')}

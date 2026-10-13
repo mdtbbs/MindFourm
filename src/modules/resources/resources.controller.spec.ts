@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import type { Response } from 'express';
 import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
@@ -397,5 +398,73 @@ describe('ResourcesController internal file access', () => {
       jest.useRealTimers();
       await rm(folder, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * Issue #70, scope boundary: `GET /api/resources` answers the Mod dependency
+ * conditions, while `GET /api/resources/admin` cannot. The two routes differ
+ * only in the scope they pass to the same service, so the contract — a 400 for
+ * the two Mod keys on the admin route, filtering on the public one — has to be
+ * pinned at the controller boundary.
+ *
+ * The service is real (built over mocked repositories) so removing the scope
+ * guard cannot pass by keeping a stub in place: the un-guarded admin call
+ * resolves with a widened list instead of rejecting.
+ */
+describe('ResourcesController Mod dependency scopes', () => {
+  const buildMinimalService = () => {
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      maxExecutionTime: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
+    };
+    const resourceRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      createQueryBuilder: jest.fn(() => queryBuilder),
+    };
+    const service = Object.assign(Object.create(ResourcesService.prototype), {
+      resourceRepository,
+      dataSource: { query: jest.fn().mockResolvedValue([]) },
+    });
+    const controller = Object.create(ResourcesController.prototype) as ResourcesController;
+    Object.defineProperty(controller, 'resourcesService', { value: service });
+    return { controller, resourceRepository };
+  };
+
+  it('refuses both Mod conditions on the admin route instead of returning an unfiltered page', async () => {
+    const { controller, resourceRepository } = buildMinimalService();
+
+    await expect(controller.getAdminList({ required_mods: 'alpha.mod' } as any))
+      .rejects.toThrow(BadRequestException);
+    await expect(controller.getAdminList({ excluded_mods: 'rival.mod' } as any))
+      .rejects.toThrow(BadRequestException);
+    // Refused, not answered: no widened list was ever queried.
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('leaves the admin route unchanged for every other condition', async () => {
+    const { controller, resourceRepository } = buildMinimalService();
+
+    await expect(controller.getAdminList({ status: 'pending', required_mods: ' , ' } as any))
+      .resolves.toBeDefined();
+    expect(resourceRepository.find).toHaveBeenCalled();
+  });
+
+  it('keeps answering the Mod conditions on the public route', async () => {
+    const { controller } = buildMinimalService();
+
+    // Same request as the refused admin one: the refusal is scoped to the
+    // admin/moderation scope, not to the parameters themselves.
+    await expect(controller.getList({ resource_kind: 'map', required_mods: 'alpha.mod' } as any))
+      .resolves.toBeDefined();
   });
 });

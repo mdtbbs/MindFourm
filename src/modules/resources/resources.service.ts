@@ -60,6 +60,7 @@ import {
   publicSelectedVersionIdSql,
   requiredDependencyProofSql,
   resolvePublicCanonicalModIds,
+  unanswerableAdminModFilters,
   unresolvedRequiredDependencySql,
 } from './resource-mod-dependency-filter';
 import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance, V1CompatibilityConfidence, V1CompatibilityProvenance } from './compatibility-vocabulary';
@@ -1422,6 +1423,19 @@ export class ResourcesService {
       excluded_mods,
     } = query;
     const scope = options.scope ?? 'public';
+    // Version-level Mod dependency conditions are answered by the public list
+    // only, because only that path selects the published version they are
+    // proven against. An admin-scope request carrying them cannot be answered
+    // as asked, and ignoring them would return the widened set the caller
+    // asked to narrow — so they are refused instead of silently dropped. Only
+    // these two keys are refused; every other condition keeps its admin-scope
+    // behaviour.
+    if (scope !== 'public') {
+      const unanswerable = unanswerableAdminModFilters(required_mods, excluded_mods);
+      if (unanswerable.length) {
+        throw new BadRequestException(`管理范围不支持 ${unanswerable.join('、')}：该筛选仅在公开列表按所选发布版本生效`);
+      }
+    }
     const sort = options.trendingOnly ? 'created_at' : validateResourceSort(query.sort);
     const direction = String(query.order || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 

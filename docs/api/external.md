@@ -502,6 +502,8 @@ Authorization: Bearer <key>
 
 如果 key 具备 `resources:moderate`，列表使用管理视角；否则只返回公开可见资源。
 
+管理视角不支持版本级 Mod 依赖筛选：该范围不选择发布版本，`required_mods` / `excluded_mods` 无法按合同证明，携带任一参数返回 400 而不是被静默忽略。
+
 ### 查询资源分类
 
 ```http
