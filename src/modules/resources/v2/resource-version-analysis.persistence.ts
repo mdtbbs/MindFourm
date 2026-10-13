@@ -161,6 +161,10 @@ export async function persistRendererAnalysis(manager: EntityManager, input: Per
 }
 
 async function persistDependencies(manager: EntityManager, input: PersistRendererAnalysisInput, ...sources: unknown[]): Promise<void> {
+  // Renderer analysis is version-scoped. Replace the previous projection even
+  // when the new analysis has no dependencies, so a re-run cannot leave stale
+  // rows behind.
+  await manager.delete(ResourceDependency, { resource_version_id: input.versionId });
   const identifiers = normalizeDependencies(...sources);
   if (!identifiers.length) return;
   const ids = [...new Set(identifiers.map(item => item.toLowerCase()))];
