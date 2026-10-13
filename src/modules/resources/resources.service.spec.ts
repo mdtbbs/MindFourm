@@ -460,10 +460,15 @@ describe('ResourcesService', () => {
       "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceTag), '$.tags')",
       { resourceTag: 'campaign' },
     );
-    expect(defaultQb.andWhere).toHaveBeenCalledWith(
-      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rc.runtime = 'mindustry' AND (rc.game_version = :supportedVersion OR ((rc.min_game_version IS NULL OR rc.min_game_version <= :supportedVersion) AND (rc.max_game_version IS NULL OR rc.max_game_version >= :supportedVersion)))) OR EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
-      { supportedVersion: 'v8' },
-    );
+    // The supported_version guard is asserted by schema in its own test below;
+    // here it only has to prove the filter still reaches the query when it
+    // travels with the other filters, without a second copy of the SQL literal
+    // for the two to drift apart.
+    const versionGuard = defaultQb.andWhere.mock.calls
+      .map(([clause]) => String(clause))
+      .find((clause) => clause.includes('resource_compatibilities'));
+    expect(versionGuard).toBeDefined();
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(versionGuard, { supportedVersion: 'v8' });
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
       "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceCompatibility), '$.compatibility')",
       { resourceCompatibility: 'desktop' },
@@ -474,17 +479,35 @@ describe('ResourcesService', () => {
   // rows visible, and show a migrated mirror exactly once. The list filter is a
   // SQL guard (asserted on the query), the filter options and the detail rows
   // read through the shared modern-first projection.
-  it('matches the supported_version filter against both compatibility tables so a modern-only release stays visible', async () => {
+  // The list filter is a SQL guard. These assertions pin the *schema-level*
+  // branch set (table and column names) rather than alias names, so removing a
+  // whole data source goes red while a self-consistent alias rename — which is
+  // behaviourally identical SQL — does not produce a false alarm. The
+  // placeholder/parameter bind check below is what catches a partial rename,
+  // the only rename that would actually break the query.
+  it('matches the supported_version filter against every compatibility source so a modern-only release stays visible', async () => {
     const { service, defaultQb } = createService();
     await service.getList({ limit: 20, supported_version: 'v8' } as any, { scope: 'public' });
-    const sql = defaultQb.andWhere.mock.calls.map(([clause]) => String(clause)).find((clause) => clause.includes('supportedVersion'));
-    expect(sql).toContain("INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id");
-    expect(sql).toContain("rc.game_version = :supportedVersion");
-    expect(sql).toContain("rc.min_game_version <= :supportedVersion");
-    // Legacy rows not yet mirrored stay searchable (mixed-storage safe).
-    expect(sql).toContain("INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id");
+    const sql = defaultQb.andWhere.mock.calls.map(([clause]) => String(clause)).find((clause) => clause.includes('supportedVersion')) as string;
+    // Modern table: new releases write here (resource-versions.service.ts:491).
+    expect(sql).toContain('INNER JOIN resource_compatibilities rc ON rc.resource_version_id = rv.id');
+    expect(sql).toContain('rc.min_game_version');
+    expect(sql).toContain('rc.max_game_version');
+    // Legacy table: rows the migration has not mirrored stay searchable.
+    expect(sql).toContain('INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id');
+    expect(sql).toContain('rvc.min_version_value');
+    expect(sql).toContain('rvc.max_version_value');
+    // Version-bounded releases that never got a compatibility row, same branch
+    // the search provider has (mdtbbs-search.providers.ts:87).
+    expect(sql).toContain('FROM resource_versions rvg WHERE rvg.resource_id = resource.id AND rvg.status = \'published\' AND (rvg.game_version_min = :supportedVersion OR rvg.game_version_max = :supportedVersion)');
+    // Metadata fallback is unchanged.
     expect(sql).toContain("JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions')");
     expect(defaultQb.andWhere).toHaveBeenCalledWith(sql, { supportedVersion: 'v8' });
+    // Rename-sensitive invariant: every `:placeholder` in the guard must be
+    // bound by the parameter object, and vice versa. A one-sided alias or
+    // placeholder rename fails here instead of silently shipping broken SQL.
+    const placeholders = [...sql.matchAll(/:(\w+)/g)].map((match) => match[1]);
+    expect([...new Set(placeholders)]).toEqual(['supportedVersion']);
   });
 
   it('offers filter options from both compatibility tables', async () => {
@@ -638,6 +661,182 @@ describe('ResourcesService', () => {
     // Mirror collapsed to one row; the distinct 148 constraint stays.
     expect(byPublicId.get('mirrored')).toHaveLength(2);
     expect(byPublicId.get('mirrored')?.map((item) => item.min_version_value)).toEqual(['146', '148']);
+  });
+
+  // Issue #58 B1: `collectCompatibilities` deliberately keeps `channel` and
+  // `confidence` in its content key so V2 can tell two declarations apart, but
+  // this detail DTO exposes neither as a dimension. The two writers disagree by
+  // construction (`channel` NULL on the legacy row vs `dto.release_channel ||
+  // 'release'` on the double-write at resources.service.ts:946/:991, and the
+  // renderer `confidence` only on the legacy row), so the same declared
+  // constraint arrives twice unless the detail path collapses it. Every
+  // assertion below goes red on the previous behaviour.
+  it('shows one detail row for a constraint the two writers restated with their own channel and confidence', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'schematic', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          // The app double-write for the submitter's declaration: channel is the
+          // release channel, confidence is unknown to that writer.
+          return [{ id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '145', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: '基于蓝图内容自动推测' }];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) {
+          // The renderer inference row: no channel, real confidence.
+          return [{ id: 4, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '145', max_version_value: null, channel: null, platform_key: null, provenance: 'inferred', confidence: 'high', notes: '基于蓝图内容自动推测', version_release_channel: 'release' }];
+        }
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    const rows = detail.versions[0].compatibility;
+
+    // One declared constraint, one row — not a legacy + modern pair.
+    expect(rows).toHaveLength(1);
+    // The renderer's own evidence is the one that survives, never the writer's
+    // default confidence the submitter never declared.
+    expect(rows[0]).toMatchObject({ min_version_value: '145', provenance: 'inferred', confidence: 'high' });
+    // The internal writer discriminator is used for collapsing only and must
+    // never reach the public payload: the Web contract is unchanged by #77.
+    expect(Object.keys(rows[0]).sort()).toEqual([
+      'channel', 'confidence', 'max_version_value', 'min_version_value', 'notes', 'provenance', 'runtime',
+    ]);
+  });
+
+  // Issue #58 B1, second shape: within the modern table alone, the app
+  // double-writes the submitter's declaration (`channel = release_channel ||
+  // 'release'`) while `persistMapAnalysis` independently stores the renderer's
+  // range for the same version — same bounds, two rows, neither a legacy row.
+  it('collapses two modern writers that recorded the same bounds for one declaration', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'map', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          return [
+            { id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '145', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+            // `persistMapAnalysis` writes the renderer's range as source
+            // 'author' with channel/confidence NULL (resource-version-analysis.persistence.ts:119).
+            { id: 2, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '145', max_game_version: null, channel: null, platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+          ];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) return [];
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    expect(detail.versions[0].compatibility).toHaveLength(1);
+    expect(detail.versions[0].compatibility[0]).toMatchObject({ min_version_value: '145', provenance: 'user_declared' });
+  });
+
+  // Two `dto.compatibility` entries can share bounds and still be separate
+  // declarations if the submitter gave them different channels; those must not
+  // be merged just because this DTO does not filter on channel.
+  // Before the detail path was unified the Web page read the legacy table
+  // alone, so a legacy-only dataset must come out of the new path unchanged —
+  // including two legacy rows that happen to share bounds.
+  it('leaves legacy-only detail rows untouched', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'legacy', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) return [];
+        if (sql.includes('FROM resource_version_compatibilities')) {
+          return [
+            { id: 4, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: 'release', platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: 'release' },
+            { id: 5, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: null, platform_key: null, provenance: 'inferred', confidence: 'high', notes: null, version_release_channel: 'release' },
+          ];
+        }
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    expect(detail.versions[0].compatibility).toHaveLength(2);
+    expect(detail.versions[0].compatibility.map((item: any) => item.provenance).sort()).toEqual(['inferred', 'user_declared']);
+  });
+
+  it('keeps both modern declarations when they differ by explicit channel', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'channels', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          return [
+            { id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: 'release', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+            { id: 2, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: 'beta', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null },
+          ];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) return [];
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    expect(detail.versions[0].compatibility).toHaveLength(2);
+    expect(detail.versions[0].compatibility.map((item: any) => item.channel).sort()).toEqual(['beta', 'release']);
+  });
+
+  it('keeps two detail rows when the two writers record genuinely different channels', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [{ id: 23, resource_id: 27, public_id: 'two-channels', version: '1.0.0', status: 'published' }];
+    const tables = ['resource_compatibilities', 'resource_version_compatibilities'];
+    const dataSource = {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('information_schema.tables')) return tables.includes(String(params[0])) ? [{ present: 1 }] : [];
+        if (sql.includes('FROM resource_compatibilities')) {
+          return [{ id: 1, resource_version_id: 23, runtime: 'mindustry', game_version: null, min_game_version: '146', max_game_version: null, channel: 'beta', platform_key: null, status: 'declared', source: 'author', confidence: null, notes: null }];
+        }
+        if (sql.includes('FROM resource_version_compatibilities')) {
+          return [{ id: 4, resource_version_id: 23, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: 'alpha', platform_key: null, provenance: 'user_declared', confidence: null, notes: null, version_release_channel: 'release' }];
+        }
+        return [];
+      }),
+    };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+      dataSource,
+      dependencyRead: new ResourceDependencyReadService(dataSource as any) as any,
+    });
+
+    const detail = await service.getByIdWithVersions(27);
+    expect(detail.versions[0].compatibility).toHaveLength(2);
+    expect(detail.versions[0].compatibility.map((item: any) => item.channel).sort()).toEqual(['alpha', 'beta']);
   });
 
   it('does not apply public map metadata filters to a quarantined initial binary', async () => {
