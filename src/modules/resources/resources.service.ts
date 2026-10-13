@@ -87,6 +87,16 @@ const RESOURCE_STATUS_PENDING = RESOURCE_STATUS.pending;
 const RESOURCE_STATUS_APPROVED = RESOURCE_STATUS.approved;
 const RESOURCE_STATUS_REJECTED = RESOURCE_STATUS.rejected;
 
+// Legacy rows and their modern twins hold the same declared evidence; the V2
+// migration pairs them through `legacy_source_id` (same version). Name the
+// pairs once so the merge path keeps both sides in step.
+const EVIDENCE_TWIN_TABLES: Array<[string, string]> = [
+  ['resource_version_dependencies', 'resource_dependencies'],
+  ['resource_version_compatibilities', 'resource_compatibilities'],
+];
+// Only the dependency pair carries a `target_resource_id` pointer.
+const [DEPENDENCY_TWIN_TABLES] = EVIDENCE_TWIN_TABLES;
+
 @Injectable()
 export class ResourcesService {
   async resolveMflDownloadUrl(fileId: number, fallback?: string | null): Promise<string> {
@@ -2127,11 +2137,18 @@ export class ResourcesService {
               SET resource_version_id = ?, role = CASE WHEN role = 'primary' THEN 'supplementary' ELSE role END,
                   sort_order = 1000000 + id
               WHERE resource_version_id = ? AND availability_status = 'available'`, [existing.id, oldId]) > 0;
-            if (present.has('resource_version_dependencies')) {
-              await safely('resource_version_dependencies', 'UPDATE resource_version_dependencies SET resource_version_id = ? WHERE resource_version_id = ?', [existing.id, oldId]);
-            }
-            if (present.has('resource_version_compatibilities')) {
-              await safely('resource_version_compatibilities', 'UPDATE resource_version_compatibilities SET resource_version_id = ? WHERE resource_version_id = ?', [existing.id, oldId]);
+            // Legacy rows and their modern twins move together. Remapping only
+            // the legacy side leaves the twin on the merged (now unreachable)
+            // source version, which the readers project as a foreign/duplicate
+            // compatibility on the target version and as a silently swallowed
+            // dependency. The twins are paired by `legacy_source_id`.
+            for (const [legacyTable, modernTable] of EVIDENCE_TWIN_TABLES) {
+              if (present.has(legacyTable)) {
+                await safely(legacyTable, `UPDATE ${legacyTable} SET resource_version_id = ? WHERE resource_version_id = ?`, [existing.id, oldId]);
+              }
+              if (present.has(modernTable)) {
+                await safely(modernTable, `UPDATE ${modernTable} SET resource_version_id = ? WHERE resource_version_id = ?`, [existing.id, oldId]);
+              }
             }
           }
           versionCollisionMappings.push({ source_version_id: oldId, target_version_id: existing.id, attachments_migrated: attachmentsMigrated });
@@ -2150,7 +2167,13 @@ export class ResourcesService {
         }
         await safely('download_events', 'UPDATE download_events SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
       }
-      await safely('resource_version_dependencies', `UPDATE resource_version_dependencies SET target_resource_id = ? WHERE target_resource_id = ?`, [targetId, sourceId]);
+      // Both copies of a dependency carry the target pointer, so the modern one
+      // has to follow the legacy one to the canonical resource: the readers
+      // suppress a target that is already merged, which would otherwise turn
+      // every remapped dependency into a null `target_public_id`.
+      for (const table of DEPENDENCY_TWIN_TABLES) {
+        await safely(table, `UPDATE ${table} SET target_resource_id = ? WHERE target_resource_id = ?`, [targetId, sourceId]);
+      }
       if (present.has('content_relations')) {
         await safely('content_relations', `INSERT IGNORE INTO content_relations (source_type, source_id, target_type, target_id, relation_type, created_at)
           SELECT source_type, source_id, target_type, ?, relation_type, created_at FROM content_relations
