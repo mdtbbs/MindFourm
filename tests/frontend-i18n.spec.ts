@@ -28,6 +28,19 @@ describe('frontend translation catalogs', () => {
     expect(translate('zh-CN', 'navigation.register')).toBe('注册');
   });
 
+  it('keeps the zh-CN version pair in the {to} 相较 {from} order', () => {
+    // The newer version leads. Neither the catalog key-set test above nor the component
+    // spec (its i18n mock is English-only) fails when the pair is swapped, so the order
+    // is asserted here — on the catalog itself, since a deleted key silently falls back
+    // to English and would keep a translate()-only assertion green.
+    const catalog = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../frontend/src/i18n/locales/zh-CN/resources.json'), 'utf8'));
+    const template: string = catalog.resourceChangeSummary.range;
+    expect(template).toContain('{to}');
+    expect(template.indexOf('{to}')).toBeLessThan(template.indexOf('{from}'));
+    const rendered = translate('zh-CN', 'resourceChangeSummary.range', { from: 'OLD-VERSION', to: 'NEW-VERSION' });
+    expect(rendered.indexOf('NEW-VERSION')).toBeLessThan(rendered.indexOf('OLD-VERSION'));
+  });
+
   it('resolves every literal translation key used by the frontend in Simplified Chinese', () => {
     const sourceRoot = path.resolve(__dirname, '../frontend/src');
     const files: string[] = [];
