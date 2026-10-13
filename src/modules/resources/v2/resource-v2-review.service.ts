@@ -9,6 +9,7 @@ import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageClientService } from '../resource-storage-client.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ResourceSubscriptionsService } from '../resource-subscriptions.service';
+import { PUBLIC_RESOURCE_STATUSES, type ResourceStatus } from '@common/utils/constants';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
 type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; title?: string; status?: string; is_public?: number; visibility?: string };
@@ -110,6 +111,10 @@ export class ResourceV2ReviewService {
         }
       }
 
+      const isResourcePubliclyVisible = Boolean(action === 'approve'
+        && PUBLIC_RESOURCE_STATUSES.includes(resource.status as ResourceStatus)
+        && Number(resource.is_public) === 1 && resource.visibility !== 'private');
+
       const resFiles = await manager.query(
         `SELECT id,public_id,provider_object_id,provider_binding_id,size_bytes,content_hash,mime_type,integrity_status
          FROM resource_files WHERE resource_version_id=? AND storage_backend='res' FOR UPDATE`,
@@ -126,8 +131,7 @@ export class ResourceV2ReviewService {
             throw new BadRequestException('资源存储对象校验失败，无法发布此版本');
           }
         }
-        const visibility = action === 'approve' && resource.status === 'approved'
-          && Number(resource.is_public) === 1 && resource.visibility !== 'private' ? 'public' : 'private';
+        const visibility = isResourcePubliclyVisible ? 'public' : 'private';
         const binding = await this.resClient.createBinding(file.provider_object_id, {
           namespace: 'mindforum', owner_type: 'resource_file', owner_id: file.public_id, visibility,
         });
@@ -206,8 +210,6 @@ export class ResourceV2ReviewService {
          WHERE resource_id=? AND role IN ('owner','maintainer') AND status='active' AND user_id IS NOT NULL`,
         [resource.id],
       ) as Array<{ user_id: number }>;
-      const isPubliclyVisible = Boolean(action === 'approve' && resource.status === 'approved'
-        && Number(resource.is_public) === 1 && resource.visibility !== 'private');
       return {
         resource_public_id: resource.public_id,
         version_public_id: version.public_id,
@@ -215,7 +217,7 @@ export class ResourceV2ReviewService {
         status: nextStatus,
         published_at: action === 'approve' ? new Date().toISOString() : null,
         recommended: Boolean(isRecommended),
-        subscriber_notification: action === 'approve' && isPubliclyVisible
+        subscriber_notification: isResourcePubliclyVisible
           ? { id: Number(resource.id), user_id: Number(resource.user_id), title: resource.title }
           : null,
         notify_user_ids: [...new Set([Number(resource.user_id), ...maintainers.map((member) => Number(member.user_id))])],
