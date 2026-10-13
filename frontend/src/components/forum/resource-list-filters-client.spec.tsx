@@ -46,6 +46,24 @@ describe('ResourceFilters map and blueprint conditions', () => {
     if (!call) throw new Error('router.push was not called');
     return new URLSearchParams(String(call[0]).replace('/resources?', ''));
   };
+  /** The pushed query strings; the empty string is the bare `/resources`. */
+  const pushedQueries = () => mockPush.mock.calls.map((call) => String(call[0]).replace(/^\/resources\??/, ''));
+  /**
+   * Model the router rendering a navigation: `searchParams` becomes the query of
+   * that push and the component re-renders. Real navigations are not guaranteed
+   * to render in the order they were issued, so `to` may be any earlier push
+   * that has now caught up.
+   */
+  const render = async (to?: string) => {
+    const queries = pushedQueries();
+    mockCurrentQuery = to ?? queries[queries.length - 1];
+    await act(async () => {
+      root!.render(createElement(ResourceFilters, {
+        categories: [], initialResourceKind: mockCurrentQuery.includes('schematic') ? 'schematic' : 'map',
+        supportedVersions: [], compatibilityOptions: [], planets: ['serpulo', 'erekir'],
+      }));
+    });
+  };
   const kindButton = (kind: string) => {
     const label = RESOURCE_KINDS.find((item) => item.value === kind)!.label;
     const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'))
@@ -79,6 +97,12 @@ describe('ResourceFilters map and blueprint conditions', () => {
   };
   const commit = async (input: HTMLInputElement) => {
     await act(async () => { input.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })); });
+  };
+  /** Enter commits the field without leaving it, so focus never moves on its own. */
+  const pressEnter = async (input: HTMLInputElement) => {
+    await act(async () => {
+      input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
   };
   // React maps onFocus to the bubbling focusin event, so a bare 'focus'
   // dispatch is ignored; focus() is what a user coming back to the field does.
@@ -252,6 +276,141 @@ describe('ResourceFilters map and blueprint conditions', () => {
     await setValue(field('desktop', 'width'), '');
     await commit(field('desktop', 'width'));
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  /**
+   * D1: a keyboard Tab through both dimension fields commits the second field
+   * before the first navigation has rendered. Both commits used to start from
+   * the same rendered `searchParams` snapshot, so the second overwrote the
+   * first and the condition the user typed silently vanished from the URL.
+   */
+  it('keeps both dimensions when they are committed by blur without a pause', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await commit(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(String(mockPush.mock.calls[0][0])).toBe('/resources?resource_kind=map&width=128');
+    expect(String(mockPush.mock.calls[1][0])).toBe('/resources?resource_kind=map&width=128&height=64');
+  });
+
+  it('keeps both dimensions when they are committed by Enter without a pause', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await pressEnter(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await pressEnter(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    const last = pushQuery();
+    expect(last.get('width')).toBe('128');
+    expect(last.get('height')).toBe('64');
+    expect(last.get('resource_kind')).toBe('map');
+  });
+
+  it('keeps a blueprint block and both dimensions committed back to back', async () => {
+    // Blueprint exposes block/width/height, so the same Tab walk crosses three
+    // fields: a commit that starts from a stale snapshot loses two of them.
+    await mount('resource_kind=schematic', 'schematic');
+    await setValue(field('desktop', 'block'), 'router');
+    await commit(field('desktop', 'block'));
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await pressEnter(field('desktop', 'height'));
+
+    expect(pushQuery().toString()).toBe('resource_kind=schematic&block=router&width=128&height=64');
+  });
+
+  /**
+   * The three cases below pin the *reset* side of the chain, which the D1 cases
+   * above cannot see: they never let a render land between two commits, so an
+   * implementation that simply clears the chain on every render stays green.
+   */
+  it('commits from the URL again once the render has caught up with the navigation', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    expect(String(mockPush.mock.calls[0][0])).toBe('/resources?resource_kind=map&width=128');
+
+    // The navigation rendered: `searchParams` is `resource_kind=map&width=128`.
+    await render();
+    await setValue(field('desktop', 'height'), '64');
+    await commit(field('desktop', 'height'));
+
+    // Chaining off the rendered URL and chaining off the pending query agree
+    // here, so this is the case that stays green when the chain is over-kept.
+    expect(String(mockPush.mock.calls[1][0])).toBe('/resources?resource_kind=map&width=128&height=64');
+  });
+
+  it('keeps a later condition when a render that overtook a newer navigation arrives', async () => {
+    // Three fields walked back to back, then the *oldest* navigation renders
+    // last — the render the component sees is not the newest one. Clearing the
+    // chain on that render would drop back to its stale snapshot and lose the
+    // conditions committed after it.
+    await mount('resource_kind=schematic', 'schematic');
+    await setValue(field('desktop', 'block'), 'router');
+    await commit(field('desktop', 'block'));
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '64');
+    await pressEnter(field('desktop', 'height'));
+
+    const [blockOnly, blockAndWidth, allThree] = pushedQueries();
+    expect(allThree).toBe('resource_kind=schematic&block=router&width=128&height=64');
+
+    // The `block=router` navigation renders last; `width` was committed after it.
+    await render(blockOnly);
+
+    await setValue(field('desktop', 'height'), '128');
+    await commit(field('desktop', 'height'));
+    expect(pushQuery().toString()).toBe('resource_kind=schematic&block=router&width=128&height=128');
+  });
+
+  it('does not revive a cleared condition when a commit follows Clear in the same render window', async () => {
+    // `clearAll` navigates outside `updateFilters`, so without sharing the chain
+    // the next commit reads the snapshot Clear removed and puts it back.
+    await mount('resource_kind=schematic&width=128&tag=campaign', 'schematic');
+    const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'resourceList.clear')!;
+    await act(async () => { clear.click(); });
+    expect(mockPush).toHaveBeenLastCalledWith('/resources');
+
+    // No render in between: the commit must chain off what Clear pushed, not off
+    // the `resource_kind=schematic&width=128&tag=campaign` the Clear removed.
+    await setValue(field('desktop', 'tag'), 'router');
+    await commit(field('desktop', 'tag'));
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(pushedQueries()[1]).toBe('tag=router');
+  });
+
+  it('treats a navigation it did not make (back/forward) as the new authority', async () => {
+    await mount('resource_kind=map&width=128', 'map');
+    await setValue(field('desktop', 'height'), '64');
+    await commit(field('desktop', 'height'));
+    expect(pushQuery().toString()).toBe('resource_kind=map&width=128&height=64');
+
+    // Back/forward lands on a query this component never pushed (`tag=campaign`
+    // was never committed here). The chain is void, so the next commit builds on
+    // that URL — keeping the stale tail would put the abandoned `height=64` back.
+    await render('resource_kind=map&width=128&tag=campaign');
+    await setValue(field('desktop', 'height'), '32');
+    await commit(field('desktop', 'height'));
+    expect(pushQuery().toString()).toBe('resource_kind=map&width=128&tag=campaign&height=32');
+  });
+
+  it('drops an invalid dimension without taking the freshly committed one with it', async () => {
+    await mount('resource_kind=map', 'map');
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    await setValue(field('desktop', 'height'), '0');
+    await commit(field('desktop', 'height'));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(pushQuery().toString()).toBe('resource_kind=map&width=128');
   });
 
   it('commits a valid dimension and keeps the sibling conditions in the same query', async () => {
