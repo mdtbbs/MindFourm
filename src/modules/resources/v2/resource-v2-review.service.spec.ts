@@ -482,19 +482,26 @@ describe('Resource V2 RES review publication', () => {
 
   it('notifies subscribers with the published version only after the approval transaction commits', async () => {
     const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    // Sample the state inside the mock and assert *after* awaiting the call: production wraps
+    // `notifyResourceUpdate` in a `.catch()`, so an assertion thrown here would be swallowed
+    // and the case would pass even when the notification moved inside the transaction.
+    const observed: Array<{ committed: boolean; versionStatus: string; reviewEvents: number }> = [];
     harness.subscriptions.notifyResourceUpdate.mockImplementation(async () => {
-      // Subscribers must not be reached before the transaction has actually committed.
-      // `committed` only flips after the callback resolves, unlike the state counters which
-      // are mutated while the callback is still running.
-      expect(harness.state.committed).toBe(true);
-      expect(harness.state.versionStatus).toBe('published');
-      expect(harness.state.reviewEvents).toBe(1);
+      observed.push({
+        committed: harness.state.committed,
+        versionStatus: harness.state.versionStatus,
+        reviewEvents: harness.state.reviewEvents,
+      });
     });
 
     const result = await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
     expect(result).toMatchObject({ status: 'published' });
 
     expect(harness.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    // Subscribers must not be reached before the transaction has actually committed:
+    // `committed` only flips after the callback resolves, unlike the state counters which
+    // are mutated while the callback is still running.
+    expect(observed).toEqual([{ committed: true, versionStatus: 'published', reviewEvents: 1 }]);
     // The response body must not leak the internal notification scaffolding.
     expect(result).not.toHaveProperty('subscriber_notification');
     expect(result).not.toHaveProperty('notify_user_ids');

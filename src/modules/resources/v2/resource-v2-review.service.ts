@@ -19,6 +19,16 @@ type VersionRow = {
 };
 type AnalysisRunRow = { id: number; parser_version: string; findings_json: unknown };
 
+// Internal transaction outcome: the public response is this shape minus the notification scaffolding,
+// which is why the two internal fields are split out into their own type.
+type ReviewOutcome = {
+  resource_public_id: string; version_public_id: string; action: string; status: string;
+  published_at: string | null; recommended: boolean;
+  subscriber_notification: { id: number; user_id: number; title?: string } | null;
+  notify_user_ids: number[];
+};
+type ReviewResponse = Omit<ReviewOutcome, 'subscriber_notification' | 'notify_user_ids'>;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ANALYZERS: Record<string, string> = {
   mod: 'mod-static-analysis',
@@ -79,7 +89,7 @@ export class ResourceV2ReviewService {
 
     const changedBindings: Array<{ objectId: string; ownerId: string }> = [];
     let changedPreview: { resource: Resource; version: ResourceVersion } | null = null;
-    let outcome: any;
+    let outcome: ReviewOutcome;
     try {
     outcome = await this.dataSource.transaction(async (manager) => {
       const resource = await this.getResource(manager, resourcePublicId, true);
@@ -260,7 +270,14 @@ export class ResourceV2ReviewService {
       ).catch((error) => this.logger.warn(`Failed to notify Resource subscribers after version review: ${(error as Error).message}`));
     }
 
-    const { notify_user_ids: _notifyUserIds, subscriber_notification: _subscriberNotification, ...response } = outcome;
+    const response: ReviewResponse = {
+      resource_public_id: outcome.resource_public_id,
+      version_public_id: outcome.version_public_id,
+      action: outcome.action,
+      status: outcome.status,
+      published_at: outcome.published_at,
+      recommended: outcome.recommended,
+    };
     return response;
   }
 
