@@ -474,6 +474,22 @@ describe('Resource V2 RES review publication', () => {
     expect(harness.storage.preparePromotion).not.toHaveBeenCalled();
   });
 
+  it('treats published resources as public when approving a version', async () => {
+    const harness = createHarness({
+      staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null,
+      resFile: true, resourceStatus: 'published',
+    });
+
+    await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+
+    expect(harness.res.createBinding).toHaveBeenCalledWith('res-object', expect.objectContaining({ visibility: 'public' }));
+    expect(harness.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    expect(harness.subscriptions.notifyResourceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7, user_id: 10, title: 'A Mod Release' }),
+      { deduplicationKey: `resource-version-published:${ids.version}` },
+    );
+  });
+
   it('keeps approved files private for private resources', async () => {
     const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true, publicResource: false });
     await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
