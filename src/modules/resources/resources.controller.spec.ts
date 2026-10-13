@@ -180,6 +180,64 @@ describe('ResourcesController internal file access', () => {
     } finally { await rm(folder, { recursive: true, force: true }); }
   });
 
+  it('attributes a legacy root-file completion to no version or file row', async () => {
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-legacy-'));
+    try {
+      const file = join(folder, 'legacy-root.msav');
+      await writeFile(file, Buffer.from('legacy root bytes'));
+      // The root file is streamed, but a published version with its own file row
+      // also exists. Recording `stored` would hang the completion on the file
+      // that was never sent.
+      const { controller, domain } = setup({ id: 12, file_path: file, file_name: 'legacy-root.msav', mime_type: 'application/octet-stream' });
+      Object.assign(domain, {
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31 }, file: { id: 42 } }),
+      });
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      Object.defineProperty(controller, 'downloadEvents', { value: events });
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn();
+      const download = await controller.download(12, undefined, response as any, { user: null, headers: {} });
+      response.emit('finish');
+      await Promise.resolve();
+
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        resource_id: 12, version_id: null, file_id: null,
+      }), expect.any(String));
+      (download as any).getStream?.();
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
+  it('attributes a versioned completion to the version and file that were streamed', async () => {
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-versioned-'));
+    try {
+      const file = join(folder, 'v3.msav');
+      await writeFile(file, Buffer.from('v3 bytes'));
+      const { controller, domain } = setup({ id: 12, file_path: null });
+      Object.assign(domain, {
+        findStoredDownloadFile: jest.fn().mockResolvedValue({ version: { id: 31 }, file: { id: 42 } }),
+      });
+      Object.defineProperty(controller, 'versionService', {
+        value: { getDownloadTarget: jest.fn().mockResolvedValue({ id: 31, file_path: file, mime_type: 'application/octet-stream', file_name: 'v3.msav' }) },
+      });
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      Object.defineProperty(controller, 'downloadEvents', { value: events });
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn();
+      const download = await controller.download(12, '31', response as any, { user: { id: 9 }, headers: {} });
+      response.emit('finish');
+      await Promise.resolve();
+
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        resource_id: 12, version_id: 31, file_id: 42,
+      }), 'user:9');
+      (download as any).getStream?.();
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
   it('preserves the validated MFL download redirect internally', async () => {
     const { controller } = setup({ id: 12, use_mfl: 1, mfl_download_url: 'https://files.example.test/map.msav' });
     const response = { redirect: jest.fn() };

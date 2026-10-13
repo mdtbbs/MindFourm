@@ -216,6 +216,7 @@ export default async function ResourcesPage({
           compatibility={compatibility}
           resourceKind={resourceKind}
           mapFilters={mapFilters}
+          locale={locale}
         />}
       </section>
     </main>

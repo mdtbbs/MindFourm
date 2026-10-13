@@ -21,8 +21,18 @@ export type DownloadEventInput = {
 @Injectable()
 export class DownloadEventsService {
   private readonly logger = new Logger(DownloadEventsService.name);
-  /** Same window as DownloadGrantService: one completion per (file, actor) per minute. */
-  private static readonly DEDUP_WINDOW_MS = 60 * 1000;
+  /**
+   * Bucket width for completion deduplication — a natural-minute bucket (the
+   * calendar minute the event falls in), not grant's rolling 60 seconds. Two
+   * ends of the same file by the same actor at 10:00:59 and 10:01:01 land in
+   * different buckets and both count, so a retry straddling a minute boundary
+   * can be counted twice (≈1/60 of boundary cases). Accepted deliberately: a
+   * rolling window needs per-(file, actor) timestamps plus a serializing lock,
+   * and grant's `download_grant_dedup` row is scoped to grants, not streams.
+   * The unique index still makes each append atomic. See
+   * docs/production-deployment.md.
+   */
+  private static readonly DEDUP_BUCKET_MS = 60 * 1000;
   constructor(@InjectRepository(DownloadEvent) private readonly events: Repository<DownloadEvent>) {}
 
   async recordEvent(event: DownloadEventInput): Promise<void> {
@@ -33,17 +43,17 @@ export class DownloadEventsService {
   /**
    * Writes the canonical "completed download" for a stream that ended successfully.
    *
-   * Counted at most once per (file, actor) window through the same
-   * `uq_download_events_dedup_bucket` unique index grants use; the bucket is
-   * namespaced (`completed:`) so a completion never collides with the grant row
-   * of the same request. The unique index arbitrates concurrent callbacks, so a
-   * rejected replay returns `false` instead of failing the request.
+   * The dedup key namespaces `completed:` so a completion never collides with
+   * the grant row of the same request; the bucket is a natural minute (see
+   * `DEDUP_BUCKET_MS`), so a retry straddling a minute boundary counts again.
+   * The unique index arbitrates concurrent callbacks, so a rejected replay
+   * returns `false` instead of failing the request.
    */
   async recordCompletion(event: DownloadEventInput, actorKey: string): Promise<boolean> {
     const dedupKey = createHash('sha256')
       .update(`completed:${event.file_id ?? `resource:${event.resource_id}`}:${actorKey}`)
       .digest('hex');
-    const dedupBucket = String(Math.floor(event.created_at.getTime() / DownloadEventsService.DEDUP_WINDOW_MS));
+    const dedupBucket = String(Math.floor(event.created_at.getTime() / DownloadEventsService.DEDUP_BUCKET_MS));
     try {
       await this.events.insert({ ...event, dedup_key: dedupKey, dedup_bucket: dedupBucket });
       this.logger.verbose(`Download completed: file=${event.file_id ?? 'legacy'} resource=${event.resource_id}`);

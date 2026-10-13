@@ -52,6 +52,7 @@ import * as path from 'path';
 import { ResourceStorageService } from './resource-storage.service';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
@@ -657,7 +658,7 @@ export class ResourcesController {
       await this.downloadGrants.recordGrant({
         resourceId: id, versionId: stored.version.id, fileId: stored.file.id, userId,
         grantedAt: new Date(), clientType: 'web', clientVersion: null, platform: null, backend: 'res',
-      }, userId ? `user:${userId}` : `ipua:${getClientIp(req || {}) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`);
+      }, downloadActorKey(userId, getClientIp(req || {}), req?.headers?.['user-agent']));
       return res.redirect(302, downloadTarget.url);
     }
 
@@ -705,21 +706,27 @@ export class ResourcesController {
       'Content-Disposition': attachmentContentDisposition(target.file_name || 'file'),
     });
 
+    // The recorded version/file must be the pair the bytes actually came from:
+    // a version row when the request named one (its primary file is `stored.file`),
+    // otherwise the resource's own legacy root file, which has no version or file
+    // row at all — never the newest published version, which was not streamed.
+    const streamedVersionId = versionId ? Number(versionId) : null;
+    const streamedFileId = streamedVersionId === null ? null : stored?.file.id ?? null;
+
     const stream = createReadStream(filePath);
     if (this.downloadEvents) {
       // The streamed branch is the only web path that can prove the bytes were
       // delivered: a finished body counts once, disconnects and read errors do not.
       const userId = req?.user?.id || null;
-      const actorKey = userId
-        ? `user:${userId}`
-        : `ipua:${getClientIp(req || {}) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`;
-      // `stored` was already resolved above; only a stream that reaches `finish`
-      // counts, so disconnected clients never enter the completion ledger.
+      // Same actor identity as the grant path above: a visitor who downloads the
+      // same file through another route is one download, not two (the grant and
+      // completion dedup keys both derive from this string).
+      const actorKey = downloadActorKey(userId, getClientIp(req || {}), req?.headers?.['user-agent']);
       observeStreamCompletion(stream, res, (event) => {
         if (event !== 'completed') return;
         void this.downloadEvents!.recordCompletion({
-          event_type: 'completed', resource_id: id, version_id: stored?.version.id ?? null,
-          file_id: stored?.file.id ?? null, user_id: userId, client_type: 'web',
+          event_type: 'completed', resource_id: id, version_id: streamedVersionId,
+          file_id: streamedFileId, user_id: userId, client_type: 'web',
           client_version: null, platform: null, backend: 'managed', created_at: new Date(),
         }, actorKey).catch((error) => this.logger.warn(`Download completion persistence failed: ${(error as Error).message}`));
       });

@@ -156,7 +156,7 @@ export default function ResourceDiscoveryShelves({ kind }: { kind?: string }) {
 const KIND_ICONS: Record<string, LucideIcon> = { map: MapIcon, schematic: FileArchive, development_tool: Blocks };
 
 function ResourceDiscoveryCard({ resource }: { resource: Resource }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const kind = resource.resource_kind || resource.resource_type || 'other';
   const translatedKind = t(`resources.kinds.${kind}`);
   const kindLabel = translatedKind === `resources.kinds.${kind}` ? resourceKindLabel(kind) : translatedKind;
@@ -173,7 +173,7 @@ function ResourceDiscoveryCard({ resource }: { resource: Resource }) {
     <span className="flex min-w-0 flex-1 flex-col gap-2 p-3">
       <span className="line-clamp-2 text-sm font-medium leading-[1.35] text-[var(--text)] transition-colors group-hover:text-[var(--primary-text)]">{resource.title}</span>
       <span className="mt-auto flex min-w-0 items-center gap-3 text-[11px] tabular-nums text-[var(--text-muted)]">
-        <span className="inline-flex shrink-0 items-center gap-1"><Download aria-hidden className="h-3 w-3" />{Number(resource.download_count || 0)}</span>
+        <span className="inline-flex shrink-0 items-center gap-1" title={t('resourceDetail.downloads', { count: Number(resource.download_count || 0).toLocaleString(locale) })}><Download aria-hidden className="h-3 w-3" />{Number(resource.download_count || 0)}</span>
         <span className="inline-flex shrink-0 items-center gap-1"><Eye aria-hidden className="h-3 w-3" />{Number(resource.view_count || 0)}</span>
       </span>
     </span>

@@ -58,8 +58,8 @@
 ## Download Events and Analytics
 
 - `DownloadEvent` is a TypeORM entity in `src/entities/download-event.entity.ts`; the database persists `requested`, `granted`, `started`, `completed`, and `failed` lifecycle events.
-- `DownloadGrantService` records requested/granted events, deduplicates grants using a database deduplication table and a 60-second window, and increments the Resource aggregate only for a new grant. `DownloadEventsService` records transfer lifecycle outcomes.
-- `StatsService` aggregates durable granted/failed counts by time range; the admin dashboard displays downloads and related range metrics. Do not describe download tracking as memory-only.
+- `DownloadGrantService` records requested/granted events, deduplicates grants using a database deduplication table and a rolling 60-second window, and increments the Resource aggregate (`resources.download_count`, the grant/authorization counter) only for a new grant. `DownloadEventsService` records transfer lifecycle outcomes and deduplicates `completed` rows with a natural-minute bucket (`DEDUP_BUCKET_MS`) — not a rolling window.
+- `StatsService` aggregates durable `completed`/`failed` counts by time range; the admin dashboard displays downloads and related range metrics. User-visible "downloads" figures count `completed` (a stream that finished writing its body) only — bare grants are not downloads. `resources.download_count` intentionally keeps its ADR-009 authorization semantics, so public cards and rankings show authorization counts, not completions; label them accordingly instead of presenting the two numbers as one metric. Do not describe download tracking as memory-only.
 
 ## Network Bans
 

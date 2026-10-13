@@ -36,7 +36,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyResourcesPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showError = useToastStore((state) => state.showError);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -161,7 +161,7 @@ export default function MyResourcesPage() {
                   </td>
                   <td className="px-4 py-3 text-[var(--text-muted)]">
                     <span className="flex items-center gap-1">
-                      <Download className="h-3 w-3" /> {r.download_count}
+                      <Download className="h-3 w-3" /> {Number(r.download_count || 0).toLocaleString(locale)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-[var(--text-muted)]">

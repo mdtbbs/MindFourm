@@ -22,6 +22,7 @@ import { DownloadPolicyService } from '../../downloads/download-policy.service';
 import { DownloadEventsService } from '../../downloads/download-events.service';
 import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { ResourceFileProviderService } from '../resource-file-provider.service';
 
 /**
@@ -159,7 +160,9 @@ export class ResourcesV1Controller {
     });
     const stream = createReadStream(filePath);
     if (this.downloadEvents) {
-      const actorKey = this.downloadActorKey(target, req);
+      // The shared util keeps this identity identical to the grant ledger's, so
+      // one anonymous visitor downloading one file through two routes counts once.
+      const actorKey = downloadActorKey(req?.user?.id, getClientIp(req), req?.headers?.['user-agent']);
       observeStreamCompletion(stream, res, (event) => {
         if (event !== 'completed') return;
         void this.downloadEvents!.recordCompletion({
@@ -175,24 +178,13 @@ export class ResourcesV1Controller {
     return new StreamableFile(stream);
   }
 
-  /** Same pseudonymous actor identity used by the grant ledger and completion writer. */
-  private downloadActorKey(target: { resource: any }, req: any): string {
-    const userId = Number(req?.user?.id);
-    return Number.isInteger(userId) && userId > 0
-      ? `user:${userId}`
-      : `ipua:${getClientIp(req) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`;
-  }
-
   private async recordDownloadGrant(target: { resource: any; version: any; file: any }, req: any): Promise<void> {
     if (!this.downloadGrantService) {
       await this.resourceReadAdapter.incrementDownload(target.resource.id);
       return;
     }
     const userId = Number(req?.user?.id);
-    const userAgent = String(req?.headers?.['user-agent'] || '');
-    const actorKey = Number.isInteger(userId) && userId > 0
-      ? `user:${userId}`
-      : `ipua:${getClientIp(req) || 'unknown'}:${userAgent}`;
+    const actorKey = downloadActorKey(userId, getClientIp(req), req?.headers?.['user-agent']);
     await this.downloadGrantService.recordGrant({
       resourceId: target.resource.id,
       versionId: target.version.id,

@@ -13,6 +13,7 @@ import { CapabilitiesService } from '../capabilities/capabilities.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
 import { ResourceDependencyReadService, UnifiedCompatibility, UnifiedDependency } from '../resources/resource-dependency-read.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
 
 const PUBLIC_RESOURCE_STATUSES = new Set(['approved', 'published']);
@@ -282,11 +283,10 @@ export class PacksService {
     if (version.status !== 'published' || !version.public_id) throw new NotFoundException('Pack 版本不存在或尚未发布');
     const members = await this.resolvePublicManifestItems(version.id);
     const userId = Number(req?.user?.id);
-    const userAgent = String(req?.headers?.['user-agent'] || '');
-    // DownloadGrantService hashes this actor key before persistence; raw IP and UA are never stored.
-    const actorKey = Number.isInteger(userId) && userId > 0
-      ? `user:${userId}`
-      : `ipua:${getClientIp(req) || 'unknown'}:${userAgent}`;
+    // DownloadGrantService hashes this actor key before persistence; raw IP and
+    // user agent are never stored. Built by the shared util so a pack grant and a
+    // V1 single-file grant for one visitor dedupe to the same key.
+    const actorKey = downloadActorKey(userId, getClientIp(req), req?.headers?.['user-agent']);
     const grants = await Promise.all(members.map(async ({ resource, version: memberVersion, file }) => {
       const granted = await this.downloadGrants.recordGrant({
         resourceId: resource.id,
