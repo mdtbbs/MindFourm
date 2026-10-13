@@ -3,6 +3,7 @@ import { CapabilitiesService } from '../capabilities/capabilities.service';
 import {
   Controller,
   Get,
+  Logger,
   Header,
   Post,
   Put,
@@ -67,6 +68,8 @@ import { DownloadPolicyService } from '../downloads/download-policy.service';
 import { ResourceDirectUploadService } from './resource-direct-upload.service';
 import { ResourceFileProviderService } from './resource-file-provider.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
+import { DownloadEventsService } from '../downloads/download-events.service';
+import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { ResourceOperationsService } from './resource-operations.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
@@ -149,6 +152,8 @@ export async function cleanupUploadedFile(file?: Express.Multer.File): Promise<v
 
 @Controller('resources')
 export class ResourcesController {
+  private readonly logger = new Logger(ResourcesController.name);
+
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly categoryService: ResourceCategoryService,
@@ -168,6 +173,7 @@ export class ResourcesController {
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly downloadGrants?: DownloadGrantService,
+    @Optional() private readonly downloadEvents?: DownloadEventsService,
     @Optional() private readonly editorCapabilities?: CapabilitiesService,
   ) {}
 
@@ -699,7 +705,26 @@ export class ResourcesController {
       'Content-Disposition': attachmentContentDisposition(target.file_name || 'file'),
     });
 
-    return new StreamableFile(createReadStream(filePath));
+    const stream = createReadStream(filePath);
+    if (this.downloadEvents) {
+      // The streamed branch is the only web path that can prove the bytes were
+      // delivered: a finished body counts once, disconnects and read errors do not.
+      const userId = req?.user?.id || null;
+      const actorKey = userId
+        ? `user:${userId}`
+        : `ipua:${getClientIp(req || {}) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`;
+      // `stored` was already resolved above; only a stream that reaches `finish`
+      // counts, so disconnected clients never enter the completion ledger.
+      observeStreamCompletion(stream, res, (event) => {
+        if (event !== 'completed') return;
+        void this.downloadEvents!.recordCompletion({
+          event_type: 'completed', resource_id: id, version_id: stored?.version.id ?? null,
+          file_id: stored?.file.id ?? null, user_id: userId, client_type: 'web',
+          client_version: null, platform: null, backend: 'managed', created_at: new Date(),
+        }, actorKey).catch((error) => this.logger.warn(`Download completion persistence failed: ${(error as Error).message}`));
+      });
+    }
+    return new StreamableFile(stream);
   }
 
   @Get(':id/versions')

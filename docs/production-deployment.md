@@ -60,7 +60,7 @@ cp frontend/.env.local.example frontend/.env.production
 | `LANLINK_ENABLED` / `LANLINK_URL` | LanLink 集成开关和控制面地址 |
 | `EASYMANAGER_ENABLED` | 当前默认 `false`，除非已恢复 EasyManager |
 
-`download_events` 保存 requested、granted、started、completed、failed 生命周期事件；新 grant 通过数据库去重表按短窗口去重。管理仪表盘按数据库事件聚合 downloads 与 failed counts。它是业务统计数据，不包含完整客户端 IP 审计记录。
+`download_events` 保存 requested、granted、started、completed、failed 生命周期事件；新 grant 通过数据库去重表按短窗口去重。`granted` 只表示授权，用户可见的“下载数”一律统计 `completed`（文件流成功结束），断流、读错误或非 2xx 响应不计完成，同一 (file, actor) 窗口内只计一次。管理仪表盘按数据库事件聚合 downloads 与 failed counts。它是业务统计数据，不包含完整客户端 IP 审计记录。
 
 生产环境不要使用 `.env.example` 中的 `change-me` 值。
 

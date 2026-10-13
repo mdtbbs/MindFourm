@@ -129,7 +129,7 @@ export class StatsService {
           (SELECT COUNT(*) FROM replies WHERE deleted_at IS NULL AND status = 'published' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS replies,
           (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS resources,
           (SELECT COUNT(*) FROM reports WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS reports,
-          (SELECT COUNT(*) FROM download_events WHERE event_type = 'granted' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS downloads,
+          (SELECT COUNT(*) FROM download_events WHERE event_type = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS downloads,
           (SELECT COUNT(*) FROM resource_view_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS views,
           (SELECT COUNT(*) FROM download_events WHERE event_type = 'failed' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS failed_jobs,
           (SELECT COUNT(*) FROM email_logs WHERE status IN ('failed', 'bounced') AND sent_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS email_failures,

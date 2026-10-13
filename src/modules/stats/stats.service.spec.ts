@@ -128,6 +128,9 @@ describe('StatsService', () => {
     expect(postRepository.query.mock.calls[0][0]).toContain("FROM posts WHERE deleted_at IS NULL AND status = 'published'");
     expect(postRepository.query.mock.calls[1][0]).toContain("p.status = 'published' AND p.source = 'USER'");
     expect(postRepository.query.mock.calls[3][0]).toContain('DATE_SUB(NOW(), INTERVAL 7 DAY)');
+    // Range downloads count successful stream ends; grants alone are not downloads.
+    expect(postRepository.query.mock.calls[3][0]).toContain("event_type = 'completed'");
+    expect(postRepository.query.mock.calls[3][0]).not.toContain("event_type = 'granted'");
     expect(redisService.activeUserStats).toHaveBeenCalledWith();
   });
 

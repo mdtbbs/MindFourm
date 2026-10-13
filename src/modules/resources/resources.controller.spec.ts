@@ -149,6 +149,37 @@ describe('ResourcesController internal file access', () => {
     } finally { await rm(folder, { recursive: true, force: true }); }
   });
 
+  it('records a completed managed stream once and skips grants for an aborted body', async () => {
+    const { EventEmitter } = await import('events');
+    const folder = await mkdtemp(join(tmpdir(), 'forum-download-complete-'));
+    try {
+      const file = join(folder, 'map.msav');
+      await writeFile(file, Buffer.from('actual map bytes'));
+      const { controller, domain } = setup({ id: 12, file_path: file, file_name: 'map.msav', mime_type: 'application/octet-stream' });
+      const events = { recordCompletion: jest.fn().mockResolvedValue(true) };
+      Object.defineProperty(controller, 'downloadEvents', { value: events });
+
+      const response = new EventEmitter() as any;
+      response.statusCode = 200; response.writableFinished = true; response.set = jest.fn();
+      const download = await controller.download(12, undefined, response as any, { user: { id: 9 }, headers: {} });
+      response.emit('finish');
+      await Promise.resolve();
+      expect(events.recordCompletion).toHaveBeenCalledTimes(1);
+      expect(events.recordCompletion).toHaveBeenCalledWith(expect.objectContaining({
+        event_type: 'completed', resource_id: 12, user_id: 9, client_type: 'web',
+      }), 'user:9');
+      (download as any).getStream?.();
+
+      const aborted = new EventEmitter() as any;
+      aborted.statusCode = 200; aborted.writableFinished = false; aborted.set = jest.fn();
+      await controller.download(12, undefined, aborted as any, { user: { id: 9 }, headers: {} });
+      aborted.emit('close');
+      await Promise.resolve();
+      expect(events.recordCompletion).toHaveBeenCalledTimes(1);
+      expect(domain.incrementDownload).toHaveBeenCalledTimes(2);
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
   it('preserves the validated MFL download redirect internally', async () => {
     const { controller } = setup({ id: 12, use_mfl: 1, mfl_download_url: 'https://files.example.test/map.msav' });
     const response = { redirect: jest.fn() };

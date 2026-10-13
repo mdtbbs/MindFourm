@@ -303,6 +303,23 @@ export class GameContentService {
     });
   }
 
+  /**
+   * The canonical "completed download" for this route. It goes through the
+   * shared completion writer (deduplicated by the events unique index) rather
+   * than `recordDownloadLifecycle`, so a replayed or resumed stream cannot
+   * count the same file twice inside the window.
+   */
+  async recordDownloadCompletion(
+    target: { resource: Resource; version: ResourceVersion | null; file: ResourceFile | null },
+    userId: number | null, clientIp: string, clientType: string, platform: string | null, clientVersion: string | null,
+  ): Promise<boolean> {
+    return this.downloadEvents.recordCompletion({
+      event_type: 'completed', resource_id: target.resource.id, version_id: target.version?.id ?? null,
+      file_id: target.file?.id ?? null, user_id: userId, client_type: clientType,
+      client_version: clientVersion, platform, backend: target.file?.storage_backend || 'local', created_at: new Date(),
+    }, this.downloadActorKey(userId, clientIp));
+  }
+
   async recordDownloadFailure(value: string, userId: number | null, clientType: string, platform: string | null, clientVersion: string | null): Promise<void> {
     const id = this.internalId(value);
     const resource = await this.resources.findOne({ where: { public_id: id, resource_kind: 'map' }, withDeleted: true, select: ['id'] });

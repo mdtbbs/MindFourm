@@ -1375,7 +1375,7 @@ export class ResourcesService {
       // Aggregate each event window once, instead of rescanning it for each card.
       const trendScore = '(COALESCE(download_trend.score, 0) + COALESCE(like_trend.score, 0) + COALESCE(favorite_trend.score, 0))';
       if (options.trendingOnly) {
-        qb.leftJoin("(SELECT resource_id, COUNT(*) * 3 AS score FROM download_events WHERE event_type = 'granted' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)", 'download_trend', 'download_trend.resource_id = resource.id')
+        qb.leftJoin("(SELECT resource_id, COUNT(*) * 3 AS score FROM download_events WHERE event_type = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)", 'download_trend', 'download_trend.resource_id = resource.id')
           .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_likes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'like_trend', 'like_trend.resource_id = resource.id')
           .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_favorites WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'favorite_trend', 'favorite_trend.resource_id = resource.id')
           .addSelect(trendScore, 'trending_score');

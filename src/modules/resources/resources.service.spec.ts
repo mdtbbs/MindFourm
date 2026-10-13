@@ -372,7 +372,7 @@ describe('ResourcesService', () => {
     expect(defaultQb.andWhere).toHaveBeenCalledWith('resource.is_featured = 1');
   });
 
-  it('orders trending public resources from the last seven days of persisted grants, likes, and favorites', async () => {
+  it('orders trending public resources from the last seven days of completed downloads, likes, and favorites', async () => {
     const { service, defaultQb } = createService();
     await service.getList({ limit: 20 } as any, { scope: 'public', trendingOnly: true });
     expect(defaultQb.leftJoin).toHaveBeenCalledWith(expect.stringContaining("DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id"), 'download_trend', 'download_trend.resource_id = resource.id');

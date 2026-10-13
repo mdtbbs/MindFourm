@@ -112,15 +112,60 @@ describe('DownloadGrantService persistence and deduplication', () => {
 });
 
 describe('DownloadEventsService persistence', () => {
-  it('inserts lifecycle events and queries durable grant counts', async () => {
-    const repo = { insert: jest.fn().mockResolvedValue(undefined), count: jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(5) };
+  const completion = (at = new Date('2026-09-24T10:00:00.000Z')) => ({
+    event_type: 'completed' as const, resource_id: 1, version_id: 2, file_id: 3,
+    user_id: null, client_type: 'game-content' as const, platform: null, backend: 'local', created_at: at,
+  });
+
+  it('inserts plain lifecycle events without dedup keys', async () => {
+    const repo = { insert: jest.fn().mockResolvedValue(undefined), count: jest.fn() };
     const { DownloadEventsService } = await import('./download-events.service');
     const service = new DownloadEventsService(repo as any);
-    await service.recordEvent({ event_type: 'completed', resource_id: 1, version_id: 2, file_id: 3, user_id: null, client_type: 'game-content', platform: null, backend: 'local', created_at: new Date() });
-    expect(repo.insert).toHaveBeenCalledWith( expect.objectContaining({ event_type: 'completed', dedup_key: null, dedup_bucket: null }));
+    await service.recordEvent({ event_type: 'started', resource_id: 1, version_id: 2, file_id: 3, user_id: null, client_type: 'game-content', platform: null, backend: 'local', created_at: new Date() });
+    expect(repo.insert).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'started', dedup_key: null, dedup_bucket: null }));
+    expect(DownloadEvent).toBeDefined();
+  });
+
+  it('counts successful stream ends only, never bare grants, for both aggregates', async () => {
+    const repo = { insert: jest.fn(), count: jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(5) };
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService(repo as any);
     await expect(service.getAggregateCount(3)).resolves.toBe(4);
     await expect(service.getResourceAggregate(1)).resolves.toBe(5);
-    expect(repo.count).toHaveBeenNthCalledWith(1, { where: { file_id: 3, event_type: 'granted' } });
-    expect(DownloadEvent).toBeDefined();
+    expect(repo.count).toHaveBeenNthCalledWith(1, { where: { file_id: 3, event_type: 'completed' } });
+    expect(repo.count).toHaveBeenNthCalledWith(2, { where: { resource_id: 1, event_type: 'completed' } });
+  });
+
+  it('records a completion once per (file, actor) window and rejects concurrent replays', async () => {
+    const seen = new Set<string>();
+    // Repository.insert takes a single entity object (unlike manager.insert).
+    const insert = jest.fn(async (value: any) => {
+      const key = `${value.dedup_key}:${value.dedup_bucket}`;
+      if (seen.has(key)) { const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error; }
+      seen.add(key);
+    });
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+
+    const results = await Promise.all([
+      service.recordCompletion(completion(), 'user:7'),
+      service.recordCompletion(completion(), 'user:7'),
+      service.recordCompletion(completion(), 'user:8'),
+    ]);
+    expect(results).toEqual([true, false, true]);
+    expect(insert.mock.calls[0][0]).toMatchObject({ event_type: 'completed' });
+    // The completion namespace never collides with the grant row of the same request.
+    expect(String(insert.mock.calls[0][0].dedup_key)).not.toContain('user:7');
+
+    // A later window is a new download and must count again.
+    const later = new Date('2026-09-24T10:02:00.000Z');
+    await expect(service.recordCompletion(completion(later), 'user:7')).resolves.toBe(true);
+  });
+
+  it('propagates real insert failures instead of swallowing them as duplicates', async () => {
+    const insert = jest.fn().mockRejectedValue(new Error('connection lost'));
+    const { DownloadEventsService } = await import('./download-events.service');
+    const service = new DownloadEventsService({ insert } as any);
+    await expect(service.recordCompletion(completion(), 'user:7')).rejects.toThrow('connection lost');
   });
 });
