@@ -241,7 +241,7 @@ describe('ResourcesV2Service mod dependency reads (shared projection)', () => {
     jest.spyOn(service as any, 'selectedVersion').mockResolvedValue(PUBLIC_VERSION);
   }
 
-  it('modern-only: getDependencies reads the modern table and keeps ordering/kind/constraint/notes semantics', async () => {
+  it('modern-only: getDependencies reads the modern table and keeps ordering/kind/constraint semantics', async () => {
     const { service: shared } = dependencyReadFromRows({
       tables: ['resource_dependencies'],
       modernDependencies: [
@@ -257,6 +257,7 @@ describe('ResourcesV2Service mod dependency reads (shared projection)', () => {
     expect(page.items.map((item: any) => item.sort_order)).toEqual([1, 2]);
     expect(page.items.map((item: any) => item.dependency_type)).toEqual(['required', 'optional']);
     expect(page.items[1]).toMatchObject({ version_constraint: '^2.0', resolution_status: 'unresolved', upstream_url: 'https://example.test/a' });
+    expect(page.items[1]).not.toHaveProperty('notes');
     expect(page.pagination.has_more).toBe(false);
   });
 
@@ -321,26 +322,40 @@ describe('ResourcesV2Service mod dependency reads (shared projection)', () => {
     expect(JSON.stringify(page)).not.toContain('9b1f5c2a-7d3e-4a61-8f0b-2c6d5e8a1b47');
   });
 
-  it('paginates with the opaque cursor over the projection order', async () => {
+  it('paginates repeated sort_order values with an opaque composite cursor', async () => {
     const { service: shared } = dependencyReadFromRows({
       tables: ['resource_dependencies'],
       modernDependencies: [
         modernRow({ id: 1, sort_order: 0, external_identifier: 'a.mod' }),
-        modernRow({ id: 2, sort_order: 1, external_identifier: 'b.mod' }),
-        modernRow({ id: 3, sort_order: 2, external_identifier: 'c.mod' }),
+        modernRow({ id: 2, sort_order: 0, external_identifier: 'b.mod' }),
+        modernRow({ id: 3, sort_order: 1, external_identifier: 'c.mod' }),
       ],
     });
     const service = createServiceWithSharedRead(shared);
     seedPublicMod(service);
 
-    const first = await service.getDependencies(ROOT_UUID, 'mod', { limit: 2 });
-    expect(first.items.map((item: any) => item.external_identifier)).toEqual(['a.mod', 'b.mod']);
+    const first = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1 });
+    expect(first.items.map((item: any) => item.external_identifier)).toEqual(['a.mod']);
     expect(first.pagination.has_more).toBe(true);
     expect(typeof first.pagination.next_cursor).toBe('string');
 
-    const second = await service.getDependencies(ROOT_UUID, 'mod', { limit: 2, cursor: first.pagination.next_cursor as string });
-    expect(second.items.map((item: any) => item.external_identifier)).toEqual(['c.mod']);
-    expect(second.pagination.has_more).toBe(false);
+    const second = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1, cursor: first.pagination.next_cursor as string });
+    expect(second.items.map((item: any) => item.external_identifier)).toEqual(['b.mod']);
+    expect(second.pagination.has_more).toBe(true);
+
+    const third = await service.getDependencies(ROOT_UUID, 'mod', { limit: 1, cursor: second.pagination.next_cursor as string });
+    expect(third.items.map((item: any) => item.external_identifier)).toEqual(['c.mod']);
+    expect(third.pagination.has_more).toBe(false);
+  });
+
+  it('rejects a legacy timestamp cursor instead of silently returning an empty page', async () => {
+    const { service: shared } = dependencyReadFromRows({ tables: ['resource_dependencies'], modernDependencies: [modernRow()] });
+    const service = createServiceWithSharedRead(shared);
+    seedPublicMod(service);
+    const legacyCursor = Buffer.from(JSON.stringify({ sort_at: '2026-10-12T10:00:00.000Z', id: 1 }), 'utf8').toString('base64url');
+
+    await expect(service.getDependencies(ROOT_UUID, 'mod', { limit: 20, cursor: legacyCursor }))
+      .rejects.toMatchObject({ code: 'INVALID_CURSOR' });
   });
 
   it('rejects a malformed cursor instead of silently returning the first page', async () => {
@@ -392,7 +407,7 @@ describe('ResourcesV2Service mod dependency reads (shared projection)', () => {
     expect(result.root_mod_id).toBe('root.mod');
     expect(result.direct).toEqual([]);
     expect(result.unresolved).toEqual([]);
-    expect(findPublic).not.toHaveBeenCalledWith(['hidden.target.mod']);
+    expect(findPublic).not.toHaveBeenCalled();
   });
 });
 

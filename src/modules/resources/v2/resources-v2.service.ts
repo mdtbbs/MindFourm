@@ -990,13 +990,16 @@ export class ResourcesV2Service {
     if (!version) return this.emptyPage(query);
     const limit = this.pageLimit(query);
     const cursor = this.decodeCursor(query.cursor);
+    if (cursor && !Number.isSafeInteger(Number(cursor.sort_at))) this.invalidCursor();
     const versionId = this.numberValue(version.id);
     // The shared modern-first projection owns the modern/legacy merge and the
     // target visibility predicate, so this entry point no longer picks a single
     // table by `tableExists` nor emits a private/merged target's public_id.
     const rows = (await this.dependencyRead.collectDependencies([versionId])).get(versionId) || [];
     const ordered = rows.map((row, index) => ({ row, cursor: this.encodeCursor({ sort_at: String(row.sort_order), id: index + 1 }) }));
-    const start = cursor ? ordered.findIndex(entry => this.isAfterCursor(entry.row.sort_order, cursor)) : 0;
+    const start = cursor
+      ? ordered.findIndex((entry, index) => this.isAfterCursor(entry.row.sort_order, index + 1, cursor))
+      : 0;
     const visible = start < 0 ? [] : ordered.slice(start, start + limit + 1);
     const hasMore = visible.length > limit;
     const page = visible.slice(0, limit);
@@ -1018,11 +1021,12 @@ export class ResourcesV2Service {
   /**
    * Cursor position for the shared projection's opaque cursor. The projection
    * page is ordered by `sort_order ASC` (stable, ties keep the projection
-   * order), so a cursor resumes after the first row whose `sort_order` is
-   * strictly greater than the cursor's.
+   * order), so the cursor uses the one-based position within that ordered
+   * projection as a tie-breaker.
    */
-  private isAfterCursor(sortOrder: number, cursor: CursorPayload): boolean {
-    return sortOrder > Number(cursor.sort_at);
+  private isAfterCursor(sortOrder: number, position: number, cursor: CursorPayload): boolean {
+    const cursorSortOrder = Number(cursor.sort_at);
+    return sortOrder > cursorSortOrder || (sortOrder === cursorSortOrder && position > cursor.id);
   }
 
   async resolveDependencies(publicId: string, query: ResourceV2DependencyResolveQueryDto): Promise<ResourceV2DependencyResolutionDto> {
