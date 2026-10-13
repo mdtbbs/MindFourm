@@ -7,6 +7,7 @@ import { resourceKindLabel } from '@/lib/display-labels';
 import { resourceCardFacts, resolveResourceCardPresentation, resourcePublicationDate } from '@/lib/resources/presentation';
 import ResourceCardActions from './resource-card-actions';
 import { translate, type Locale } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
 function KindFacts({ resource }: { resource: Resource }) {
   const facts = resourceCardFacts(resource);
@@ -16,7 +17,7 @@ function KindFacts({ resource }: { resource: Resource }) {
   </dl>;
 }
 
-export default function ResourceRow({ resource, locale = 'zh-CN' }: { resource: Resource; locale?: Locale }) {
+export default function ResourceRow({ resource, locale = siteProfile.localization.defaultLocale }: { resource: Resource; locale?: Locale }) {
   const summary = markdownToPlainExcerpt(resource.description || resource.content || '');
   const presentation = resolveResourceCardPresentation(resource.resource_kind);
   const isGallery = presentation === 'gallery';

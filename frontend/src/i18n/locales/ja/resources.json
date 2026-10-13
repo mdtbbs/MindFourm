@@ -58,6 +58,7 @@
     "updated": "更新",
     "published": "公開日",
     "downloads": "ダウンロード許可 {count} 件",
+    "downloadsUnit": "許可",
     "views": "閲覧 {count} 回",
     "rendererProcessing": "Mindustry 公式プレビューを生成中…",
     "rendererFailed": "プレビューを生成できませんでした。元のファイルはダウンロードできます。",

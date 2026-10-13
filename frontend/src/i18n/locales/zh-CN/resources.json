@@ -58,6 +58,7 @@
     "updated": "更新",
     "published": "发布于",
     "downloads": "{count} 次授权",
+    "downloadsUnit": "授权",
     "views": "{count} 次浏览",
     "rendererProcessing": "正在生成官方 Mindustry 预览图…",
     "rendererFailed": "预览生成失败，仍可下载原文件。",

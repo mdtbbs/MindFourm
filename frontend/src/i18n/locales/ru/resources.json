@@ -58,6 +58,7 @@
     "updated": "Обновлено",
     "published": "Опубликовано",
     "downloads": "Авторизовано: {count}",
+    "downloadsUnit": "авторизаций",
     "views": "Просмотров: {count}",
     "rendererProcessing": "Создаём официальный предпросмотр Mindustry…",
     "rendererFailed": "Не удалось создать предпросмотр. Исходный файл доступен для скачивания.",

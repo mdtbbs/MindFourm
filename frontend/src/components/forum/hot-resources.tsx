@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { Resource } from '@/types';
 import { Download, Star } from 'lucide-react';
 import { translate, type Locale } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
 interface HotResourcesProps {
   resources: Resource[];
   locale?: Locale;
 }
 
-export default function HotResources({ resources, locale = 'zh-CN' }: HotResourcesProps) {
+export default function HotResources({ resources, locale = siteProfile.localization.defaultLocale }: HotResourcesProps) {
   if (resources.length === 0) return null;
 
   return (

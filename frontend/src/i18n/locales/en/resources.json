@@ -58,6 +58,7 @@
     "updated": "Updated",
     "published": "Published",
     "downloads": "{count} authorizations",
+    "downloadsUnit": "grants",
     "views": "{count} views",
     "rendererProcessing": "Generating the official Mindustry preview…",
     "rendererFailed": "Preview generation failed. The original file is still available.",
