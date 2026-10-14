@@ -54,12 +54,12 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 | 方法 | 路径 | Scope |
 |--------|----------|-------|
-| POST | `/api/auth/validate-credentials` | lanlink:auth, backupsave:auth |
+| POST | `/api/auth/validate-credentials` | lanlink:auth, backupsave:auth（专用 key，拒绝通配） |
 | GET | `/api/external/v1/friends` | friends:read |
 | GET | `/api/external/v1/friends/requests` | friends:read |
 | GET | `/api/external/v1/users/search` | friends:read |
-| POST | `/api/external/v1/lanlink/quick-code/validate` | lanlink:auth |
-| GET | `/api/external/v1/lanlink/quick-code/users/:id` | lanlink:auth |
+| POST | `/api/external/v1/lanlink/quick-code/validate` | lanlink:legacy_quick_code（私有兼容接口，默认关闭） |
+| GET | `/api/external/v1/lanlink/quick-code/users/:id` | lanlink:legacy_quick_code（私有兼容接口，默认关闭） |
 | POST | `/api/external/v1/notifications` | notifications:write |
 | GET | `/api/external/v1/presence` | presence:read |
 | PUT | `/api/external/v1/presence/:userId` | presence:write |
@@ -379,8 +379,8 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 | GET | `/api/lanlink/quick-code` | 🔒 需登录 | - |
 | POST | `/api/lanlink/quick-code` | 🔒 需登录 | - |
 | DELETE | `/api/lanlink/quick-code` | 🔒 需登录 | - |
-| POST | `/api/external/v1/lanlink/quick-code/validate` | 🤖 机器人 | lanlink:auth |
-| GET | `/api/external/v1/lanlink/quick-code/users/:id` | 🤖 机器人 | lanlink:auth |
+| POST | `/api/external/v1/lanlink/quick-code/validate` | 🤖 机器人 | lanlink:legacy_quick_code |
+| GET | `/api/external/v1/lanlink/quick-code/users/:id` | 🤖 机器人 | lanlink:legacy_quick_code |
 
 ### levels
 
