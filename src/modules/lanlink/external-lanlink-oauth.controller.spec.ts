@@ -72,6 +72,18 @@ describe('ExternalLanLinkOAuthController', () => {
     )).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('derives the trusted client_id from the verified token, never from request parameters', async () => {
+    // A body-supplied client_id must not influence the outcome: only the
+    // introspection result of the MindAuth token decides which client is
+    // allowed. Here the request claims the approved client while the token
+    // belongs to another one, and the call must still be refused.
+    const { controller, request } = createController({ ...validContext, clientId: 'forged-client' });
+    await expect(controller.resolve(
+      { access_token: 'opaque-mindauth-token-123456', client_id: 'lanlink-mindustry-mod' } as any,
+      request,
+    )).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('declares the strict deny-override and the exact scope on the resolve route', () => {
     // Wiring regression: the guard can only apply the deny override when the
     // handler actually carries the metadata. Removing either decorator would
