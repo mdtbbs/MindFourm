@@ -64,6 +64,16 @@ export const V1_ERROR_CODES: Record<string, V1ErrorCodeDefinition> = {
     defaultMessage: '联机大厅返回了无效数据',
     description: 'The LanLink room service returned a response that could not be parsed or projected.',
   },
+  LANLINK_QUICK_CODE_ATTEMPTS_EXCEEDED: {
+    code: 'LANLINK_QUICK_CODE_ATTEMPTS_EXCEEDED', httpStatus: 429, retryable: true,
+    defaultMessage: '识别码校验失败次数过多，请稍后重试',
+    description: 'The legacy quick-code route refused further submissions after too many failed guesses from one key and client address. Successful submissions do not consume this budget.',
+  },
+  SECURITY_DEPENDENCY_UNAVAILABLE: {
+    code: 'SECURITY_DEPENDENCY_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '安全依赖暂不可用，请稍后重试',
+    description: 'An authentication-sensitive route refused to proceed because the shared Redis rate limiter was unreachable. No credential or identity resolution was performed; retry once the dependency recovers.',
+  },
   MESSAGING_DISABLED: {
     code: 'MESSAGING_DISABLED', httpStatus: 403, retryable: false,
     defaultMessage: '站点已关闭私信功能',

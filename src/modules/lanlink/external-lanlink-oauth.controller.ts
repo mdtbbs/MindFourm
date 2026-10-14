@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ExternalApiKeyGuard } from '@common/guards/external-api-key.guard';
 import { ExternalScope } from '@common/decorators/external-scope.decorator';
+import { ExternalStrictScope } from '@common/decorators/external-route-policy.decorator';
 import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
 import { AuthService } from '../auth/auth.service';
 import { ResolveLanLinkOAuthDto } from './dto/resolve-lanlink-oauth.dto';
@@ -33,14 +34,17 @@ export class ExternalLanLinkOAuthController {
 
   @Post('resolve')
   @ExternalScope('lanlink:auth')
+  // Strict deny override: the dedicated LanLink auth key is issued per
+  // deployment and reviewed, so a wildcard grant cannot stand in for it. The
+  // guard rejects `*`, `admin:*` and `domain:*` keys even though the general
+  // matcher above would accept them, and marks the route as
+  // authentication-sensitive for fail-closed rate limiting.
+  @ExternalStrictScope('lanlink:auth')
   @Header('Cache-Control', 'no-store')
   @Header('Pragma', 'no-cache')
   async resolve(@Body() body: ResolveLanLinkOAuthDto, @Req() request: any) {
     const apiKey = request?.externalApiKey;
-    const apiKeyScopes = Array.isArray(apiKey?.scopes) ? apiKey.scopes.map(String) : [];
-    const hasBroadScope = apiKeyScopes.some((scope) => scope === '*' || scope.endsWith(':*'));
-    if (!Number.isSafeInteger(Number(apiKey?.id)) || Number(apiKey.id) <= 0
-      || !apiKeyScopes.includes('lanlink:auth') || hasBroadScope) {
+    if (!Number.isSafeInteger(Number(apiKey?.id)) || Number(apiKey.id) <= 0) {
       throw new ForbiddenException({ code: 'LANLINK_AUTH_API_KEY_REQUIRED', message: 'A dedicated LanLink auth API key is required' });
     }
 

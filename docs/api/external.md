@@ -2,7 +2,7 @@
 
 > Repository-side reference for separately approved server integrations. This guide is not linked or served from the third-party Public Client Developer Center.
 
-**更新时间：**2026-07-28 · **状态：**M1 已实现。本文介绍机器人和第三方服务如何通过 API Key 调用论坛，并在已授权的 scope 范围内代指定用户发帖、回复、审核和管理资源。
+**更新时间：**2026-10-14 · **状态：**M1 已实现。本文介绍机器人和第三方服务如何通过 API Key 调用论坛，并在已授权的 scope 范围内代指定用户发帖、回复、审核和管理资源。LanLink 身份接口与 Agent 机器接口属于私有基础设施，不属于第三方客户端接入范围（见文末）。
 
 ## 设计目标
 
@@ -124,6 +124,32 @@ admin:* + users:impersonate
 | `audit:read` | 查看 External API 审计日志（后台接口） |
 | `admin:*` | 管理员级通配 scope，高风险 |
 | `*` | 全部权限，高风险 |
+| `lanlink:legacy_quick_code` | 旧版 LanLink 识别码校验（兼容接口，部署须显式开启，见下） |
+
+### 身份接口不接受通配 scope
+
+LanLink OAuth 身份解析、旧版识别码校验、服务间凭据验证这三类路由不接受通配授权。即使 key 持有 `*`、`admin:*` 或同名域通配（如 `lanlink:*`），这些路由也会返回 `403 EXTERNAL_API_SCOPE_DENIED`；必须由专用 key 精确声明所需 scope。原因很直接：这些路由解析身份或验证凭据，只有专用 key 才能证明它经过了独立审核，而通配授权无法提供这一证明。
+
+这些路由同时也是认证敏感路由，其 key 级限流在共享 Redis 计数器不可用时返回 `503 SECURITY_DEPENDENCY_UNAVAILABLE`，而不是在没有全局限流的情况下继续验证凭据。普通读取接口保持原有的降级策略，不受影响。
+
+---
+
+## 旧版 LanLink 识别码（兼容接口）
+
+```http
+POST /api/external/v1/lanlink/quick-code/validate
+GET  /api/external/v1/lanlink/quick-code/users/:id
+Authorization: Bearer <external-api-key>
+```
+
+这两条路由是给旧版 LanLink 控制面的兼容接口，不属于第三方客户端接入范围。使用条件：
+
+- 部署方将 `LANLINK_LEGACY_QUICK_CODE_ENABLED` 设为 `true`（默认 `false`）。未开启时路由返回 `403 LANLINK_LEGACY_QUICK_CODE_DISABLED`，且不会读取任何用户身份。
+- key 精确持有 `lanlink:legacy_quick_code`，且不带任何通配授权。该 scope 与 `lanlink:auth` 相互独立：持有 OAuth 专用 scope 不会自动解锁旧接口。
+- 响应只包含 LanLink 控制面实际读取的身份字段（`id`、`mindauth_id`、`username`、`avatar_url`、`role`、`phone_verified`）与 `code.token_version`。`email`、`phone_verified_at` 及使用计数不在响应中。
+- 失败猜测按 key 与来源地址计预算（600 秒内 20 次），仅失败计入；成功调用不消耗预算。
+
+**已知限制（Needs Verification）：** 当前识别码在轮换前长期有效，没有短期/一次性语义。需要短期、一次性凭证的部署应使用 MindAuth OAuth 解析路径（`POST /api/external/v1/lanlink/oauth/resolve`），不要依赖旧接口补齐这些语义。
 
 ---
 
@@ -187,6 +213,9 @@ External API Key 仅用于获准的服务端集成。Public Client、浏览器�
 | `EXTERNAL_API_SCOPE_DENIED` | 403 | 缺少 scope |
 | `EXTERNAL_API_IP_DENIED` | 403 | 请求 IP 不在白名单 |
 | `EXTERNAL_API_RATE_LIMITED` | 429 | Key 限流超限 |
+| `LANLINK_LEGACY_QUICK_CODE_DISABLED` | 403 | 旧版识别码接口未在部署中开启 |
+| `LANLINK_QUICK_CODE_ATTEMPTS_EXCEEDED` | 429 | 识别码失败尝试超预算 |
+| `SECURITY_DEPENDENCY_UNAVAILABLE` | 503 | 认证敏感路由的限流依赖不可用，未执行验证 |
 | `EXTERNAL_API_IMPERSONATION_DENIED` | 403 | 没有指定用户代发权限 |
 | `EXTERNAL_API_ACTOR_REQUIRED` | 400 | 没有指定用户，也没有默认用户 |
 | `EXTERNAL_API_ACTOR_NOT_FOUND` | 404 | 指定用户不存在 |
@@ -612,6 +641,16 @@ curl -X POST "https://forum.example.com/api/external/v1/posts/123/moderation" \
 ```
 
 ---
+
+## 私有基础设施边界
+
+以下内容属于私有部署契约，不纳入第三方客户端公开接入示例，也不出现在公开 V1 OpenAPI 中：
+
+- **LanLink 身份接口**：`/api/external/v1/lanlink/*`（OAuth resolve、识别码校验）及 `/api/auth/validate-credentials`。仅限部署方与 LanLink 控制面之间的专用 key。
+- **External API Key**：凭证本身只发放给经审核的服务端集成，Public Client、浏览器、Android、桌面端、Mod 与启动器不得持有或转发。
+- **Agent 机器接口（Multiplayer Relay）**：官方 Relay Agent 走 `MULTIPLAYER_RELAY_MACHINE_CREDENTIAL` 机器凭证，与上面的 External API Key 是两条独立的授权边界，互不通用。
+
+第三方客户端请使用 [公开 V1 文档](./README.md)，不要依赖本文件中的路由。
 
 ## 安全建议
 

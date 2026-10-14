@@ -327,6 +327,8 @@ Content-Type: application/json
 
 `credential` 是短期秘密，只允许放入 WSS 第一条 AUTH 文本帧，不可放在 URL、查询参数、日志或分析事件里。凭证使用方式和 HTTPS 代理服务协议见下文中继专节。
 
+中继 Agent 向论坛边缘提交中继状态时使用的机器接口与 `MULTIPLAYER_RELAY_MACHINE_CREDENTIAL` 凭证属于私有基础设施：它们不面向第三方客户端，不出现在公开 V1 OpenAPI 中，也不能被客户端代码依赖。第三方客户端与中继服务之间的公开契约只有本文件描述的凭证分配与数据通道部分。
+
 ### WebSocket 票据
 
 公共实时消息 WebSocket 不能直接把 OAuth 访问令牌放进 URL。先用 `friends.read` 权限范围调用 `POST /api/v1/realtime/tickets`（无请求体）：

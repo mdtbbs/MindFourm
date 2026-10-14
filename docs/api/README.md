@@ -16,6 +16,8 @@
 | 历史与内部接口 | `/api/*` | 论坛前端、后台和兼容代码 | 不承诺长期兼容第三方 |
 | 服务间集成 | 受信任的服务端调用 | 私有部署契约 |
 
+服务间集成是私有基础设施，不纳入第三方客户端接入示例，也不出现在公开 V1 OpenAPI 中，包括：External API Key（`/api/external/v1/*`）、LanLink 身份接口（`/api/external/v1/lanlink/*`、`/api/auth/validate-credentials`）与多中继 Agent 机器接口（`MULTIPLAYER_RELAY_MACHINE_CREDENTIAL`）。仓库侧的 [`external.md`](./external.md) 只作为部署方的服务端集成说明维护，不随公开门户发布。
+
 客户端不要因为源码中存在某个历史接口就依赖它。调用 V1 功能前，还要检查服务端当前公布的能力。
 
 ## 文档入口

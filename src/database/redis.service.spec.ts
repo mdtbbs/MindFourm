@@ -52,6 +52,37 @@ describe('RedisService fixed-window counter', () => {
   });
 });
 
+describe('RedisService strict fixed-window counter', () => {
+  it('refuses to count in process memory while Redis is known to be down', async () => {
+    const { service, state } = createService();
+    state.redisAvailable = false;
+
+    await expect(service.incrementFixedWindowStrict('lanlink:strict:k', 60))
+      .rejects.toThrow(/Redis unavailable/);
+    // The strict variant must not touch the fallback counter either.
+    expect(state.fallback.ttl('lanlink:strict:k')).toBe(-2);
+  });
+
+  it('throws when Redis fails mid-flight instead of degrading', async () => {
+    const { service, client, state } = createService();
+    state.redisAvailable = true;
+    client.eval.mockRejectedValue(new Error('connection closed'));
+
+    await expect(service.incrementFixedWindowStrict('lanlink:strict:k', 60))
+      .rejects.toThrow('connection closed');
+    expect(state.redisAvailable).toBe(false);
+  });
+
+  it('uses the same atomic script as the degrading counter while Redis is up', async () => {
+    const { service, client, state } = createService();
+    state.redisAvailable = true;
+    client.eval.mockResolvedValue(2);
+
+    await expect(service.incrementFixedWindowStrict('lanlink:strict:k', 60)).resolves.toBe(2);
+    expect(client.eval).toHaveBeenCalledWith(expect.stringContaining("redis.call('INCR'"), 1, 'lanlink:strict:k', 60);
+  });
+});
+
 describe('RedisService cooldowns', () => {
   it('grants once and refuses while the cooldown is active', async () => {
     const { service, client, state } = createService();

@@ -78,6 +78,11 @@ export const appConfig = () => ({
   lanlink: {
     enabled: process.env.LANLINK_ENABLED === 'true',
     baseUrl: process.env.LANLINK_URL || '',
+    // Legacy quick-code compatibility surface. Off by default: the OAuth
+    // `resolve` path replaces it, and the legacy codes are long-lived reusable
+    // credentials without one-time/expiry semantics. A deployment has to opt
+    // in explicitly before the two external quick-code routes are reachable.
+    legacyQuickCodeEnabled: process.env.LANLINK_LEGACY_QUICK_CODE_ENABLED === 'true',
   },
   multiplayer: {
     relayCredentialSecret: process.env.MULTIPLAYER_RELAY_CREDENTIAL_SECRET || '',

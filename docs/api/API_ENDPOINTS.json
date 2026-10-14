@@ -1901,7 +1901,7 @@
         "roles": [],
         "public": false,
         "scopes": [
-          "lanlink:auth"
+          "lanlink:legacy_quick_code"
         ]
       }
     },
@@ -1917,7 +1917,7 @@
         "roles": [],
         "public": false,
         "scopes": [
-          "lanlink:auth"
+          "lanlink:legacy_quick_code"
         ]
       }
     },
