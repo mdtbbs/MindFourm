@@ -1,19 +1,29 @@
 # 第三方客户端接入指南
 
-本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth 授权码模式 + PKCE S256，并调用 `/api/v1/*`；应用名称或客户端类型不会自动增加权限。
+本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth 授权码模式 + PKCE S256，并调用 `/api/v1/*`；应用名称或客户端类型不会自动增加权限。完整的联机接入流程（会话、邀请、中继、实时事件）见[第三方联机接入指南](./multiplayer-guide.md)。
+
+第三方接入可分为三类：Mod/启动器/桌面客户端走本页的公开 OAuth + Multiplayer V1；第三方游戏服务的 server-to-server 公共身份接口**未开放**；Relay Agent operator 未作为第三方产品开放，属于 MDTBBS 基础设施边界。LanLink 是官方实现、Broker、SDK 与兼容层，其内部 Broker API、机器接口与管理界面不属于公开客户端契约（边界见[第三方联机接入指南](./multiplayer-guide.md#公开-api-与仅基础设施边界)）。
 
 在线的[第三方客户端授权指南](https://mdtbbs.cn/api/v1/docs/oauth)介绍应用申请、重定向地址、PKCE、权限申请、令牌交换、刷新和撤销。MindAuth 协议细节及 Java/Kotlin PKCE 示例见 [公开客户端 PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。MindFourm 的 OpenAPI 契约位于 `/api/openapi/v1.json`。
 
 ## 接入顺序
 
 1. 登录并完成手机号验证，在 MindAuth 开发者中心自助创建公开客户端。创建后立即取得 `client_id`，无需管理员审核；公开客户端没有 `client_secret`，创建接口按 IP 限流。
-2. 注册精确重定向地址和所需权限范围。桌面本机回环支持 `127.0.0.1`、`[::1]` 和 `localhost`；以端口 `0` 注册可匹配运行时随机端口，其他内网地址不允许。
+2. 注册精确重定向地址和所需权限范围，并在应用资料中申请对应能力：`supports_presence`（在线状态与富活动）、`supports_multiplayer`（联机会话）、`supports_join_intent`（加入意图处理，配合带 `{intent_id}` 的启动 URI 模板）。桌面本机回环支持 `127.0.0.1`、`[::1]` 和 `localhost`；以端口 `0` 注册可匹配运行时随机端口，其他内网地址不允许。
 3. 客户端生成随机 PKCE 校验值，计算 S256 挑战值，使用系统浏览器打开 MindAuth `/api/authorize`，并验证返回的 `state`。
 4. 使用授权码、相同的 `redirect_uri`、校验值和 `client_id` 调用 MindAuth `/api/token`。
 5. 将访问令牌作为 `Authorization: Bearer` 调用 MindFourm。论坛服务端通过保密的资源服务器凭据校验不透明令牌；客户端不解析令牌，也不接触论坛的 `MINDAUTH_CLIENT_SECRET`。
 6. 访问令牌过期后通过标准 `/api/token` 的 `grant_type=refresh_token` 轮换刷新令牌。建议每次刷新使用唯一且预先持久化的 `Idempotency-Key`；超时或 5xx 时用原刷新令牌与同一 key 重试，成功后原子保存新刷新令牌并清除待处理 key。不带 key 的旧客户端仍按原有单次轮换行为工作，但不能恢复超时前的结果；格式错误的非空 key 会返回 `400 invalid_request`，且不会消费令牌。退出或解除授权调用 MindAuth `/api/revoke` 或用户的“已授权应用”页面。
 
 不要把 MindAuth 密码、外部 API 密钥、服务端密钥或客户端密钥放进客户端。注册和账号验证始终在 MindAuth 网页端完成。
+
+## 应用审核、能力与撤销
+
+- **公开客户端 vs 应用能力**：创建公开客户端与登记重定向地址是自助的；`supports_presence`、`supports_multiplayer`、`supports_join_intent` 由 MindAuth 审核后生效，未通过或撤销时论坛拒绝受保护操作（403 `CLIENT_CAPABILITY_NOT_APPROVED`）。
+- **审核状态查询**：论坛从 MindAuth 读取应用公开资料（含能力标志）并缓存 60 秒。审核通过后通常一个缓存周期内生效；客户端无需也无法在请求里声明自己的能力。
+- **能力撤销后的行为**：新请求被拒绝；已建立的联机会话、Presence 连接与 WebSocket 不会被立即断开，它们在各自 TTL 或宽限期内自然结束。详见[多人联机 API V1 的撤销与生效边界](./multiplayer-v1.md#撤销与生效边界)。
+- **三道独立门槛**：OAuth 权限范围（用户授权）、application capability（应用许可）、全局 feature flags（平台开放）分别由 MindAuth 授权、应用审核与站点运营控制，缺一即失败，错误码各不相同。详见[第三方联机接入指南](./multiplayer-guide.md#三道独立门槛)。
+- **绝不放客户端**：`client_secret`、论坛 External API Key、Relay Agent 机器凭据、服务端资源服务器凭据。公开客户端只持有自己的 `client_id`；如曾把上述值放入客户端或示例，视为已泄露并立即轮换。
 
 ## OAuth 权限范围
 
