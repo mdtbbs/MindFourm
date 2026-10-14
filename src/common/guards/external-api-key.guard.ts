@@ -12,10 +12,15 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { RedisService } from '../../database/redis.service';
 import { EXTERNAL_SCOPE_KEY } from '../decorators/external-scope.decorator';
+import {
+  EXTERNAL_LEGACY_FLAG_KEY,
+  EXTERNAL_STRICT_SCOPE_KEY,
+  ExternalLegacyFlagOptions,
+} from '../decorators/external-route-policy.decorator';
 import { ipInRange, normalizeIp } from '../../modules/bans/bans.service';
 import { getClientIp } from '../utils/client-context.util';
 import { ExternalApiKeyService } from '../../modules/service-api/external-api-key.service';
-import { hasAnyExternalScope } from '../../modules/service-api/external-api-scopes';
+import { ExternalApiKeyContext, hasAnyExternalScope, hasStrictExternalScope } from '../../modules/service-api/external-api-scopes';
 
 @Injectable()
 export class ExternalApiKeyGuard implements CanActivate {
@@ -72,6 +77,14 @@ export class ExternalApiKeyGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]) ?? [];
+    const strictScopes = this.reflector.getAllAndOverride<string[]>(EXTERNAL_STRICT_SCOPE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]) ?? [];
+    // Authentication-sensitive routes fail closed while the legacy compatibility
+    // flag is off, before scope evaluation: a disabled route must not reach any
+    // credential or identity lookup.
+    this.assertLegacyFlagOpen(context);
 
     if (requiredScopes.length && !hasAnyExternalScope(apiKey.scopes, requiredScopes)) {
       throw new ForbiddenException({
@@ -80,7 +93,14 @@ export class ExternalApiKeyGuard implements CanActivate {
       });
     }
 
-    await this.checkKeyRateLimit(apiKey.id, apiKey.rate_limit_per_minute);
+    if (strictScopes.length && !hasStrictExternalScope(apiKey.scopes, strictScopes)) {
+      throw new ForbiddenException({
+        code: 'EXTERNAL_API_SCOPE_DENIED',
+        message: 'External API key scope denied',
+      });
+    }
+
+    await this.checkKeyRateLimit(apiKey, { strict: strictScopes.length > 0 });
     if (apiKey.id > 0) {
       this.externalApiKeyService.touchLastUsed(apiKey.id).catch(() => undefined);
     }
@@ -137,8 +157,38 @@ export class ExternalApiKeyGuard implements CanActivate {
     }
   }
 
-  private async checkKeyRateLimit(keyId: number, maxPerMinute: number): Promise<void> {
-    const key = `external_api_rate:${keyId}:${Math.floor(Date.now() / 60000)}`;
+  /**
+   * Key-level counter.
+   *
+   * The default path degrades: a Redis outage must not take ordinary service
+   * integrations down, and the shared site-wide guard still applies. Routes
+   * marked `@ExternalStrictScope` are authentication-sensitive and pass
+   * `strict`: they must not validate credentials without the shared limiter,
+   * so an unreachable or failing counter answers 503
+   * `SECURITY_DEPENDENCY_UNAVAILABLE` and the controller is never invoked.
+   */
+  private async checkKeyRateLimit(
+    apiKey: ExternalApiKeyContext,
+    options: { strict?: boolean } = {},
+  ): Promise<void> {
+    const key = `external_api_rate:${apiKey.id}:${Math.floor(Date.now() / 60000)}`;
+
+    if (options.strict) {
+      try {
+        const current = await this.redisService.incrementFixedWindowStrict(key, 60);
+        if (current > apiKey.rate_limit_per_minute) {
+          throw this.rateLimited();
+        }
+      } catch (error) {
+        if (error instanceof HttpException) throw error;
+        throw new HttpException({
+          code: 'SECURITY_DEPENDENCY_UNAVAILABLE',
+          message: 'Authentication dependency unavailable; refusing to validate credentials',
+        }, HttpStatus.SERVICE_UNAVAILABLE);
+      }
+      return;
+    }
+
     let current: number;
     try {
       current = await this.redisService.incr(key);
@@ -149,12 +199,26 @@ export class ExternalApiKeyGuard implements CanActivate {
       return;
     }
 
-    if (current > maxPerMinute) {
-      throw new HttpException({
-        code: 'EXTERNAL_API_RATE_LIMITED',
-        message: 'External API key rate limit exceeded',
-      }, HttpStatus.TOO_MANY_REQUESTS);
+    if (current > apiKey.rate_limit_per_minute) {
+      throw this.rateLimited();
     }
+  }
+
+  private rateLimited(): HttpException {
+    return new HttpException({
+      code: 'EXTERNAL_API_RATE_LIMITED',
+      message: 'External API key rate limit exceeded',
+    }, HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  private assertLegacyFlagOpen(context: ExecutionContext): void {
+    const options = this.reflector.getAllAndOverride<ExternalLegacyFlagOptions | undefined>(
+      EXTERNAL_LEGACY_FLAG_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (!options) return;
+    if (this.config.get<boolean>(options.configPath) === true) return;
+    throw new ForbiddenException({ code: options.code, message: options.message });
   }
 
   private isLegacyKey(plainKey: string): boolean {

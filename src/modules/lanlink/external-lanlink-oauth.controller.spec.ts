@@ -1,5 +1,7 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ExternalLanLinkOAuthController } from './external-lanlink-oauth.controller';
+import { EXTERNAL_SCOPE_KEY } from '@common/decorators/external-scope.decorator';
+import { EXTERNAL_STRICT_SCOPE_KEY } from '@common/decorators/external-route-policy.decorator';
 
 describe('ExternalLanLinkOAuthController', () => {
   const validContext = {
@@ -59,16 +61,23 @@ describe('ExternalLanLinkOAuthController', () => {
     await expect(controller.resolve({ access_token: 'opaque-mindauth-token-123456' }, request)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it.each([
-    [{ id: -1, scopes: ['admin:*'] }],
-    [{ id: 8, scopes: ['*', 'lanlink:auth'] }],
-    [{ id: 9, scopes: ['admin:*', 'lanlink:auth'] }],
-    [{ id: 10, scopes: ['friends:read'] }],
-  ])('rejects legacy, wildcard, admin, or missing-scope API keys', async (externalApiKey) => {
+  it('keeps a controller-level refusal for the compatibility key that has no dedicated identity', async () => {
+    // The guard already refuses wildcard grants on this route; this pins the
+    // defence-in-depth check so the resolve handler cannot run with a
+    // compatibility key whose id does not identify a reviewed integration.
     const { controller } = createController();
     await expect(controller.resolve(
       { access_token: 'opaque-mindauth-token-123456' },
-      { externalApiKey } as any,
+      { externalApiKey: { id: -1, scopes: ['admin:*'] } } as any,
     )).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('declares the strict deny-override and the exact scope on the resolve route', () => {
+    // Wiring regression: the guard can only apply the deny override when the
+    // handler actually carries the metadata. Removing either decorator would
+    // silently re-open the route to wildcard keys.
+    const handler = ExternalLanLinkOAuthController.prototype.resolve;
+    expect(Reflect.getMetadata(EXTERNAL_STRICT_SCOPE_KEY, handler)).toEqual(['lanlink:auth']);
+    expect(Reflect.getMetadata(EXTERNAL_SCOPE_KEY, handler)).toEqual(['lanlink:auth']);
   });
 });

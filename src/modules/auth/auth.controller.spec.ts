@@ -4,6 +4,8 @@ jest.mock('./auth.service', () => ({
 
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
+import { EXTERNAL_SCOPE_KEY } from '../../common/decorators/external-scope.decorator';
+import { EXTERNAL_STRICT_SCOPE_KEY } from '../../common/decorators/external-route-policy.decorator';
 
 describe('AuthController', () => {
   const createController = () => {
@@ -127,5 +129,13 @@ describe('AuthController', () => {
     const { controller, req } = createController();
 
     await expect(controller.syncPhoneStatus({ ...req, cookies: {} } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('marks service credential validation as scope-deny-overridden for wildcard keys', () => {
+    // This route validates username/password and must keep its dedicated-scope
+    // policy even though the shared guard accepts wildcards elsewhere.
+    const handler = AuthController.prototype.validateCredentials;
+    expect(Reflect.getMetadata(EXTERNAL_STRICT_SCOPE_KEY, handler)).toEqual(['lanlink:auth', 'backupsave:auth']);
+    expect(Reflect.getMetadata(EXTERNAL_SCOPE_KEY, handler)).toEqual(['lanlink:auth', 'backupsave:auth']);
   });
 });

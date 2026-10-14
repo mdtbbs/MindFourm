@@ -10,6 +10,7 @@ import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verifi
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { ExternalApiKeyGuard } from '../../common/guards/external-api-key.guard';
 import { ExternalScope } from '../../common/decorators/external-scope.decorator';
+import { ExternalStrictScope } from '../../common/decorators/external-route-policy.decorator';
 import { getClientIp } from '../../common/utils/client-context.util';
 
 function getSafeRedirectPath(state?: string): string {
@@ -111,6 +112,11 @@ export class AuthController {
   @SkipPhoneVerification()
   @UseGuards(ExternalApiKeyGuard)
   @ExternalScope('lanlink:auth', 'backupsave:auth')
+  // Deny override: service-to-service credential validation requires a
+  // dedicated key with one of these exact scopes. Wildcard grants (`*`,
+  // `admin:*`, `lanlink:*`, `backupsave:*`) are refused, and the guard's
+  // fail-closed limiter applies to this route.
+  @ExternalStrictScope('lanlink:auth', 'backupsave:auth')
   @RateLimit({ max: 30, window: 60 })
   async validateCredentials(@Body() body: ValidateCredentialsDto) {
     const { username, password } = body;

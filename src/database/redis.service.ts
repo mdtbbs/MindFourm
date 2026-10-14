@@ -559,6 +559,38 @@ return current`,
   }
 
   /**
+   * Fixed-window counter that must not degrade.
+   *
+   * Authentication-sensitive routes refuse to run credential validation
+   * without the shared limiter, so unlike `incrementFixedWindow` this variant
+   * throws when Redis is unreachable (or fails mid-flight) instead of counting
+   * in process memory. Callers map the failure to a stable 503
+   * (`SECURITY_DEPENDENCY_UNAVAILABLE` on the external API surface).
+   */
+  async incrementFixedWindowStrict(key: string, windowSeconds: number): Promise<number> {
+    if (!this.redisAvailable) {
+      throw new Error('Redis unavailable: strict counter refused');
+    }
+
+    try {
+      return Number(
+        (await this.client.eval(
+          `local current = redis.call('INCR', KEYS[1])
+if current == 1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end
+return current`,
+          1,
+          key,
+          windowSeconds,
+        )) as number,
+      );
+    } catch (error) {
+      this.logger.warn(`Strict Redis counter failed: ${(error as Error).message}`);
+      this.redisAvailable = false;
+      throw error;
+    }
+  }
+
+  /**
    * Lua script execution.
    *
    * There is no fallback: callers rely on Redis to run state transitions

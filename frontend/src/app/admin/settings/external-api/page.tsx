@@ -28,6 +28,10 @@ const AVAILABLE_SCOPES = [
   'audit:read',
   // LanLink / BackupSave integration scopes
   'lanlink:auth',
+  // Compatibility scope for the legacy LanLink quick-code routes. Requires
+  // LANLINK_LEGACY_QUICK_CODE_ENABLED=true on the deployment; the routes
+  // refuse wildcard grants regardless of this list.
+  'lanlink:legacy_quick_code',
   'backupsave:auth',
   'friends:read',
   'presence:read',

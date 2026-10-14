@@ -18,6 +18,11 @@ export const EXTERNAL_API_SCOPES = [
   'tags:read',
   'audit:read',
   'lanlink:auth',
+  // Narrow compatibility scope for the legacy LanLink quick-code endpoints.
+  // It is deliberately separate from `lanlink:auth`: the quick-code routes
+  // return LanLink identity fields, and a deployment has to opt in through
+  // the legacy flag before the routes are reached at all.
+  'lanlink:legacy_quick_code',
   'backupsave:auth',
   'friends:read',
   'presence:read',
@@ -53,6 +58,32 @@ export function hasExternalScope(scopes: readonly string[], requiredScope: strin
 
 export function hasAnyExternalScope(scopes: readonly string[], requiredScopes: readonly string[]): boolean {
   return requiredScopes.some((scope) => hasExternalScope(scopes, scope));
+}
+
+/**
+ * `*`, `admin:*` and `domain:*` all satisfy the general matcher above. The
+ * routes that parse identities or validate credentials must not accept them:
+ * those routes are reviewed against a dedicated, narrowly issued key, so a
+ * key carrying any wildcard cannot prove that review happened. This is the
+ * deny override behind `@ExternalStrictScope`.
+ */
+export function isWildcardExternalScope(scope: string): boolean {
+  return scope === '*' || scope.endsWith(':*');
+}
+
+/**
+ * Dedicated-scope check for authentication-sensitive routes. The key must
+ * name one of the required scopes exactly and must not carry any wildcard
+ * grant, even when the wildcard would otherwise match.
+ */
+export function hasStrictExternalScope(scopes: readonly string[], requiredScopes: readonly string[]): boolean {
+  if (!requiredScopes.length) {
+    return false;
+  }
+  if (scopes.some(isWildcardExternalScope)) {
+    return false;
+  }
+  return requiredScopes.some((scope) => scopes.includes(scope));
 }
 
 export function uniqueScopes(scopes: readonly string[] = []): string[] {
