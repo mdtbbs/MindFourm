@@ -168,6 +168,49 @@ describe('ResourceLoadMore pagination', () => {
     for (const key of ['planet', 'block', 'width', 'height']) expect(params[key]).toBeUndefined();
   });
 
+  // Issue #70: the cursor belongs to the filtered list, so a continuation that
+  // dropped a Mod condition would page through a wider set than the first page.
+  it('repeats both Mod conditions for a map continuation', async () => {
+    mockList.mockResolvedValueOnce(page([2], null));
+    await mount({
+      initialResources: [{ id: 1 } as never],
+      initialCursor: 'cursor-1',
+      hasMore: true,
+      resourceKind: 'map',
+      mapFilters: { planet: 'serpulo', width: 128 },
+      requiredMods: 'alpha.mod,beta.mod',
+      excludedMods: 'rival.mod',
+    });
+
+    await clickLoadMore();
+
+    const params = mockList.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.required_mods).toBe('alpha.mod,beta.mod');
+    expect(params.excluded_mods).toBe('rival.mod');
+    // The page already validated these, so they travel with the cursor unchanged.
+    expect(params.cursor).toBe('cursor-1');
+    expect(params.planet).toBe('serpulo');
+    expect(params.width).toBe(128);
+  });
+
+  it('sends no Mod condition when the page validated none', async () => {
+    mockList.mockResolvedValueOnce(page([2], null));
+    await mount({
+      initialResources: [{ id: 1 } as never],
+      initialCursor: 'cursor-1',
+      hasMore: true,
+      resourceKind: 'schematic',
+      mapFilters: { block: 'router' },
+    });
+
+    await clickLoadMore();
+
+    const params = mockList.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.required_mods).toBeUndefined();
+    expect(params.excluded_mods).toBeUndefined();
+    expect(params.block).toBe('router');
+  });
+
   it('offers no continuation once the server reports the last page', async () => {
     await mount({
       initialResources: [{ id: 1 } as never],

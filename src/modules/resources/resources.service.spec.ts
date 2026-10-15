@@ -82,6 +82,7 @@ jest.mock('./resource-subscriptions.service', () => ({
   ResourceSubscriptionsService: class ResourceSubscriptionsService {},
 }));
 
+import { BadRequestException } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { ResourceDependencyReadService } from './resource-dependency-read.service';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
@@ -1818,5 +1819,218 @@ describe('ResourcesService mergeResource version-collision evidence (Issue #65)'
     await runMerge({ store, remap: 'symmetric', ...baseInput });
     // The colliding pair keeps its rows; only the non-colliding version moves resource.
     expect(store.resource_versions.map((row) => [row.id, row.resource_id])).toEqual([[200, 8], [100, 7], [201, 7]]);
+  });
+});
+
+/**
+ * Issue #70: Map/Schematic version-level Mod dependency filtering.
+ *
+ * The rule itself (selector, visibility predicate, token resolution) is pinned
+ * in `resource-mod-dependency-filter.spec.ts`; these cases pin the list query's
+ * behaviour: what reaches `andWhere`, under which `resource_kind`, and what a
+ * request that cannot be answered does.
+ */
+describe('ResourcesService Mod dependency filter', () => {
+  const MOD_QUERY = 'resourceRequiredMod0';
+  const EXCLUDED_QUERY = 'resourceExcludedMod0';
+
+  /**
+   * A service whose data source answers the three reads the filter performs:
+   * table availability, the canonical/alias resolver, and filter options. The
+   * resolver rows are keyed by the identifiers the request used, mimicking
+   * `mod_profiles`/`mod_id_aliases` joined on a publicly visible resource.
+   */
+  function createModFilterService(options: {
+    tables?: string[];
+    resolves?: Array<{ mod_id: string; requested_identifier: string }>;
+    optionRows?: Array<{ mod_id: string }>;
+  } = {}) {
+    const tables = options.tables ?? ['resource_dependencies', 'resource_version_dependencies'];
+    const resolves = options.resolves ?? [];
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('information_schema.tables')) return tables.map((table_name) => ({ table_name }));
+      // The options query also joins `mod_profiles`, so it must be matched first.
+      if (sql.includes('SELECT DISTINCT profile.mod_id')) return options.optionRows ?? [];
+      if (sql.includes('mod_profiles profile')) return resolves;
+      return [];
+    });
+    return createService({ dataSource: { query } });
+  }
+
+  const clauseFor = (qb: { andWhere: jest.Mock }, marker: string) => {
+    const call = qb.andWhere.mock.calls.find(([clause]) => String(clause).includes(marker));
+    return call ? { clause: String(call[0]), parameters: call[1] as Record<string, string> } : null;
+  };
+
+  it('requires every requested Mod on the selected published version, resolving aliases to canonical IDs', async () => {
+    const { service, defaultQb } = createModFilterService({
+      resolves: [
+        { mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' },
+        { mod_id: 'beta.mod', requested_identifier: 'beta-alias' },
+      ],
+    });
+
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod, beta-alias' } as any, { scope: 'public' });
+
+    // One condition, both proofs, ANDed: an alias resolves to its canonical ID
+    // and the second value is a separate conjunct, never an alternative.
+    const condition = clauseFor(defaultQb, MOD_QUERY)!;
+    expect(condition.clause).toContain(`profile.mod_id = :${MOD_QUERY}`);
+    expect(condition.clause).toContain('profile.mod_id = :resourceRequiredMod1');
+    expect(condition.clause).toContain(' AND ');
+    expect(condition.parameters).toEqual({ [MOD_QUERY]: 'alpha.mod', resourceRequiredMod1: 'beta.mod' });
+    // The proof targets the D-A selector, both dependency tables, and the public
+    // visibility predicate of the selected version's dependency target.
+    expect(condition.clause).toContain('resource_versions sv WHERE sv.resource_id = resource.id');
+    expect(condition.clause).toContain("sv.status = 'published'");
+    expect(condition.clause).toContain('sv.public_id IS NOT NULL');
+    expect(condition.clause).toContain('ORDER BY sv.recommended DESC, COALESCE(sv.published_at, sv.created_at) DESC, sv.revision DESC, sv.id DESC LIMIT 1');
+    expect(condition.clause).toContain('resource_dependencies d');
+    expect(condition.clause).toContain('resource_version_dependencies d');
+    expect(condition.clause).toContain('legacy_source_id');
+    expect(condition.clause).toContain('target.merged_into_resource_id IS NULL');
+    expect(condition.clause).toContain("target.visibility <> 'private'");
+    expect(condition.clause).toContain('mod_profiles profile');
+    // Never resolved through the raw identifier: an unresolved row is not proof.
+    expect(condition.clause).not.toContain('external_identifier');
+  });
+
+  it('excludes a Mod only when the version proves it absent and has no unprovable dependency row', async () => {
+    const { service, defaultQb } = createModFilterService({
+      resolves: [{ mod_id: 'rival.mod', requested_identifier: 'rival.mod' }],
+    });
+
+    await service.getList({ limit: 20, resource_kind: 'schematic', excluded_mods: 'rival.mod' } as any, { scope: 'public' });
+
+    const condition = clauseFor(defaultQb, EXCLUDED_QUERY)!;
+    expect(condition.clause).toContain('NOT (EXISTS');
+    expect(condition.parameters).toEqual({ [EXCLUDED_QUERY]: 'rival.mod' });
+    // Two facts, both required: the Mod is proven absent, and the version has no
+    // unprovable required row that could be the very dependency in question.
+    expect(condition.clause).toContain(`NOT (EXISTS`);
+    expect(condition.clause).toContain("d.dependency_type = 'required'");
+    // The unproven-row guard is an additional conjunct whose inner proof is a
+    // negation: `NOT EXISTS (... WHERE target/profile visible)`.
+    expect(condition.clause).toContain('NOT EXISTS (SELECT 1 FROM resources target');
+    // One unproven-row guard per dependency table, plus the exclusion itself.
+    expect(condition.clause.split('NOT EXISTS (SELECT 1 FROM resources target').length - 1).toBe(2);
+  });
+
+  it('turns an unresolvable non-empty token into an empty result, not a dropped condition', async () => {
+    const { service, defaultQb } = createModFilterService({ resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }] });
+
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod,ghost.mod' } as any, { scope: 'public' });
+
+    expect(defaultQb.andWhere).toHaveBeenCalledWith('1 = 0', {});
+    expect(clauseFor(defaultQb, MOD_QUERY)).toBeNull();
+  });
+
+  it('empty and whitespace-only values are not conditions', async () => {
+    const { service, defaultQb } = createModFilterService();
+    const baseline = createModFilterService();
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: ' , ', excluded_mods: '' } as any, { scope: 'public' });
+    await baseline.service.getList({ limit: 20, resource_kind: 'map' } as any, { scope: 'public' });
+    // SQL identical to the same request without the parameter, literally.
+    const clauses = (qb: { andWhere: jest.Mock }) => qb.andWhere.mock.calls.map(([clause, params]) => [String(clause), params]);
+    expect(clauses(defaultQb)).toEqual(clauses(baseline.defaultQb));
+  });
+
+  it('ignores the condition for a kind without version-level dependency evidence', async () => {
+    const { service, defaultQb } = createModFilterService({ resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }] });
+    const baseline = createModFilterService({ resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }] });
+
+    await service.getList({ limit: 20, resource_kind: 'mod', required_mods: 'alpha.mod' } as any, { scope: 'public' });
+    await baseline.service.getList({ limit: 20, resource_kind: 'mod' } as any, { scope: 'public' });
+
+    const clauses = (qb: { andWhere: jest.Mock }) => qb.andWhere.mock.calls.map(([clause, params]) => [String(clause), params]);
+    expect(clauses(defaultQb)).toEqual(clauses(baseline.defaultQb));
+    expect(defaultQb.andWhere).not.toHaveBeenCalledWith('1 = 0');
+  });
+
+  it('fails closed when no dependency table can be read', async () => {
+    const { service, defaultQb } = createModFilterService({ tables: [], resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }] });
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod' } as any, { scope: 'public' });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith('1 = 0', {});
+  });
+
+  it('binds every placeholder the generated condition uses', async () => {
+    const { service, defaultQb } = createModFilterService({
+      resolves: [
+        { mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' },
+        { mod_id: 'rival.mod', requested_identifier: 'rival.mod' },
+      ],
+    });
+
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod', excluded_mods: 'rival.mod' } as any, { scope: 'public' });
+
+    const [clause, parameters] = defaultQb.andWhere.mock.calls.find(([value]) => String(value).includes(MOD_QUERY))! as [string, Record<string, string>];
+    const placeholders = [...new Set([...clause.matchAll(/:(\w+)/g)].map((match) => match[1]))].sort();
+    expect(placeholders).toEqual(Object.keys(parameters).sort());
+    expect(parameters[MOD_QUERY]).toBe('alpha.mod');
+    expect(parameters[EXCLUDED_QUERY]).toBe('rival.mod');
+  });
+
+  /**
+   * Issue #70, admin scope: `GET /api/resources/admin` and the external
+   * `resources:moderate` list both funnel through this call with
+   * `scope: 'admin'`. That path never selects a published version, so it has no
+   * version to prove a dependency against — answering without the condition
+   * would return precisely the widened set the caller asked to narrow.
+   */
+  it('refuses the Mod conditions for the admin scope instead of silently dropping them', async () => {
+    const { service, resourceRepository } = createModFilterService();
+
+    await expect(service.getList(
+      { limit: 20, resource_kind: 'map', required_mods: 'alpha.mod' } as any,
+      { scope: 'admin' },
+    )).rejects.toThrow(BadRequestException);
+    // Refused, not answered: the widened admin query is never issued.
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+
+    await expect(service.getList(
+      { limit: 20, excluded_mods: 'rival.mod' } as any,
+      { scope: 'admin' },
+    )).rejects.toThrow(BadRequestException);
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('keeps every other admin-scope condition untouched by that refusal', async () => {
+    const { service, resourceRepository, defaultQb } = createModFilterService();
+    // Same request minus the two Mod keys: the documented admin behaviour, and
+    // an empty (whitespace-only) Mod value is not a condition anywhere.
+    await service.getList({ limit: 20, status: 'pending', required_mods: ' , ' } as any, { scope: 'admin' });
+
+    expect(resourceRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(resourceRepository.find).toHaveBeenCalled();
+    expect(defaultQb.andWhere).not.toHaveBeenCalledWith('1 = 0', {});
+  });
+
+  it('still answers the Mod conditions on the public scope', async () => {
+    const { service, resourceRepository } = createModFilterService({
+      resolves: [{ mod_id: 'alpha.mod', requested_identifier: 'alpha.mod' }],
+    });
+    await service.getList({ limit: 20, resource_kind: 'map', required_mods: 'alpha.mod' } as any, { scope: 'public' });
+    // The refusal is scoped to admin; the public path keeps filtering.
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('offers only publicly resolvable Mod options, never an unresolved token', async () => {
+    const { service, dataSource } = createModFilterService({
+      optionRows: [{ mod_id: 'alpha.mod' }, { mod_id: 'beta.mod' }],
+    });
+
+    const options = await service.getFilterOptions();
+
+    expect(options.required_mods).toEqual(['alpha.mod', 'beta.mod']);
+    const optionSql = dataSource.query.mock.calls.map(([sql]) => String(sql)).find((sql) => sql.includes('SELECT DISTINCT profile.mod_id'));
+    expect(optionSql).toBeDefined();
+    // Options come from the same selector and visibility predicate as the list:
+    // a pending version's dependency (or a hidden target) can never surface.
+    expect(optionSql).toContain("sv.status = 'published'");
+    expect(optionSql).toContain('sv.public_id IS NOT NULL');
+    expect(optionSql).toContain("d.dependency_type = 'required'");
+    expect(optionSql).toContain('target.is_public = 1');
+    expect(optionSql).toContain('target.merged_into_resource_id IS NULL');
+    expect(optionSql).not.toContain('external_identifier');
   });
 });

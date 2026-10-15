@@ -110,6 +110,63 @@ export function parseMapFilters(
   return result;
 }
 
+/**
+ * Version-level Mod dependency conditions (Issue #70). The backend
+ * `QueryResourcesDto` owns the values (`required_mods`/`excluded_mods`,
+ * comma-separated canonical Mod IDs); this module owns which kind can answer
+ * them and how a URL is normalised.
+ *
+ * Only `map` and `schematic` carry version-level dependency evidence, and the
+ * backend ignores these keys for every other kind, so the URL rule matches
+ * `KIND_FILTER_KEYS`: a condition the selected kind cannot answer is removed
+ * instead of being forwarded as a dead filter.
+ */
+export const MOD_FILTER_KEYS = ['required_mods', 'excluded_mods'] as const;
+export type ModFilterKey = (typeof MOD_FILTER_KEYS)[number];
+
+/** Mirrors `QueryResourcesDto`'s `@MaxLength(600)` on both keys. */
+export const MAX_MOD_FILTER_LENGTH = 600;
+
+/** The kinds version-level Mod dependency facts exist for. */
+export function isModFilterKind(kind?: string | null): boolean {
+  return kind === 'map' || kind === 'schematic';
+}
+
+/** The Mod conditions a kind can answer, empty for every other kind. */
+export function modFilterKeys(kind?: string | null): readonly ModFilterKey[] {
+  return isModFilterKind(kind) ? MOD_FILTER_KEYS : [];
+}
+
+/**
+ * One comma-separated condition as its tokens, trimmed and de-duplicated like
+ * the backend resolver reads them. An empty token is not a condition: it is
+ * dropped here and never reaches the URL.
+ */
+export function parseModList(value?: string | null): string[] {
+  const tokens: string[] = [];
+  const seen = new Set<string>();
+  for (const item of String(value ?? '').split(',')) {
+    const token = item.trim();
+    const key = token.toLowerCase();
+    if (!token || seen.has(key)) continue;
+    seen.add(key);
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+/**
+ * The canonical URL value for a token list. `null` means "no condition": an
+ * empty list, or one whose joined length would exceed the backend limit and turn
+ * the whole page into a 400 error state.
+ */
+export function modListValue(tokens: readonly string[]): string | null {
+  const parsed = parseModList(tokens.join(','));
+  if (!parsed.length) return null;
+  const value = parsed.join(',');
+  return value.length > MAX_MOD_FILTER_LENGTH ? null : value;
+}
+
 /** Drops hidden and invalid map conditions from an existing query. */
 export function normalizeResourceFilterParams(input: URLSearchParams): URLSearchParams {
   const params = new URLSearchParams(input);
@@ -123,6 +180,16 @@ export function normalizeResourceFilterParams(input: URLSearchParams): URLSearch
     const value = kept[key];
     if (value === undefined) params.delete(key);
     else params.set(key, String(value));
+  }
+  // Mod conditions follow the same rule as the map ones: the kind that answers
+  // them is the only place they may survive, and an empty token list is not a
+  // condition. Unknown tokens are kept — the backend answers them with an empty
+  // result (D-D), and the filter UI shows every URL token as a removable chip.
+  const modKeys = modFilterKeys(params.get('resource_kind'));
+  for (const key of MOD_FILTER_KEYS) {
+    const value = modKeys.includes(key) ? modListValue(parseModList(params.get(key))) : null;
+    if (value === null) params.delete(key);
+    else params.set(key, value);
   }
   return params;
 }
@@ -145,7 +212,7 @@ export function mergeResourceQuery(search: string, updates: Record<string, strin
 export const RESOURCE_LIST_QUERY_KEYS = [
   'page', 'limit', 'cursor', 'category_id', 'search', 'content_language', 'status',
   'sort', 'order', 'tag', 'tags', 'author', 'supported_version', 'compatibility',
-  'resource_kind', 'planet', 'block', 'width', 'height',
+  'resource_kind', 'planet', 'block', 'width', 'height', 'required_mods', 'excluded_mods',
 ] as const;
 
 /** Copies just the keys the list API understands; unknown keys are left in the URL. */

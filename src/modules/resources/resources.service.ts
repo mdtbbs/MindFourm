@@ -52,6 +52,17 @@ import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
 import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
 import { ResourceDependencyReadService, type UnifiedCompatibility } from './resource-dependency-read.service';
+import {
+  collectPublicRequiredModOptions,
+  dependencyTableAvailability,
+  isModFilterKind,
+  parseModFilterTokens,
+  publicSelectedVersionIdSql,
+  requiredDependencyProofSql,
+  resolvePublicCanonicalModIds,
+  unanswerableAdminModFilters,
+  unresolvedRequiredDependencySql,
+} from './resource-mod-dependency-filter';
 import { normalizeCompatibilityConfidence, normalizeCompatibilityProvenance, V1CompatibilityConfidence, V1CompatibilityProvenance } from './compatibility-vocabulary';
 
 export interface ResourceFileMeta {
@@ -1338,6 +1349,55 @@ export class ResourcesService {
     }
   }
 
+  /**
+   * The SQL condition for the version-level Mod dependency filter, or `null`
+   * when the request carries no condition this kind can answer.
+   *
+   * `required_mods` is an AND over canonical Mod IDs — each one must be proven
+   * against the selected published version. `excluded_mods` is a NOT ANY: every
+   * listed Mod must be proven absent, and the version must carry no unprovable
+   * dependency row, because such a row could be the very dependency the
+   * exclusion is about. A non-empty token the read-side resolver cannot map to a
+   * publicly visible canonical Mod makes the whole condition unanswerable, and
+   * the result is an empty page (D-D) — never a silently widened one.
+   */
+  private async buildModDependencyFilter(
+    resourceKind: string | undefined,
+    requiredMods: string | undefined,
+    excludedMods: string | undefined,
+  ): Promise<{ clause: string; parameters: Record<string, string> } | null> {
+    const requiredTokens = parseModFilterTokens(requiredMods);
+    const excludedTokens = parseModFilterTokens(excludedMods);
+    if (!isModFilterKind(resourceKind) || (!requiredTokens.length && !excludedTokens.length)) return null;
+    const empty = { clause: '1 = 0', parameters: {} };
+    const allTokens = [...requiredTokens, ...excludedTokens];
+    const tables = await dependencyTableAvailability(this.dataSource);
+    if (!tables.modern && !tables.legacy) return empty;
+    const canonicalModIds = await resolvePublicCanonicalModIds(this.dataSource, allTokens);
+    if (allTokens.some((token) => !canonicalModIds.has(token.toLowerCase()))) return empty;
+    const selectedVersionId = publicSelectedVersionIdSql('resource');
+    const parameters: Record<string, string> = {};
+    const clauses: string[] = [];
+    for (const [index, token] of requiredTokens.entries()) {
+      const parameter = `resourceRequiredMod${index}`;
+      clauses.push(requiredDependencyProofSql(selectedVersionId, parameter, tables)!);
+      parameters[parameter] = canonicalModIds.get(token.toLowerCase())!;
+    }
+    if (excludedTokens.length) {
+      const unproven = unresolvedRequiredDependencySql(selectedVersionId, tables);
+      if (!unproven) return empty;
+      // Every listed Mod must be absent, and one unprovable dependency row
+      // anywhere in the version is enough to make the whole omission unprovable.
+      for (const [index, token] of excludedTokens.entries()) {
+        const parameter = `resourceExcludedMod${index}`;
+        clauses.push(`NOT ${requiredDependencyProofSql(selectedVersionId, parameter, tables)!}`);
+        parameters[parameter] = canonicalModIds.get(token.toLowerCase())!;
+      }
+      clauses.push(`NOT ${unproven}`);
+    }
+    return { clause: clauses.join(' AND '), parameters };
+  }
+
   async getList(
     query: QueryResourcesDto,
     options: { scope?: ResourceListScope; featuredOnly?: boolean; trendingOnly?: boolean } = {},
@@ -1359,8 +1419,23 @@ export class ResourcesService {
       block,
       width,
       height,
+      required_mods,
+      excluded_mods,
     } = query;
     const scope = options.scope ?? 'public';
+    // Version-level Mod dependency conditions are answered by the public list
+    // only, because only that path selects the published version they are
+    // proven against. An admin-scope request carrying them cannot be answered
+    // as asked, and ignoring them would return the widened set the caller
+    // asked to narrow — so they are refused instead of silently dropped. Only
+    // these two keys are refused; every other condition keeps its admin-scope
+    // behaviour.
+    if (scope !== 'public') {
+      const unanswerable = unanswerableAdminModFilters(required_mods, excluded_mods);
+      if (unanswerable.length) {
+        throw new BadRequestException(`管理范围不支持 ${unanswerable.join('、')}：该筛选仅在公开列表按所选发布版本生效`);
+      }
+    }
     const sort = options.trendingOnly ? 'created_at' : validateResourceSort(query.sort);
     const direction = String(query.order || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -1442,6 +1517,14 @@ export class ResourcesService {
           { resourceHeight: height },
         );
       }
+
+      // Version-level Mod dependency conditions (Issue #70). They are meaningful
+      // only while the list is narrowed to a kind whose versions carry that
+      // evidence; every other kind — including an absent `resource_kind` — adds
+      // no clause and no parameter, so its SQL stays identical to the same
+      // request without the parameter.
+      const modDependencyFilter = await this.buildModDependencyFilter(resource_kind, required_mods, excluded_mods);
+      if (modDependencyFilter) qb.andWhere(modDependencyFilter.clause, modDependencyFilter.parameters);
 
       // These fields are normalised arrays in metadata_json. JSON_CONTAINS
       // deliberately returns no match for NULL metadata, which is the public
@@ -1730,7 +1813,7 @@ export class ResourcesService {
     };
   }
 
-  async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[]; planets: string[] }> {
+  async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[]; planets: string[]; required_mods: string[] }> {
     const rows = await this.resourceRepository
       .createQueryBuilder('resource')
       .leftJoin('resource.category', 'category')
@@ -1796,10 +1879,16 @@ export class ResourcesService {
       // Legacy metadata continues to serve filters until the new tables exist.
     }
 
+    // The Mod options come from the same selector and visibility predicate the
+    // list filter uses, so the UI can never offer a Mod no resource can match,
+    // and an unresolved dependency token never becomes an option.
+    const requiredMods = await collectPublicRequiredModOptions(this.dataSource, await dependencyTableAvailability(this.dataSource));
+
     return {
       supported_versions: Array.from(supportedVersions).sort((a, b) => a.localeCompare(b, 'zh-CN')),
       compatibility: Array.from(compatibility).sort((a, b) => a.localeCompare(b, 'zh-CN')),
       planets: Array.from(planets).sort((a, b) => a.localeCompare(b, 'zh-CN')),
+      required_mods: requiredMods,
     };
   }
 

@@ -22,6 +22,7 @@ type ResourceFilterOptions = {
   supported_versions: string[];
   compatibility: string[];
   planets: string[];
+  required_mods: string[];
 };
 
 type ResourcesSearchParams = Record<string, string | string[] | undefined>;
@@ -73,7 +74,7 @@ async function fetchData(params: URLSearchParams) {
       init: { next: { tags: ["resource-categories"], revalidate: 300 } }, fallback: [], throwOnError: true,
     }),
     fetchApiData<ResourceFilterOptions>("/api/resources/filter-options", {
-      init: { next: { revalidate: 300 } }, fallback: { supported_versions: [], compatibility: [], planets: [] }, throwOnError: false,
+      init: { next: { revalidate: 300 } }, fallback: { supported_versions: [], compatibility: [], planets: [], required_mods: [] }, throwOnError: false,
     }),
   ]);
 
@@ -149,8 +150,13 @@ export default async function ResourcesPage({
   const search = params.get('search') || undefined;
   const sort = params.get('sort') || undefined;
 
+  // A Mod condition is a filter like any other: the discovery shelves describe
+  // the unfiltered library, so they must not render beside a narrowed list.
+  const requiredMods = params.get('required_mods') || undefined;
+  const excludedMods = params.get('excluded_mods') || undefined;
   const discoveryMode = !search && !categoryId && !tag && !supportedVersion
-    && !compatibility && !sort && MAP_FILTER_KEYS.every((key) => !params.get(key));
+    && !compatibility && !sort && !requiredMods && !excludedMods
+    && MAP_FILTER_KEYS.every((key) => !params.get(key));
   const submitHrefByKind: Record<string, string> = {
     mod: '/resources/submit/mod',
     map: '/resources/submit/map',
@@ -194,9 +200,12 @@ export default async function ResourcesPage({
           initialBlock={block}
           initialWidth={width ? String(width) : undefined}
           initialHeight={height ? String(height) : undefined}
+          initialRequiredMods={requiredMods}
+          initialExcludedMods={excludedMods}
           supportedVersions={filterOptions.supported_versions}
           compatibilityOptions={filterOptions.compatibility}
           planets={filterOptions.planets}
+          modOptions={filterOptions.required_mods}
         />
 
         {resources.length === 0 ? <div className="border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
@@ -216,6 +225,8 @@ export default async function ResourcesPage({
           compatibility={compatibility}
           resourceKind={resourceKind}
           mapFilters={mapFilters}
+          requiredMods={requiredMods}
+          excludedMods={excludedMods}
           locale={locale}
         />}
       </section>

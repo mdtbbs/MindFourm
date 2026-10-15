@@ -1,6 +1,7 @@
 import {
   MAX_BLOCK_LENGTH,
   MAX_MAP_DIMENSION,
+  MAX_MOD_FILTER_LENGTH,
   blockInvalid,
   isBlockFilterKind,
   isMapFilterKind,
@@ -8,6 +9,9 @@ import {
   mapFilterKeys,
   mapTextFilterKeys,
   mergeResourceQuery,
+  modFilterKeys,
+  modListValue,
+  parseModList,
   normalizeResourceFilterParams,
   parseMapDimension,
   parseMapFilters,
@@ -347,4 +351,87 @@ test('the submit path reads the same key set as the render path', () => {
   expect(mapTextFilterKeys('map')).toEqual(['width', 'height']);
   expect(mapTextFilterKeys('schematic')).toEqual(['block', 'width', 'height']);
   for (const kind of ['mod', 'pack', '', undefined, null]) expect(mapTextFilterKeys(kind)).toEqual([]);
+});
+
+/**
+ * Issue #70: version-level Mod dependency conditions in the URL.
+ *
+ * The contract the UI and SSR share: only a kind whose versions carry
+ * dependency evidence may hold the keys, an empty token list is not a
+ * condition, and the value that leaves the client is the same shape the
+ * backend's `QueryResourcesDto` accepts (comma-separated, length-limited).
+ */
+test('only map and blueprint can hold a Mod condition', () => {
+  expect(modFilterKeys('map')).toEqual(['required_mods', 'excluded_mods']);
+  expect(modFilterKeys('schematic')).toEqual(['required_mods', 'excluded_mods']);
+  for (const kind of ['mod', 'pack', 'save', 'other', '', undefined, null]) expect(modFilterKeys(kind)).toEqual([]);
+});
+
+test('a Mod list is parsed like the backend reads it, so both sides agree byte for byte', () => {
+  expect(parseModList(' alpha.mod , beta.mod ')).toEqual(['alpha.mod', 'beta.mod']);
+  expect(parseModList('alpha.mod,ALPHA.MOD')).toEqual(['alpha.mod']);
+  expect(parseModList('alpha.mod,, ,')).toEqual(['alpha.mod']);
+  expect(parseModList('')).toEqual([]);
+  expect(parseModList(undefined)).toEqual([]);
+
+  expect(modListValue(['alpha.mod', 'beta.mod'])).toBe('alpha.mod,beta.mod');
+  expect(modListValue([' alpha.mod ', ''])).toBe('alpha.mod');
+  // No conditions means no key, never an empty value in the URL.
+  expect(modListValue([])).toBeNull();
+  expect(modListValue(['', '  '])).toBeNull();
+});
+
+test('a Mod list past the backend limit is refused rather than sent to a 400', () => {
+  const exact = 'a'.repeat(MAX_MOD_FILTER_LENGTH);
+  expect(modListValue([exact])).toBe(exact);
+  const tooLong = 'a'.repeat(MAX_MOD_FILTER_LENGTH + 1);
+  expect(modListValue([tooLong])).toBeNull();
+  // Two tokens that only together overflow are refused as well, not truncated.
+  expect(modListValue([exact, 'b'])).toBeNull();
+});
+
+test('SSR canonicalisation keeps Mod conditions only for the kind that answers them', () => {
+  const map = normalizeResourceFilterParams(new URLSearchParams(
+    'resource_kind=map&required_mods=alpha.mod,beta.mod&excluded_mods=rival.mod',
+  ));
+  expect(map.get('required_mods')).toBe('alpha.mod,beta.mod');
+  expect(map.get('excluded_mods')).toBe('rival.mod');
+  // Idempotent: canonicalising the canonical form cannot redirect in a loop.
+  expect(normalizeResourceFilterParams(map).toString()).toBe(map.toString());
+
+  const schematic = normalizeResourceFilterParams(new URLSearchParams(
+    'resource_kind=schematic&required_mods=alpha.mod',
+  ));
+  expect(schematic.get('required_mods')).toBe('alpha.mod');
+
+  // A hidden condition is removed, not forwarded as a dead filter.
+  for (const query of [
+    'resource_kind=mod&required_mods=alpha.mod',
+    'resource_kind=pack&excluded_mods=rival.mod',
+    'required_mods=alpha.mod',
+  ]) {
+    const normalized = normalizeResourceFilterParams(new URLSearchParams(query));
+    expect(normalized.has('required_mods')).toBe(false);
+    expect(normalized.has('excluded_mods')).toBe(false);
+  }
+
+  // Whitespace and duplicates are a URL-normalisation concern, like the map ones.
+  const messy = normalizeResourceFilterParams(new URLSearchParams(
+    'resource_kind=map&required_mods=%20alpha.mod%20,%20alpha.mod%20',
+  ));
+  expect(messy.get('required_mods')).toBe('alpha.mod');
+
+  const overLong = normalizeResourceFilterParams(new URLSearchParams(
+    `resource_kind=map&required_mods=${'a'.repeat(MAX_MOD_FILTER_LENGTH + 1)}`,
+  ));
+  expect(overLong.has('required_mods')).toBe(false);
+});
+
+test('the Mod keys are part of the list API whitelist', () => {
+  const forwarded = resourceListQuery(new URLSearchParams(
+    'resource_kind=map&required_mods=alpha.mod&excluded_mods=rival.mod&utm_source=weibo',
+  ));
+  expect(forwarded.get('required_mods')).toBe('alpha.mod');
+  expect(forwarded.get('excluded_mods')).toBe('rival.mod');
+  expect(forwarded.has('utm_source')).toBe(false);
 });
