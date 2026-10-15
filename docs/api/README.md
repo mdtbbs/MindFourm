@@ -47,6 +47,7 @@
 - [云存档 API V1](./cloud-saves-v1.md)
 - [通用 Blob 存储 V1](./blobs-v1.md)
 - [公开 V1 错误代码](./errors-v1.md)
+- [逐接口 API Skill 文档](./skill/SKILL.md)：由 `openapi-public-v1.json` 生成的全量接口文档（每个接口含认证、权限范围、参数、响应结构与 curl 示例）
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)
 

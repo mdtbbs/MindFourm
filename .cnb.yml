@@ -28,8 +28,12 @@
       script: npm run test:frontend-unit
     - name: check committed Public V1 OpenAPI contract
       script: npm run openapi:check
+    - name: check generated API skill docs match the contract
+      script: npm run api-skill:check
     - name: test Public V1 changelog guard
       script: npm run test:api-changelog
+    - name: test API skill generator
+      script: npm run test:api-skill
 
 .frontend: &frontend
   name: frontend-quality-gates
