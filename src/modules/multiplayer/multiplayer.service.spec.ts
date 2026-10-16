@@ -1,5 +1,7 @@
-import { createHmac } from 'crypto';
+import { createHmac, createHash } from 'crypto';
 import { MultiplayerService } from './multiplayer.service';
+
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
 describe('MultiplayerService control-plane guards', () => {
   it('lists only unexpired join requests owned by the caller and bounds the projection', async () => {
@@ -496,5 +498,160 @@ describe('MultiplayerService control-plane guards', () => {
     expect(service.resumeTokens.save).toHaveBeenCalledWith(expect.objectContaining({ peer_id: 'peer_owner', consumed_at: null }));
     expect(sessionQueryBuilder.set).toHaveBeenCalledWith({ status: 'active', close_after: null });
     expect(sessionQueryBuilder.execute).toHaveBeenCalled();
+  });
+});
+
+describe('MultiplayerService lobby discovery', () => {
+  function createLobbyService({ sessions, friends = [], blocked = [], viewerPeers = [], occupying = [] }: any) {
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.sessions = { find: jest.fn().mockResolvedValue(sessions) };
+    service.peers = {
+      find: jest.fn(async (options: any) => {
+        const ids: string[] = options.where.session_id?._value ?? [];
+        const isViewer = options.where.user_id !== undefined;
+        if (isViewer) return viewerPeers;
+        return occupying.filter((peer: any) => ids.includes(peer.session_id));
+      }),
+    };
+    service.socialPolicy = {
+      areFriendsMany: jest.fn(async (_viewer: number, ids: number[]) =>
+        new Map(ids.map((id) => [id, friends.includes(id)]))),
+      isBlockedMany: jest.fn(async (_viewer: number, ids: number[]) =>
+        new Map(ids.map((id) => [id, blocked.includes(id)]))),
+    };
+    return service;
+  }
+
+  const row = (id: string, owner: number, visibility: string) => ({
+    id, owner_user_id: owner, visibility, join_policy: 'public', require_approval: false,
+    game_id: 'mindustry', game_version: null, activity_name: 'Mindustry', max_players: 8,
+    status: 'active', expires_at: new Date(Date.now() + 60_000),
+  });
+
+  it('lists public Sessions to strangers and friend-scoped Sessions only to friends', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_public', 1, 'public'), row('ses_friends', 2, 'friends'), row('ses_private', 3, 'private')],
+      friends: [2],
+      occupying: [{ session_id: 'ses_public' }, { session_id: 'ses_public' }, { session_id: 'ses_friends' }],
+    });
+
+    // The query itself never selects a private Session, and the friend-scoped one
+    // survives the per-viewer filter because the viewer is a friend of its owner.
+    expect((await service.listDiscoverableSessions(7)).data.map((s: any) => s.id))
+      .toEqual(['ses_public', 'ses_friends']);
+    expect(service.sessions.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: [
+        expect.objectContaining({ visibility: 'public', status: 'active' }),
+        expect.objectContaining({ visibility: 'friends', status: 'active' }),
+      ],
+    }));
+  });
+
+  it('drops friend-scoped Sessions the viewer is not a friend of and blocked owners', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_friends', 2, 'friends'), row('ses_blocked', 3, 'public')],
+      friends: [],
+      blocked: [3],
+      occupying: [],
+    });
+    expect(await service.listDiscoverableSessions(7)).toMatchObject({ data: [], total: 0 });
+  });
+
+  it('shows the viewer their own private Session and reports live player counts', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_mine', 7, 'private'), row('ses_public', 1, 'public')],
+      friends: [],
+      viewerPeers: [{ session_id: 'ses_mine' }],
+      occupying: [{ session_id: 'ses_mine' }, { session_id: 'ses_public' }],
+    });
+
+    const result = await service.listDiscoverableSessions(7);
+    expect(result.data.map((s: any) => s.id)).toEqual(['ses_mine', 'ses_public']);
+    expect(result.data[0]).toMatchObject({ current_players: 1, visibility: 'private' });
+  });
+
+  it('projects only the public Session shape and bounds the page', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_public', 1, 'public')],
+      occupying: [{ session_id: 'ses_public' }],
+    });
+    (service.sessions.find as jest.Mock).mockResolvedValue([]);
+
+    await service.listDiscoverableSessions(7, { page: 3, limit: 999 });
+    expect(service.sessions.find).toHaveBeenCalledWith(expect.objectContaining({ skip: 100, take: 50 }));
+
+    (service.sessions.find as jest.Mock).mockResolvedValue([row('ses_public', 1, 'public')]);
+    const listed = (await service.listDiscoverableSessions(7)).data[0];
+    expect(Object.keys(listed).sort()).toEqual([
+      'activity_name', 'current_players', 'expires_at', 'game', 'id', 'join_policy',
+      'max_players', 'owner_user_id', 'require_approval', 'status', 'visibility',
+    ]);
+    expect(JSON.stringify(listed)).not.toContain('code_hash');
+  });
+});
+
+describe('MultiplayerService join authorization has no entry-path bypass', () => {
+  function createJoinService(session: any, denial: string | null) {
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.findActiveSession = jest.fn().mockResolvedValue(session);
+    service.findResumableSession = jest.fn().mockResolvedValue(session);
+    service.peers = { findOne: jest.fn().mockResolvedValue(null) };
+    service.sessionPolicy = { joinDenialCode: jest.fn().mockResolvedValue(denial) };
+    return service;
+  }
+
+  // A room code only authorizes when the Session's code_hash actually matches; it
+  // is passed to the ladder as `viaJoinCode` but can never satisfy join_policy.
+  const inviteOnly = {
+    id: 'ses_12345678901234567890', owner_user_id: 9, visibility: 'private', join_policy: 'invite_only',
+    require_approval: false, max_players: 4, status: 'active',
+    expires_at: new Date(Date.now() + 60_000), code_hash: sha256('ABCD1234'),
+  };
+
+  it('sends the room-code entry down the same ladder as the session-id entry', async () => {
+    const service = createJoinService(inviteOnly, 'SESSION_NOT_JOINABLE');
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, { join_code: 'ABCD1234' }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: false,
+      viaJoinCode: true,
+    });
+  });
+
+  it('treats a wrong room code as a permission failure before consulting the policy', async () => {
+    const service = createJoinService(inviteOnly, null);
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, { join_code: 'ZZZZZZZZ' }))
+      .rejects.toMatchObject({ status: 403 });
+    // The code mismatch short-circuits; the ladder never runs with viaJoinCode set.
+    expect(service.sessionPolicy.joinDenialCode).not.toHaveBeenCalled();
+  });
+
+  it('reaches the same ladder through the direct entry with no code at all', async () => {
+    const service = createJoinService(inviteOnly, 'SESSION_NOT_JOINABLE');
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, {}))
+      .rejects.toMatchObject({ status: 400 });
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: false,
+      viaJoinCode: false,
+    });
+  });
+
+  it('passes an accepted invite through as an approved path', async () => {
+    const service = createJoinService(inviteOnly, null);
+    service.getUsableInvite = jest.fn().mockResolvedValue({ id: 'inv_1', session_id: inviteOnly.id });
+
+    // The ladder allows it; the join then proceeds to the transaction, whose
+    // managed lookups are absent here, so assert only that the ladder ran with
+    // the approved flag rather than asserting the whole join.
+    await service.joinSession(7, 'forum_web', inviteOnly.id, { invite_id: 'inv_1' }).catch(() => undefined);
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: true,
+      viaJoinCode: false,
+    });
   });
 });

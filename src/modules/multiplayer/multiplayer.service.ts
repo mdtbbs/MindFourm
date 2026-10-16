@@ -29,7 +29,7 @@ import {
   RelayAgentRegisterDto, RelayAllocationAckDto,
 } from './dto/multiplayer.dto';
 import { InvitePolicyService } from './invite-policy.service';
-import { SessionPolicyService } from './session-policy.service';
+import { canDiscover, evaluateJoin, SessionPolicyService } from './session-policy.service';
 import { MULTIPLAYER_CAPACITY_PEER_STATUSES } from './multiplayer.constants';
 
 const PRESENCE_TTL_SECONDS = 90;
@@ -222,8 +222,15 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       invites_v1: sessions && invites,
       relay_v1: sessions && relay,
       third_party_multiplayer: sessions && thirdParty,
-      visibility: ['private', 'friends', 'unlisted'] as const,
-      join_policies: ['open', 'friends', 'request', 'invite_only'] as const,
+      visibility: ['private', 'friends', 'public'] as const,
+      join_policies: ['invite_only', 'friends', 'public'] as const,
+      // Enumerated combinations of the two orthogonal single-select fields.
+      visibility_join_policy_combinations: [
+        'private+invite_only', 'private+friends', 'private+public',
+        'friends+invite_only', 'friends+friends', 'friends+public',
+        'public+invite_only', 'public+friends', 'public+public',
+      ] as const,
+      require_approval: true as const,
       transports: ['udp', 'tcp', 'quic', 'custom'] as const,
       relay_credential_ttl_seconds: RELAY_CREDENTIAL_TTL_SECONDS,
     };
@@ -301,16 +308,23 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     if (!gameId || gameId.length > 128) fail(400, 'SESSION_NOT_JOINABLE');
     const visibility: SessionVisibility = input.visibility || 'private';
     const joinPolicy: SessionJoinPolicy = input.join_policy || 'friends';
-    if (visibility === 'private' && joinPolicy === 'open') fail(400, 'SESSION_NOT_JOINABLE');
+    // visibility and join_policy are orthogonal: no combination is rejected.
+    // `private + public` in particular is the documented replacement for the
+    // retired `unlisted` value, so a hidden room stays reachable by its code.
+    const requireApproval = input.require_approval === true;
 
     const id = opaqueId('ses');
-    const code = visibility === 'unlisted' ? randomBytes(5).toString('hex').toUpperCase() : null;
+    // A room code is the entry path for owners who want to hand out an address
+    // instead of relying on discovery, so it tracks `join_policy` rather than
+    // `visibility`. It locates the Session; it never grants join eligibility.
+    const code = joinPolicy === 'public' ? randomBytes(5).toString('hex').toUpperCase() : null;
     const session = this.sessions.create({
       id,
       owner_user_id: userId,
       code_hash: code ? sha256(code) : null,
       visibility,
       join_policy: joinPolicy,
+      require_approval: requireApproval,
       game_id: gameId,
       game_version: input.game_version?.trim() || null,
       activity_name: input.activity_name?.trim() || gameId,
@@ -332,7 +346,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       }));
       await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
         actor_user_id: userId, action: 'session.created', target_type: 'session', target_id: id,
-        details: { visibility, join_policy: joinPolicy, game_id: gameId },
+        details: { visibility, join_policy: joinPolicy, require_approval: requireApproval, game_id: gameId },
       }));
     });
     await this.redis.set(`multiplayer:peer:${peerId}`, JSON.stringify({ peer_id: peerId, session_id: id, user_id: userId, client_id: clientId }), PRESENCE_TTL_SECONDS);
@@ -352,6 +366,59 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     const peer = await this.activePeer(sessionId, viewerId);
     if (!peer && !(await this.canViewSession(viewerId, session))) fail(403, 'SESSION_PERMISSION_DENIED');
     return this.toPublicSession(session, await this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }));
+  }
+
+  /**
+   * The discovery read behind the forum multiplayer lobby.
+   *
+   * Visibility is a *filter* here, never an authorization: every entry this
+   * returns still has to pass `assertCanJoin` when the user actually joins.
+   * Rows are projected through `toPublicSession`, so relay internals, room-code
+   * hashes and peer-level network data never leave the control plane.
+   */
+  async listDiscoverableSessions(viewerId: number, options: { page?: number; limit?: number } = {}) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Math.floor(options.limit ?? 20)));
+    const now = new Date();
+
+    // A private Session is never listed, so the query can restrict itself to the
+    // two discoverable scopes before doing any per-row work.
+    const rows = await this.sessions.find({
+      where: [
+        { visibility: 'public', status: 'active', expires_at: MoreThan(now) },
+        { visibility: 'friends', status: 'active', expires_at: MoreThan(now) },
+      ],
+      order: { created_at: 'DESC' },
+      // Page over the candidate set, then drop rows the viewer may not see. The
+      // friend-scope rows are the only ones that need per-viewer filtering and a
+      // page is bounded at 50, so the batch stays constant-size.
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    if (!rows.length) return { data: [], total: 0, page, limit };
+
+    const ownerIds = [...new Set(rows.map((session) => session.owner_user_id))];
+    const sessionIds = rows.map((session) => session.id);
+    const [friendRows, blocks, viewerPeers, occupyingPeers] = await Promise.all([
+      this.socialPolicy.areFriendsMany(viewerId, ownerIds),
+      this.socialPolicy.isBlockedMany(viewerId, ownerIds),
+      this.peers.find({ where: { session_id: In(sessionIds), user_id: viewerId, status: 'active' }, select: ['session_id'] }),
+      this.peers.find({ where: { session_id: In(sessionIds), status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) }, select: ['session_id'] }),
+    ]);
+    const alreadyIn = new Set(viewerPeers.map((peer) => peer.session_id));
+    const playerCounts = new Map<string, number>();
+    for (const peer of occupyingPeers) playerCounts.set(peer.session_id, (playerCounts.get(peer.session_id) || 0) + 1);
+
+    const data = rows.flatMap((session) => {
+      const blocked = blocks.get(session.owner_user_id) === true;
+      const friend = friendRows.get(session.owner_user_id) === true;
+      const visible = canDiscover(viewerId, session, {
+        blocked, friend, activePeer: alreadyIn.has(session.id),
+      });
+      return visible ? [this.toPublicSession(session, playerCounts.get(session.id) || 0)] : [];
+    });
+    return { data, total: data.length, page, limit };
   }
 
   async resolveCode(viewerId: number, code: string) {
@@ -1400,18 +1467,30 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
         });
         continue;
       }
-      if (blocked.get(item.user_id) || blocked.get(session.owner_user_id)) continue;
+      const ownerBlocked = blocked.get(item.user_id) === true || blocked.get(session.owner_user_id) === true;
+      if (ownerBlocked) continue;
       const friend = friends.get(session.owner_user_id) === true;
-      const visibleScope = session.visibility === 'friends' && friend;
       const hasSpace = (occupyingCounts.get(session.id) || 0) < session.max_players;
-      const canJoin = canJoinMap.get(session.owner_user_id) === true && hasSpace && visibleScope && (
-        session.join_policy === 'open' || (session.join_policy === 'friends' && friend)
-      );
-      const canRequestJoin = invitesEnabled && hasSpace && visibleScope && session.join_policy === 'request' && canRequest.get(session.owner_user_id) === true;
-      const sessionVisible = visibleScope || (session.visibility === 'unlisted' && friend);
+      // Same ladder as the single-Session join path; a friend card must not be
+      // able to offer a join the join endpoint would refuse.
+      const decision = evaluateJoin({
+        joinPolicy: session.join_policy,
+        requireApproval: session.require_approval === true,
+        blocked: ownerBlocked,
+        friend,
+        ownerAllowsJoin: canJoinMap.get(session.owner_user_id) === true,
+        ownerAllowsRequest: canRequest.get(session.owner_user_id) === true,
+        approvedPath: false,
+        viaJoinCode: false,
+        spaceAvailable: hasSpace,
+      });
+      // Discovery is reported separately and does not influence the join decision.
+      const sessionVisible = canDiscover(viewerId, session, {
+        blocked: ownerBlocked, friend, activePeer: false,
+      });
       result.set(item.user_id, {
-        can_join: canJoin,
-        can_request_join: canRequestJoin,
+        can_join: decision.can_join,
+        can_request_join: decision.can_request_join,
         can_invite: inviteAction,
         ...(viewerSession && !targetAlreadyInInviteSession ? { invite_session_id: viewerSession.id } : {}),
         session_visible: sessionVisible,
@@ -1682,6 +1761,11 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     await this.requireActivePeer(userId, sessionId);
   }
 
+  /**
+   * The only join gate. Every entry path — session id, room code, invite, lobby
+   * button, join intent — funnels through here, so no path can check less than
+   * another.
+   */
   private async assertCanJoin(userId: number, session: MultiplayerSession, viaInviteOrApproval: boolean, viaJoinCode = false): Promise<void> {
     const denial = await this.sessionPolicy.joinDenialCode(userId, session, {
       viaInviteOrApproval,
@@ -1999,7 +2083,8 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   private toPublicSession(session: MultiplayerSession, currentPlayers: number) {
     return {
       id: session.id, owner_user_id: session.owner_user_id, visibility: session.visibility,
-      join_policy: session.join_policy, game: { id: session.game_id, version: session.game_version },
+      join_policy: session.join_policy, require_approval: session.require_approval === true,
+      game: { id: session.game_id, version: session.game_version },
       activity_name: session.activity_name, current_players: currentPlayers, max_players: session.max_players,
       status: session.status, expires_at: session.expires_at,
     };

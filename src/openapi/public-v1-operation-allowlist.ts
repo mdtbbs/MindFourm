@@ -178,6 +178,7 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'GET /v1/multiplayer/capabilities',
   'GET /v1/multiplayer/preferences',
   'PATCH /v1/multiplayer/preferences',
+  'GET /v1/multiplayer/sessions',
   'POST /v1/multiplayer/sessions',
   'POST /v1/multiplayer/sessions/resolve-code',
   'GET /v1/multiplayer/sessions/{id}',

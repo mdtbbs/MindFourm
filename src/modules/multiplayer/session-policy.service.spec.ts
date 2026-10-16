@@ -1,7 +1,10 @@
 import { SessionPolicyService } from './session-policy.service';
 
 describe('SessionPolicyService', () => {
-  const session = { id: 'ses_12345678901234567890', owner_user_id: 9, visibility: 'friends', join_policy: 'open', max_players: 4 } as any;
+  const session = {
+    id: 'ses_12345678901234567890', owner_user_id: 9,
+    visibility: 'friends', join_policy: 'friends', require_approval: false, max_players: 4,
+  } as any;
 
   function createPolicy(overrides: Record<string, any> = {}) {
     const social = {
@@ -23,21 +26,72 @@ describe('SessionPolicyService', () => {
     };
   }
 
-  it('checks block before privacy or friendship policy', async () => {
-    const { policy, social } = createPolicy({ social: { isBlockedEither: jest.fn().mockResolvedValue(true) } });
+  // The ladder probes its inputs in one parallel round-trip, so these assert the
+  // *decision* precedence (blockout outranks privacy outranks policy) rather than
+  // which lookup happened first.
+  it('reports the block before any other denial reason', async () => {
+    const { policy } = createPolicy({
+      social: {
+        isBlockedEither: jest.fn().mockResolvedValue(true),
+        canPerform: jest.fn().mockResolvedValue(false),
+        areFriends: jest.fn().mockResolvedValue(false),
+      },
+      peers: { count: jest.fn().mockResolvedValue(99) },
+    });
 
-    await expect(policy.joinDenialCode(7, session, { viaInviteOrApproval: false })).resolves.toBe('USER_BLOCKED');
-    expect(social.canPerform).not.toHaveBeenCalled();
-    expect(social.areFriends).not.toHaveBeenCalled();
+    await expect(policy.joinDenialCode(7, { ...session, join_policy: 'invite_only' }, { viaInviteOrApproval: false }))
+      .resolves.toBe('USER_BLOCKED');
   });
 
-  it('denies by privacy before session friendship policy and reports capacity', async () => {
+  it('reports privacy before join policy and capacity before approval', async () => {
     const privatePolicy = createPolicy({ social: { canPerform: jest.fn().mockResolvedValue(false) } });
-    await expect(privatePolicy.policy.joinDenialCode(7, session, { viaInviteOrApproval: false })).resolves.toBe('PRIVACY_DENIED');
-    expect(privatePolicy.social.areFriends).not.toHaveBeenCalled();
+    await expect(privatePolicy.policy.joinDenialCode(7, { ...session, join_policy: 'invite_only' }, { viaInviteOrApproval: false }))
+      .resolves.toBe('PRIVACY_DENIED');
 
     const fullPolicy = createPolicy({ peers: { count: jest.fn().mockResolvedValue(4) } });
-    await expect(fullPolicy.policy.joinDenialCode(7, { ...session, visibility: 'private' }, { viaInviteOrApproval: true })).resolves.toBe('SESSION_FULL');
+    await expect(fullPolicy.policy.joinDenialCode(7, session, { viaInviteOrApproval: true })).resolves.toBe('SESSION_FULL');
+  });
+
+  it('never lets visibility alone deny a join', async () => {
+    // The same private Session is joinable or not purely by join_policy: the
+    // retired model rejected `private` outright, which is the coupling this
+    // issue removes.
+    const ownerAllows = createPolicy({ social: { canPerform: jest.fn().mockResolvedValue(true) } });
+    await expect(ownerAllows.policy.joinDenialCode(7, { ...session, visibility: 'private', join_policy: 'public' }, { viaInviteOrApproval: false }))
+      .resolves.toBeNull();
+
+    const invited = createPolicy({ social: { canPerform: jest.fn().mockResolvedValue(false) } });
+    await expect(invited.policy.joinDenialCode(7, { ...session, visibility: 'private' }, { viaInviteOrApproval: true }))
+      .resolves.toBeNull();
+  });
+
+  it('requires an accepted invite for invite_only regardless of the entry path', async () => {
+    const { policy } = createPolicy();
+    const inviteOnly = { ...session, join_policy: 'invite_only', visibility: 'public' };
+
+    await expect(policy.joinDenialCode(7, inviteOnly, { viaInviteOrApproval: false })).resolves.toBe('SESSION_NOT_JOINABLE');
+    // A room code locates the Session; it does not confer eligibility.
+    await expect(policy.joinDenialCode(7, inviteOnly, { viaInviteOrApproval: false, viaJoinCode: true })).resolves.toBe('SESSION_NOT_JOINABLE');
+    await expect(policy.joinDenialCode(7, inviteOnly, { viaInviteOrApproval: true })).resolves.toBeNull();
+  });
+
+  it('requires friendship when join_policy is friends, then accepts an approved path', async () => {
+    const { policy } = createPolicy();
+    const friendsOnly = { ...session, join_policy: 'friends' };
+
+    await expect(policy.joinDenialCode(7, friendsOnly, { viaInviteOrApproval: false })).resolves.toBe('FRIEND_REQUIRED');
+    await expect(policy.joinDenialCode(7, friendsOnly, { viaInviteOrApproval: false, viaJoinCode: true })).resolves.toBe('FRIEND_REQUIRED');
+    await expect(policy.joinDenialCode(7, friendsOnly, { viaInviteOrApproval: true })).resolves.toBeNull();
+  });
+
+  it('defers to require_approval on top of an otherwise eligible policy', async () => {
+    const { policy } = createPolicy();
+    const gated = { ...session, join_policy: 'public', require_approval: true, visibility: 'public' };
+
+    const decision = await policy.decideJoin(7, gated, { viaInviteOrApproval: false });
+    expect(decision).toMatchObject({ denial: 'JOIN_REQUEST_REQUIRED', can_join: false, can_request_join: true });
+
+    await expect(policy.joinDenialCode(7, gated, { viaInviteOrApproval: true })).resolves.toBeNull();
   });
 
   it('allows an already-pending join request to be retried without another capacity check', async () => {
@@ -47,30 +101,50 @@ describe('SessionPolicyService', () => {
       joinRequests: { findOne: jest.fn().mockResolvedValue(existing) },
     });
 
-    await expect(policy.joinRequestDenialCode(7, { ...session, join_policy: 'request' })).resolves.toBeNull();
+    await expect(policy.joinRequestDenialCode(7, { ...session, join_policy: 'public', require_approval: true })).resolves.toBeNull();
     expect(joinRequests.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'pending' }) }));
     expect(peers.count).not.toHaveBeenCalled();
   });
 
-  it('rejects join requests for the wrong policy, active peers, and full sessions', async () => {
-    const wrongPolicy = createPolicy();
-    await expect(wrongPolicy.policy.joinRequestDenialCode(7, session)).resolves.toBe('SESSION_NOT_JOINABLE');
+  it('rejects join requests when approval is off, when already joined, and when full', async () => {
+    const approvalOff = createPolicy();
+    await expect(approvalOff.policy.joinRequestDenialCode(7, session)).resolves.toBe('SESSION_NOT_JOINABLE');
 
     const activePeer = createPolicy({ peers: { findOne: jest.fn().mockResolvedValue({ id: 'peer' }) } });
-    await expect(activePeer.policy.joinRequestDenialCode(7, { ...session, join_policy: 'request' })).resolves.toBe('SESSION_NOT_JOINABLE');
+    await expect(activePeer.policy.joinRequestDenialCode(7, { ...session, join_policy: 'public', require_approval: true }))
+      .resolves.toBe('SESSION_NOT_JOINABLE');
 
     const full = createPolicy({ peers: { findOne: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(4) } });
-    await expect(full.policy.joinRequestDenialCode(7, { ...session, join_policy: 'request' })).resolves.toBe('SESSION_FULL');
+    await expect(full.policy.joinRequestDenialCode(7, { ...session, join_policy: 'public', require_approval: true }))
+      .resolves.toBe('SESSION_FULL');
   });
 
-  it('hides private and unlisted sessions while respecting blocks and active membership', async () => {
+  it('never issues a join request for invite_only, even with approval enabled', async () => {
+    const { policy } = createPolicy();
+    await expect(policy.joinRequestDenialCode(7, { ...session, join_policy: 'invite_only', require_approval: true }))
+      .resolves.toBe('SESSION_NOT_JOINABLE');
+  });
+
+  it('treats an active peer and the owner as discoverable at every visibility', async () => {
+    for (const visibility of ['private', 'friends', 'public'] as const) {
+      const active = createPolicy({ peers: { findOne: jest.fn().mockResolvedValue({ id: 'peer' }) } });
+      await expect(active.policy.canViewSession(7, { ...session, visibility })).resolves.toBe(true);
+
+      const viewerOwner = createPolicy();
+      await expect(viewerOwner.policy.canViewSession(9, { ...session, visibility })).resolves.toBe(true);
+    }
+  });
+
+  it('hides private sessions from everyone else while respecting blocks and friendship', async () => {
     const blocked = createPolicy({ social: { isBlockedEither: jest.fn().mockResolvedValue(true) } });
     await expect(blocked.policy.canViewSession(7, session)).resolves.toBe(false);
 
-    const unlisted = createPolicy();
-    await expect(unlisted.policy.canViewSession(7, { ...session, visibility: 'unlisted' })).resolves.toBe(false);
+    const stranger = createPolicy();
+    await expect(stranger.policy.canViewSession(7, { ...session, visibility: 'private' })).resolves.toBe(false);
+    await expect(stranger.policy.canViewSession(7, { ...session, visibility: 'friends' })).resolves.toBe(false);
+    await expect(stranger.policy.canViewSession(7, { ...session, visibility: 'public' })).resolves.toBe(true);
 
-    const active = createPolicy({ peers: { findOne: jest.fn().mockResolvedValue({ id: 'peer' }) } });
-    await expect(active.policy.canViewSession(7, { ...session, visibility: 'private' })).resolves.toBe(true);
+    const friend = createPolicy({ social: { areFriends: jest.fn().mockResolvedValue(true) } });
+    await expect(friend.policy.canViewSession(7, { ...session, visibility: 'friends' })).resolves.toBe(true);
   });
 });
