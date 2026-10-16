@@ -46,6 +46,7 @@ export class MultiplayerVisibilityJoinPolicySplit1720000380000 implements Migrat
     await addColumnIfMissing(queryRunner, TABLE, 'require_approval', 'TINYINT(1) NOT NULL DEFAULT 0');
 
     // 2. Capture the legacy `request` policy before `join_policy` loses the value.
+    //    A rerun matches no rows here, because step 3 already rewrote them.
     await queryRunner.query(
       `UPDATE \`${TABLE}\` SET require_approval = 1 WHERE join_policy = 'request'`,
     );

@@ -1,5 +1,7 @@
-import { createHmac } from 'crypto';
+import { createHmac, createHash } from 'crypto';
 import { MultiplayerService } from './multiplayer.service';
+
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
 describe('MultiplayerService control-plane guards', () => {
   it('lists only unexpired join requests owned by the caller and bounds the projection', async () => {
@@ -586,5 +588,70 @@ describe('MultiplayerService lobby discovery', () => {
       'max_players', 'owner_user_id', 'require_approval', 'status', 'visibility',
     ]);
     expect(JSON.stringify(listed)).not.toContain('code_hash');
+  });
+});
+
+describe('MultiplayerService join authorization has no entry-path bypass', () => {
+  function createJoinService(session: any, denial: string | null) {
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.findActiveSession = jest.fn().mockResolvedValue(session);
+    service.findResumableSession = jest.fn().mockResolvedValue(session);
+    service.peers = { findOne: jest.fn().mockResolvedValue(null) };
+    service.sessionPolicy = { joinDenialCode: jest.fn().mockResolvedValue(denial) };
+    return service;
+  }
+
+  // A room code only authorizes when the Session's code_hash actually matches; it
+  // is passed to the ladder as `viaJoinCode` but can never satisfy join_policy.
+  const inviteOnly = {
+    id: 'ses_12345678901234567890', owner_user_id: 9, visibility: 'private', join_policy: 'invite_only',
+    require_approval: false, max_players: 4, status: 'active',
+    expires_at: new Date(Date.now() + 60_000), code_hash: sha256('ABCD1234'),
+  };
+
+  it('sends the room-code entry down the same ladder as the session-id entry', async () => {
+    const service = createJoinService(inviteOnly, 'SESSION_NOT_JOINABLE');
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, { join_code: 'ABCD1234' }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: false,
+      viaJoinCode: true,
+    });
+  });
+
+  it('treats a wrong room code as a permission failure before consulting the policy', async () => {
+    const service = createJoinService(inviteOnly, null);
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, { join_code: 'ZZZZZZZZ' }))
+      .rejects.toMatchObject({ status: 403 });
+    // The code mismatch short-circuits; the ladder never runs with viaJoinCode set.
+    expect(service.sessionPolicy.joinDenialCode).not.toHaveBeenCalled();
+  });
+
+  it('reaches the same ladder through the direct entry with no code at all', async () => {
+    const service = createJoinService(inviteOnly, 'SESSION_NOT_JOINABLE');
+
+    await expect(service.joinSession(7, 'forum_web', inviteOnly.id, {}))
+      .rejects.toMatchObject({ status: 400 });
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: false,
+      viaJoinCode: false,
+    });
+  });
+
+  it('passes an accepted invite through as an approved path', async () => {
+    const service = createJoinService(inviteOnly, null);
+    service.getUsableInvite = jest.fn().mockResolvedValue({ id: 'inv_1', session_id: inviteOnly.id });
+
+    // The ladder allows it; the join then proceeds to the transaction, whose
+    // managed lookups are absent here, so assert only that the ladder ran with
+    // the approved flag rather than asserting the whole join.
+    await service.joinSession(7, 'forum_web', inviteOnly.id, { invite_id: 'inv_1' }).catch(() => undefined);
+    expect(service.sessionPolicy.joinDenialCode).toHaveBeenCalledWith(7, inviteOnly, {
+      viaInviteOrApproval: true,
+      viaJoinCode: false,
+    });
   });
 });
