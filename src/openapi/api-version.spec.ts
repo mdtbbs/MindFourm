@@ -20,5 +20,6 @@ describe('published contract version', () => {
     // The blobs contract shipped as 1.5.0; additive changes only move it forward.
     const [major, minor] = API_V1_VERSION.split('.').map(Number);
     expect(major * 1000 + minor).toBeGreaterThanOrEqual(1005);
+    expect(major * 1000 + minor).toBeGreaterThanOrEqual(1007);
   });
 });

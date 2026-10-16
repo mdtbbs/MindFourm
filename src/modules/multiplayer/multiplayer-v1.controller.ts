@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
@@ -7,7 +7,7 @@ import { MultiplayerOAuthProtected } from './multiplayer-oauth-protected.decorat
 import { MultiplayerService } from './multiplayer.service';
 import {
   CreateCandidateDto, CreateJoinIntentDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto,
-  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ResolveSessionCodeDto,
+  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
   RelayAgentRegisterDto, RelayAllocationAckDto, RelayAllocationRevokeDto, SetDefaultMultiplayerClientDto,
 } from './dto/multiplayer.dto';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
@@ -37,6 +37,12 @@ export class MultiplayerV1Controller {
   @RateLimit({ max: 10, window: 60 })
   createSession(@Body() body: CreateMultiplayerSessionDto, @Req() request: any) {
     return this.multiplayer.createSession(request.user.id, request.authContext?.clientId || 'forum_web', body);
+  }
+
+  @MultiplayerOAuthProtected('multiplayer.read')
+  @Get('sessions')
+  listSessions(@Query() query: ListMultiplayerSessionsDto, @Req() request: any) {
+    return this.multiplayer.listDiscoverableSessions(request.user.id, query);
   }
 
   @MultiplayerOAuthProtected('multiplayer.read')

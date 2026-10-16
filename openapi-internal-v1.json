@@ -18024,6 +18024,58 @@
             "MindAuthBearer": []
           }
         ]
+      },
+      "get": {
+        "operationId": "MultiplayerV1Controller_listSessions",
+        "x-required-scopes": [
+          "multiplayer.read"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始。",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页数量，最大 50。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "联机会话"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
       }
     },
     "/v1/multiplayer/sessions/resolve-code": {
@@ -24953,7 +25005,7 @@
   "info": {
     "title": "MDTBBS Internal V1 API",
     "description": "Internal development contract. This specification may contain privileged operations and must not be exposed from the public developer portal. Third-party clients use the separately filtered Public Client V1 contract. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "contact": {}
   },
   "tags": [],
@@ -31160,21 +31212,25 @@
             "enum": [
               "private",
               "friends",
-              "unlisted"
+              "public"
             ],
             "example": "friends",
-            "description": "Session 可见范围。"
+            "description": "可见范围：谁能在联机大厅或好友列表中发现自己。不决定是否允许加入。"
           },
           "join_policy": {
             "type": "string",
             "enum": [
-              "open",
+              "invite_only",
               "friends",
-              "request",
-              "invite_only"
+              "public"
             ],
             "example": "friends",
-            "description": "其他玩家加入 Session 的策略。"
+            "description": "加入权限：谁有资格加入。房间码、邀请链接、大厅入口都只是入口，不是权限。"
+          },
+          "require_approval": {
+            "type": "boolean",
+            "example": false,
+            "description": "加入范围内仍需房主批准：开启后符合条件的用户须先发加入请求。"
           },
           "max_players": {
             "type": "number",
@@ -31221,7 +31277,7 @@
             "type": "string",
             "example": "ABCD1234",
             "maxLength": 32,
-            "description": "Unlisted Session 的加入码。"
+            "description": "Session 加入码；只用于定位 Session，不代替加入权限。"
           },
           "capabilities": {
             "type": "object",

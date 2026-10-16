@@ -30,7 +30,8 @@
 | PUT/DELETE | `/api/v1/presence/connections/{id}/activity` | `presence.write` | 发布或清除富活动状态 |
 | GET/PATCH | `/api/v1/multiplayer/preferences` | `multiplayer.read` / `multiplayer.write` | 读取/设置用户默认加入意图客户端 |
 | GET | `/api/v1/multiplayer/capabilities` | `multiplayer.read` | 多人联机能力与约束 |
-| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；可选可见范围、join_policy、max_players |
+| GET | `/api/v1/multiplayer/sessions` | `multiplayer.read` | 公开联机大厅；按可见范围列出可发现的会话（`page`/`limit`，最多 50/页） |
+| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；可选可见范围、join_policy、require_approval、max_players |
 | GET | `/api/v1/multiplayer/sessions/{id}`、`.../{id}/peers` | `multiplayer.read` | 查询可见会话和对端 |
 | POST | `/api/v1/multiplayer/sessions/resolve-code` | `multiplayer.read` | 解析不公开会话加入码 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join`、`.../{id}/leave` | `multiplayer.write` | 加入/退出或用绑定的恢复令牌恢复对端 |
@@ -43,12 +44,18 @@
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 处理邀请；接受返回加入意图 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入 `join_policy=request` 的会话 |
 | POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 房主批准/拒绝；批准返回 10 分钟有效、绑定申请者 OAuth 客户端的加入意图 |
-| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户的加入意图；不预绑定 OAuth 客户端；可传不公开 `join_code` |
+| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户的加入意图；不预绑定 OAuth 客户端；可传房间码 `join_code` |
 | POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | 启动器使用加入意图并成为会话对端；同一用户和首次使用的客户端可在 10 分钟内恢复相同对端与恢复令牌 |
 | POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前对端请求官方中继凭证 |
 | POST | `/api/v1/realtime/tickets` | `friends.read` | 创建有效期 60 秒的一次性 WebSocket 票据 |
 
-会话可见范围为 `private`、`friends`、`unlisted`；加入策略为 `open`、`friends`、`request`、`invite_only`。V1 没有公共大厅或房主迁移。房主主动离开后，会话进入既有的 60 秒关闭宽限期；只有同一用户、同一 OAuth 客户端并提供有效的一次性恢复令牌，才能恢复会话。房主心跳超时后，在线状态租期在 90 秒后到期，会话随之进入关闭状态。对端另有独立的 60 秒恢复窗口；它与会话关闭宽限期是两种状态期限，即使当前时长相同也分别判定。
+**可见范围 `visibility`（单选）**回答“谁能在联机大厅、好友列表或联机状态中发现这个房间”：`private`（仅房主与已在房内的对端）、`friends`（房主好友）、`public`（所有人）。
+
+**加入权限 `join_policy`（单选）**回答“谁有资格加入”：`invite_only`（仅持有当前有效邀请或已批准加入请求的用户）、`friends`（房主好友）、`public`（所有通过基础登录、封禁、容量、会话状态检查的用户）。
+
+两者正交，九种组合都有明确语义。`visibility` 只控制发现与展示，绝不隐式决定是否能加入；房间码、邀请链接、大厅入口都只是入口（transport），不是权限。**`require_approval`** 独立于两者：开启后即使已符合 `join_policy`，仍需房主批准加入请求（`private + public + require_approval` 即旧 `request` 语义）。
+
+V1 没有房主迁移。房主主动离开后，会话进入既有的 60 秒关闭宽限期；只有同一用户、同一 OAuth 客户端并提供有效的一次性恢复令牌，才能恢复会话。房主心跳超时后，在线状态租期在 90 秒后到期，会话随之进入关闭状态。对端另有独立的 60 秒恢复窗口；它与会话关闭宽限期是两种状态期限，即使当前时长相同也分别判定。
 
 好友在线状态返回的 `actions.can_join`、`can_request_join`、`can_invite` 是后端策略结果。客户端不得自行推导按钮权限。屏蔽规则优先于隐私设置；好友聚合最多批量查询一页，不会为每位好友单独执行一组 SQL。
 
@@ -180,8 +187,10 @@ Authorization: Bearer <ACCESS_TOKEN>
   "invites_v1": true,
   "relay_v1": true,
   "third_party_multiplayer": true,
-  "visibility": ["private","friends","unlisted"],
-  "join_policies": ["open","friends","request","invite_only"],
+  "visibility": ["private","friends","public"],
+  "join_policies": ["invite_only","friends","public"],
+  "visibility_join_policy_combinations": ["private+invite_only","private+friends","private+public","friends+invite_only","friends+friends","friends+public","public+invite_only","public+friends","public+public"],
+  "require_approval": true,
   "transports": ["udp","tcp","quic","custom"],
   "relay_credential_ttl_seconds": 120
 }
@@ -202,6 +211,7 @@ Content-Type: application/json
   "activity_name":"正在游玩 Salt Flats",
   "visibility":"friends",
   "join_policy":"friends",
+  "require_approval":false,
   "max_players":8
 }
 ```
@@ -211,11 +221,12 @@ Content-Type: application/json
 | `game_id` | 是 | 非空字符串，最多 128 字符 | 游戏稳定标识。 |
 | `game_version` | 否 | 最多 64 字符 | 客户端/服务器游戏版本。 |
 | `activity_name` | 否 | 最多 160 字符 | 好友看到的会话活动文字；缺省使用 `game_id`。 |
-| `visibility` | 否 | `private`、`friends`、`unlisted` | 缺省 `private`。不公开会在创建结果中返回一次性展示的 `join_code`。 |
-| `join_policy` | 否 | `open`、`friends`、`request`、`invite_only` | 缺省 `friends`；`private + open` 不允许。 |
+| `visibility` | 否 | `private`、`friends`、`public` | 缺省 `private`。只决定谁能在列表中发现房间，不决定能否加入。 |
+| `join_policy` | 否 | `invite_only`、`friends`、`public` | 缺省 `friends`。决定谁有资格加入；与 `visibility` 正交，任一组合都合法。 |
+| `require_approval` | 否 | 布尔 | 缺省 `false`。为 `true` 时符合加入范围的用户仍需房主批准。 |
 | `max_players` | 否 | 2–64 整数 | 缺省 8。 |
 
-创建响应包含 `session`、`peer`、`resume_token`，不公开会话还包含 `join_code`。立即安全保存 `resume_token`；它绑定用户和 OAuth `client_id`、只能使用一次，断线恢复后会旋转出新令牌。
+创建响应包含 `session`、`peer`、`resume_token`；`join_policy = public` 的会话还包含一次性展示的 `join_code`。立即安全保存 `resume_token`；它绑定用户和 OAuth `client_id`、只能使用一次，断线恢复后会旋转出新令牌。
 
 ```json
 {
@@ -249,7 +260,15 @@ Content-Type: application/json
 
 ### 解析、加入、退出和恢复
 
-不公开加入码用 `POST /api/v1/multiplayer/sessions/resolve-code` 解析，请求体为 `{"code":"A1B2C3D4E5"}`（10 位十六进制码）。加入码只应作为短期邀请信息分享。公开或好友策略允许的直接加入可用：
+### 联机大厅
+
+`GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话。`page` 从 1 起，`limit` 最大 50。返回值只包含 `visibility = public` 的会话、`visibility = friends` 且调用者是房主好友的会话，以及调用者自己已在房内的会话；`private` 会话永不出现。被任一方屏蔽的房主同样不会出现。响应中的会话对象与创建、查询接口同构（不含 `code_hash` 或中继内部字段），`current_players` 为实时占用人数。
+
+大厅只是发现入口：列表里的每个会话在实际加入时仍会走同一套加入鉴权，服务端返回的 `can_join` 才是最终结论。客户端不得根据列表可见性推断加入权限。
+
+### 解析、加入、退出和恢复
+
+房间码用 `POST /api/v1/multiplayer/sessions/resolve-code` 解析，请求体为 `{"code":"A1B2C3D4E5"}`（10 位十六进制码）。房间码在 `join_policy = public` 时签发，用于定位会话或短期分享，**不代表持有加入权限**：`invite_only` 仍要求有效邀请，`friends` 仍要求好友关系。解析后按 `join_policy` 做最终鉴权。符合加入策略的直接加入可用：
 
 ```http
 POST /api/v1/multiplayer/sessions/ses_AbCdEf0123456789_-wxyz/join
@@ -262,15 +281,15 @@ Content-Type: application/json
 | 请求体字段 | 是否必填 | 含义 |
 |---|---|---|
 | `invite_id` | 否 | 通过邀请加入时使用目标用户收到的有效邀请 ID。 |
-| `join_code` | 否 | 加入不公开会话时提交对应加入码。 |
+| `join_code` | 否 | 提交房间码用于定位会话，并满足房主自身的 `allow_join` 隐私设置；不会代替 `join_policy` 判定。 |
 | `resume_token` | 否 | 恢复既有对端时提交；若提供则优先执行恢复。成功后旧令牌作废并返回新令牌。 |
 | `capabilities` | 否 | 客户端可选能力 JSON；服务端作为该对端信息返回，不会据此授予权限。 |
 
 新加入返回 `{ "peer": ..., "resume_token": "..." }`。即使 join 请求体没有可选字段，也发送 `{}`；恢复时还会有 `resumed: true`。恢复只能在对端的 60 秒恢复窗口内完成；过期对端不可恢复。`POST .../sessions/{id}/leave` 不需要请求体；普通成员返回 `{ "status":"left" }`，房主主动退出返回 `{ "status":"closing","grace_seconds":60 }`。调用 `POST .../sessions/{id}/peers/{peerId}/heartbeat` 续期活跃对端，响应含 `peer_id`、30 秒 `heartbeat_interval` 和 90 秒 `expires_in`。
 
-若加入策略要求审批，客户端先创建加入请求。请求有效期为 5 分钟；房主批准后，申请者会收到绑定当前 OAuth 客户端的加入意图。申请者使用该意图后即可加入会话；重复使用会在恢复窗口内返回相同结果。处理批准事件时，客户端应先成功使用意图并保存本地事件游标，再发送确认消息；启动器跳转前应由用户确认。
+若 `require_approval = true`，客户端先创建加入请求（`join_policy = invite_only` 不提供请求路径）。请求有效期为 5 分钟；房主批准后，申请者会收到绑定当前 OAuth 客户端的加入意图。申请者使用该意图后即可加入会话；重复使用会在恢复窗口内返回相同结果。处理批准事件时，客户端应先成功使用意图并保存本地事件游标，再发送确认消息；启动器跳转前应由用户确认。
 
-不公开会话可通过加入码创建直接加入意图。意图绑定当前论坛用户，须在 60 秒内首次使用；相同用户和 OAuth 客户端可在 10 分钟恢复窗口内重新取得成功结果。
+可通过房间码创建直接加入意图；服务端在签发意图时已按 `join_policy` 完成鉴权。意图绑定当前论坛用户，须在 60 秒内首次使用；相同用户和 OAuth 客户端可在 10 分钟恢复窗口内重新取得成功结果。
 
 直接创建、接受邀请和房主批准的意图都有明确的有效期与消费身份约束。消费失败时按稳定错误码处理；已经消费的意图不会重新授予加入权限。
 

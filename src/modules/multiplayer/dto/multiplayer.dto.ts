@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-  IsEnum, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested,
+  IsBoolean, IsEnum, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -17,17 +17,42 @@ export class CreateMultiplayerSessionDto {
   @IsOptional() @IsString() @MaxLength(160)
   activity_name?: string;
 
-  @ApiPropertyOptional({ enum: ['private', 'friends', 'unlisted'], example: 'friends', description: 'Session 可见范围。' })
-  @IsOptional() @IsEnum(['private', 'friends', 'unlisted'])
-  visibility?: 'private' | 'friends' | 'unlisted';
+  @ApiPropertyOptional({
+    enum: ['private', 'friends', 'public'],
+    example: 'friends',
+    description: '可见范围：谁能在联机大厅或好友列表中发现自己。不决定是否允许加入。',
+  })
+  @IsOptional() @IsEnum(['private', 'friends', 'public'])
+  visibility?: 'private' | 'friends' | 'public';
 
-  @ApiPropertyOptional({ enum: ['open', 'friends', 'request', 'invite_only'], example: 'friends', description: '其他玩家加入 Session 的策略。' })
-  @IsOptional() @IsEnum(['open', 'friends', 'request', 'invite_only'])
-  join_policy?: 'open' | 'friends' | 'request' | 'invite_only';
+  @ApiPropertyOptional({
+    enum: ['invite_only', 'friends', 'public'],
+    example: 'friends',
+    description: '加入权限：谁有资格加入。房间码、邀请链接、大厅入口都只是入口，不是权限。',
+  })
+  @IsOptional() @IsEnum(['invite_only', 'friends', 'public'])
+  join_policy?: 'invite_only' | 'friends' | 'public';
+
+  @ApiPropertyOptional({
+    example: false,
+    description: '加入范围内仍需房主批准：开启后符合条件的用户须先发加入请求。',
+  })
+  @IsOptional() @IsBoolean()
+  require_approval?: boolean;
 
   @ApiPropertyOptional({ minimum: 2, maximum: 64, example: 8, description: 'Peer 最大数量。' })
   @IsOptional() @IsInt() @Min(2) @Max(64)
   max_players?: number;
+}
+
+export class ListMultiplayerSessionsDto {
+  @ApiPropertyOptional({ minimum: 1, example: 1, description: '页码，从 1 开始。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, example: 20, description: '每页数量，最大 50。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50)
+  limit?: number;
 }
 
 export class JoinMultiplayerSessionDto {
@@ -39,7 +64,7 @@ export class JoinMultiplayerSessionDto {
   @IsOptional() @IsString() @MaxLength(256)
   resume_token?: string;
 
-  @ApiPropertyOptional({ example: 'ABCD1234', maxLength: 32, description: 'Unlisted Session 的加入码。' })
+  @ApiPropertyOptional({ example: 'ABCD1234', maxLength: 32, description: 'Session 加入码；只用于定位 Session，不代替加入权限。' })
   @IsOptional() @IsString() @MaxLength(32)
   join_code?: string;
 

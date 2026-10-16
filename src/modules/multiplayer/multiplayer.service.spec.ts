@@ -498,3 +498,93 @@ describe('MultiplayerService control-plane guards', () => {
     expect(sessionQueryBuilder.execute).toHaveBeenCalled();
   });
 });
+
+describe('MultiplayerService lobby discovery', () => {
+  function createLobbyService({ sessions, friends = [], blocked = [], viewerPeers = [], occupying = [] }: any) {
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.sessions = { find: jest.fn().mockResolvedValue(sessions) };
+    service.peers = {
+      find: jest.fn(async (options: any) => {
+        const ids: string[] = options.where.session_id?._value ?? [];
+        const isViewer = options.where.user_id !== undefined;
+        if (isViewer) return viewerPeers;
+        return occupying.filter((peer: any) => ids.includes(peer.session_id));
+      }),
+    };
+    service.socialPolicy = {
+      areFriendsMany: jest.fn(async (_viewer: number, ids: number[]) =>
+        new Map(ids.map((id) => [id, friends.includes(id)]))),
+      isBlockedMany: jest.fn(async (_viewer: number, ids: number[]) =>
+        new Map(ids.map((id) => [id, blocked.includes(id)]))),
+    };
+    return service;
+  }
+
+  const row = (id: string, owner: number, visibility: string) => ({
+    id, owner_user_id: owner, visibility, join_policy: 'public', require_approval: false,
+    game_id: 'mindustry', game_version: null, activity_name: 'Mindustry', max_players: 8,
+    status: 'active', expires_at: new Date(Date.now() + 60_000),
+  });
+
+  it('lists public Sessions to strangers and friend-scoped Sessions only to friends', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_public', 1, 'public'), row('ses_friends', 2, 'friends'), row('ses_private', 3, 'private')],
+      friends: [2],
+      occupying: [{ session_id: 'ses_public' }, { session_id: 'ses_public' }, { session_id: 'ses_friends' }],
+    });
+
+    // The query itself never selects a private Session, and the friend-scoped one
+    // survives the per-viewer filter because the viewer is a friend of its owner.
+    expect((await service.listDiscoverableSessions(7)).data.map((s: any) => s.id))
+      .toEqual(['ses_public', 'ses_friends']);
+    expect(service.sessions.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: [
+        expect.objectContaining({ visibility: 'public', status: 'active' }),
+        expect.objectContaining({ visibility: 'friends', status: 'active' }),
+      ],
+    }));
+  });
+
+  it('drops friend-scoped Sessions the viewer is not a friend of and blocked owners', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_friends', 2, 'friends'), row('ses_blocked', 3, 'public')],
+      friends: [],
+      blocked: [3],
+      occupying: [],
+    });
+    expect(await service.listDiscoverableSessions(7)).toMatchObject({ data: [], total: 0 });
+  });
+
+  it('shows the viewer their own private Session and reports live player counts', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_mine', 7, 'private'), row('ses_public', 1, 'public')],
+      friends: [],
+      viewerPeers: [{ session_id: 'ses_mine' }],
+      occupying: [{ session_id: 'ses_mine' }, { session_id: 'ses_public' }],
+    });
+
+    const result = await service.listDiscoverableSessions(7);
+    expect(result.data.map((s: any) => s.id)).toEqual(['ses_mine', 'ses_public']);
+    expect(result.data[0]).toMatchObject({ current_players: 1, visibility: 'private' });
+  });
+
+  it('projects only the public Session shape and bounds the page', async () => {
+    const service = createLobbyService({
+      sessions: [row('ses_public', 1, 'public')],
+      occupying: [{ session_id: 'ses_public' }],
+    });
+    (service.sessions.find as jest.Mock).mockResolvedValue([]);
+
+    await service.listDiscoverableSessions(7, { page: 3, limit: 999 });
+    expect(service.sessions.find).toHaveBeenCalledWith(expect.objectContaining({ skip: 100, take: 50 }));
+
+    (service.sessions.find as jest.Mock).mockResolvedValue([row('ses_public', 1, 'public')]);
+    const listed = (await service.listDiscoverableSessions(7)).data[0];
+    expect(Object.keys(listed).sort()).toEqual([
+      'activity_name', 'current_players', 'expires_at', 'game', 'id', 'join_policy',
+      'max_players', 'owner_user_id', 'require_approval', 'status', 'visibility',
+    ]);
+    expect(JSON.stringify(listed)).not.toContain('code_hash');
+  });
+});

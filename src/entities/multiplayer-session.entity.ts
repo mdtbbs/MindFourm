@@ -1,9 +1,23 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { User } from './user.entity';
 
+/**
+ * Discovery scope: who may find this Session in a lobby or friend list. It never
+ * decides whether a user is allowed to join — that is `join_policy` alone.
+ */
+export type MultiplayerSessionVisibility = 'private' | 'friends' | 'public';
+
+/**
+ * Join eligibility: which users may become a Peer. Single-select by design; the
+ * entry path a client used (room code, invite link, lobby button) is transport,
+ * not permission.
+ */
+export type MultiplayerSessionJoinPolicy = 'invite_only' | 'friends' | 'public';
+
 @Entity('multiplayer_sessions')
 @Index('idx_multiplayer_sessions_owner_status', ['owner_user_id', 'status'])
 @Index('idx_multiplayer_sessions_expiry', ['expires_at', 'status'])
+@Index('idx_multiplayer_sessions_discovery', ['visibility', 'status', 'expires_at'])
 export class MultiplayerSession {
   @PrimaryColumn({ type: 'varchar', length: 48 })
   id: string;
@@ -14,11 +28,19 @@ export class MultiplayerSession {
   @Column({ type: 'varchar', length: 64, nullable: true, unique: true })
   code_hash: string | null;
 
-  @Column({ type: 'enum', enum: ['private', 'friends', 'unlisted'], default: 'private' })
-  visibility: 'private' | 'friends' | 'unlisted';
+  @Column({ type: 'enum', enum: ['private', 'friends', 'public'], default: 'private' })
+  visibility: MultiplayerSessionVisibility;
 
-  @Column({ type: 'enum', enum: ['open', 'friends', 'request', 'invite_only'], default: 'friends' })
-  join_policy: 'open' | 'friends' | 'request' | 'invite_only';
+  @Column({ type: 'enum', enum: ['invite_only', 'friends', 'public'], default: 'friends' })
+  join_policy: MultiplayerSessionJoinPolicy;
+
+  /**
+   * Orthogonal to `join_policy`: the user is already inside the join scope but
+   * the owner still approves each join through the existing Join Request flow.
+   * Replaces the removed `join_policy = request` value without a second ACL.
+   */
+  @Column({ type: 'boolean', default: false })
+  require_approval: boolean;
 
   @Column({ type: 'varchar', length: 128 })
   game_id: string;

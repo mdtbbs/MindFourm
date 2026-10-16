@@ -619,7 +619,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_messages_third_party_access_enabled', value: 'false', category: 'features', description: 'Allow third-party OAuth clients to use direct messages' },
       { key: 'feature_social_presence_v1_enabled', value: 'false', category: 'features', description: 'Enable multi-client Presence and social privacy APIs' },
       { key: 'feature_rich_activity_v1_enabled', value: 'false', category: 'features', description: 'Enable Rich Activity reporting and display' },
-      { key: 'feature_multiplayer_sessions_v1_enabled', value: 'false', category: 'features', description: 'Enable private/friends/unlisted multiplayer Sessions' },
+      { key: 'feature_multiplayer_sessions_v1_enabled', value: 'false', category: 'features', description: 'Enable private/friends/public multiplayer Sessions' },
       { key: 'feature_multiplayer_invites_v1_enabled', value: 'false', category: 'features', description: 'Enable multiplayer invites and join requests' },
       { key: 'feature_multiplayer_relay_v1_enabled', value: 'false', category: 'features', description: 'Enable allocation of official Relay Agents' },
       { key: 'feature_third_party_multiplayer_v1_enabled', value: 'false', category: 'features', description: 'Allow reviewed third-party OAuth apps to use Multiplayer APIs' },

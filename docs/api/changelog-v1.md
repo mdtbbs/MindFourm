@@ -8,6 +8,44 @@
 
 现有 `htmlBlock.attrs.html` 支持完整 HTML 文档及内嵌样式表，长度上限从 20000 扩展到 200000 字符，管理团队权限及每篇最多 5 个区块的约束不变。完整文档的 `content_html` 投影改为隔离 iframe；客户端应保留其 sandbox/CSP，或使用同等隔离的文档容器。旧式无样式表片段的呈现方式保持兼容。Base64 及外站图片须先导入站点存储并替换为站内 URL；完整文档 CSP 仅允许站内图片加载。详细规则见[富文本格式 V2](./rich-content-schema-v2.md)。
 
+## Public API 1.7.0
+
+本次把联机会话的「谁能发现房间」与「谁有资格加入」拆成两个正交的单选设置，契约版本从 `1.6.0` 更新为 `1.7.0`。
+
+此前 `visibility` 同时承担发现与加入判定：`private`、`friends` 会直接拒绝加入，`unlisted` 既是「不出现在列表」又是「凭房间码可加入」，而「符合范围但仍需房主批准」只能塞进 `join_policy = request`。结果是不可见的房间被默认认为不可加入，房间码与邀请被当作权限而不是入口。
+
+新模型中 `visibility` 只回答发现（`private`、`friends`、`public`），`join_policy` 只回答加入资格（`invite_only`、`friends`、`public`），`require_approval` 独立表达「符合范围但需房主批准」。房间码、邀请链接和大厅入口都只是入口，服务端在每条入口上都走同一套加入鉴权。
+
+### Added
+
+- `GET /api/v1/multiplayer/sessions`：公开联机大厅，返回调用者可发现的活跃会话，支持 `page`（从 1 起）与 `limit`（最大 50，默认 20）。只包含 `visibility = public` 的会话、`visibility = friends` 且调用者是房主好友的会话，以及调用者自己已在房内的会话；`private` 会话永不出现。所需 scope 为 `multiplayer.read`。
+- `POST /api/v1/multiplayer/sessions` 新增可选请求字段 `require_approval`（布尔，缺省 `false`），并在会话对象中回显。开启后即使符合 `join_policy`，仍需通过加入请求由房主批准。
+- `GET /api/v1/multiplayer/capabilities` 新增 `visibility_join_policy_combinations`（九种合法组合的字符串列表）与 `require_approval`（恒为 `true`，表示服务端支持该字段）。
+
+### Changed
+
+- `visibility` 取值由 `private`、`friends`、`unlisted` 改为 `private`、`friends`、`public`；`join_policy` 取值由 `open`、`friends`、`request`、`invite_only` 改为 `invite_only`、`friends`、`public`。两个字段均为单选，任一组合都合法（此前 `private + open` 会被拒绝）。
+- `join_code` 的签发条件从 `visibility = unlisted` 改为 `join_policy = public`。房间码只用于定位会话并满足房主自身的 `allow_join` 隐私设置，**不再代表持有加入权限**：`invite_only` 仍要求有效邀请，`friends` 仍要求好友关系。
+- `POST /api/v1/multiplayer/sessions/{id}/join-requests` 的适用条件从 `join_policy = request` 改为 `require_approval = true`；`join_policy = invite_only` 不提供加入请求路径。
+- 会话对象新增 `require_approval` 字段。客户端应忽略未知的新增字段，因此旧客户端可继续读取 `visibility` 与 `join_policy`（见下方兼容说明）。
+
+### Deprecated
+
+- `visibility = unlisted` 与 `join_policy` 的旧取值 `open`、`request` 不再被接受。服务端在写入路径上已拒绝这些值。
+
+### Security
+
+- 服务端是唯一的加入裁决方，`visibility` 不再参与加入判定。九种组合下均按同一顺序检查：封禁 → 隐私设置 → `join_policy` → 容量 → `require_approval`。
+- 大厅列表只做投影：不返回 `code_hash`、中继内部字段或对端级网络数据；被任一方屏蔽的房主不会出现在列表中。
+
+### Notes
+
+- 数据库迁移 `MultiplayerVisibilityJoinPolicySplit1720000380000` 按**有效权限**而非枚举名称重映射历史行：`unlisted` 迁移为 `private` 并保留原 `join_policy`（`unlisted + open` → `private + public`，即旧房间码语义）；`private` 下非邀请的加入一律收敛为 `invite_only`；`join_policy = request` 迁移为 `require_approval = 1`。迁移可回滚。
+- 唯一的有意放宽：旧 `unlisted + friends` 会话此前好友也需要房间码，迁移后为 `private + friends`，好友可直接加入。`visibility = private` 仍保证其不出现在任何列表中。
+- 客户端 UX 建议收敛为两个单选：「谁能看到这个房间？」（仅自己 / 好友 / 所有人）与「谁能加入？」（仅受邀者 / 我的好友 / 所有人）。不要向普通用户暴露 `code`、`invite`、`friends_direct` 这类入口型复选项。
+
+Ref: #101
+
 ## Public API 1.6.0
 
 本次为富文本正文增加块级对齐与受信 HTML 区块，契约版本从 `1.5.0` 更新为 `1.6.0`。既有路由、必填参数和响应字段不变；新增节点与属性均为兼容性新增，不提交它们的旧客户端不受影响。

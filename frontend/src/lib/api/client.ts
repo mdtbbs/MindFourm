@@ -1652,6 +1652,11 @@ export const multiplayerApi = {
   setDefaultClient: (clientId: string | null) => requestV1<{ default_client_id: string | null }>('/multiplayer/preferences', {
     method: 'PATCH', body: JSON.stringify({ client_id: clientId ?? null }),
   }),
+  // Discovery only. `can_join` is never derived from this list — the join call
+  // returns the authoritative decision.
+  listSessions: (page = 1, limit = 20) => requestV1<{ data: MultiplayerSessionSummary[]; total: number; page: number; limit: number }>(
+    `/multiplayer/sessions?page=${page}&limit=${limit}`, { method: 'GET' },
+  ),
   createJoinIntent: (sessionId: string, joinCode?: string) => requestV1<{ intent_id: string; expires_in: number }>(
     `/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-intents`,
     { method: 'POST', body: JSON.stringify(joinCode ? { join_code: joinCode } : {}) },
@@ -1680,6 +1685,23 @@ export const multiplayerApi = {
     `/multiplayer/join-intents/${encodeURIComponent(intentId)}/consume`, { method: 'POST', body: JSON.stringify({}) },
   ),
 };
+
+export interface MultiplayerSessionSummary {
+  id: string;
+  owner_user_id: number;
+  /** Who can discover this Session. Never an input to the join decision. */
+  visibility: 'private' | 'friends' | 'public';
+  /** Who may join. Single-select; entry paths (room code, invite, lobby) are not permissions. */
+  join_policy: 'invite_only' | 'friends' | 'public';
+  /** When true, an eligible user still needs the owner to approve a join request. */
+  require_approval: boolean;
+  game: { id: string; version: string | null };
+  activity_name: string | null;
+  current_players: number;
+  max_players: number;
+  status: string;
+  expires_at: string;
+}
 
 export interface IncomingJoinRequest {
   id: string;
