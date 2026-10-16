@@ -51,7 +51,13 @@ export class MultiplayerVisibilityJoinPolicySplit1720000380000 implements Migrat
       `UPDATE \`${TABLE}\` SET require_approval = 1 WHERE join_policy = 'request'`,
     );
 
-    // 3. Remap join_policy while the legacy `visibility` values are still readable.
+    // 3. Permit the new value before remapping rows. MySQL rejects (or truncates)
+    //    an UPDATE that writes `public` while the legacy ENUM still lacks it.
+    //    This also repairs a partially applied run: `require_approval` may already
+    //    exist, but the legacy join_policy ENUM is still intact.
+    await this.expandJoinPolicyForPublic(queryRunner);
+
+    // 4. Remap join_policy while the legacy `visibility` values are still readable.
     //
     //    Order matters and each rule is *exclusive* on its legacy value:
     //    `unlisted` rows must be resolved before the `private` rules, because the
@@ -82,15 +88,15 @@ export class MultiplayerVisibilityJoinPolicySplit1720000380000 implements Migrat
       );
     }
 
-    // 4. `unlisted` becomes `private`; the room code (if any) keeps working because
+    // 5. `unlisted` becomes `private`; the room code (if any) keeps working because
     //    `join_policy` now carries that permission instead of the visibility value.
     await queryRunner.query(`UPDATE \`${TABLE}\` SET visibility = 'private' WHERE visibility = 'unlisted'`);
 
-    // 5. Only now shrink both enums — every row is guaranteed to hold a legal value.
+    // 6. Only now shrink both enums — every row is guaranteed to hold a legal value.
     await this.alignEnum(queryRunner, 'visibility', ['private', 'friends', 'public'], 'private');
     await this.alignEnum(queryRunner, 'join_policy', ['invite_only', 'friends', 'public'], 'friends');
 
-    // 6. The public lobby lists by (visibility, status, expires_at).
+    // 7. The public lobby lists by (visibility, status, expires_at).
     await createIndexIfMissing(queryRunner, TABLE, 'idx_multiplayer_sessions_discovery', ['visibility', 'status', 'expires_at']);
   }
 
@@ -133,5 +139,16 @@ export class MultiplayerVisibilityJoinPolicySplit1720000380000 implements Migrat
       `ALTER TABLE \`${TABLE}\` MODIFY COLUMN \`${column}\` ENUM(${values.map((value) => `'${value}'`).join(',')})
         NOT NULL DEFAULT '${fallback}'`,
     );
+  }
+
+  private async expandJoinPolicyForPublic(queryRunner: QueryRunner): Promise<void> {
+    const rows: Array<{ COLUMN_TYPE: string }> = await queryRunner.query(
+      `SELECT COLUMN_TYPE FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+      [TABLE, 'join_policy'],
+    );
+    const current = rows[0]?.COLUMN_TYPE;
+    if (!current || current.toLowerCase().includes("'public'")) return;
+    await this.alignEnum(queryRunner, 'join_policy', ['open', 'friends', 'request', 'invite_only', 'public'], 'open');
   }
 }

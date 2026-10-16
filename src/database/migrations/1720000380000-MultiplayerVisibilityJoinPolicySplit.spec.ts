@@ -35,11 +35,13 @@ function buildQueryRunner(rows: Row[], { columnPresent = false, indexPresent = f
     }
     if (statement.includes('CREATE INDEX `idx_multiplayer_sessions_discovery`')) { state.index = true; return [{ affectedRows: 0 }]; }
     if (statement.includes('MODIFY COLUMN `visibility`')) {
-      state.visibilityEnum = "enum('private','friends','public')";
+      const values = statement.match(/ENUM\(([^)]+)\)/)?.[1];
+      if (values) state.visibilityEnum = `enum(${values})`;
       return [{ affectedRows: 0 }];
     }
     if (statement.includes('MODIFY COLUMN `join_policy`')) {
-      state.joinPolicyEnum = "enum('invite_only','friends','public')";
+      const values = statement.match(/ENUM\(([^)]+)\)/)?.[1];
+      if (values) state.joinPolicyEnum = `enum(${values})`;
       return [{ affectedRows: 0 }];
     }
     if (statement.startsWith('UPDATE `multiplayer_sessions` SET require_approval')) {
@@ -49,6 +51,8 @@ function buildQueryRunner(rows: Row[], { columnPresent = false, indexPresent = f
     if (statement.includes('SET join_policy = ?')) {
       const [next, guard] = params!;
       if (guard !== next) return [{ affectedRows: 0 }];
+      const allowedValues = [...state.joinPolicyEnum.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+      if (!allowedValues.includes(next)) throw new Error(`Data truncated for column 'join_policy' at row 1`);
       for (const row of rows) if (matchesWhere(statement, row)) row.join_policy = next;
       return [{ affectedRows: 0 }];
     }
@@ -123,6 +127,7 @@ describe('MultiplayerVisibilityJoinPolicySplit1720000380000', () => {
 
     const ddl = queryRunner.query.mock.calls.map(([sql]) => String(sql));
     expect(ddl.some((sql) => sql.includes('ADD COLUMN `require_approval` TINYINT(1) NOT NULL DEFAULT 0'))).toBe(true);
+    expect(ddl.some((sql) => sql.includes("MODIFY COLUMN `join_policy` ENUM('open','friends','request','invite_only','public')"))).toBe(true);
     expect(ddl.some((sql) => sql.includes("MODIFY COLUMN `visibility` ENUM('private','friends','public')"))).toBe(true);
     expect(ddl.some((sql) => sql.includes("MODIFY COLUMN `join_policy` ENUM('invite_only','friends','public')"))).toBe(true);
     expect(ddl.some((sql) => sql.includes('CREATE INDEX `idx_multiplayer_sessions_discovery`'))).toBe(true);
@@ -141,6 +146,22 @@ describe('MultiplayerVisibilityJoinPolicySplit1720000380000', () => {
     expect(ddl.some((sql) => sql.includes('CREATE INDEX'))).toBe(false);
     // The remap probes still run, so a partially migrated table converges.
     expect(ddl.some((sql) => sql.includes('SET join_policy = ?'))).toBe(true);
+  });
+
+  it('recovers when the approval column was added before the legacy enum failed', async () => {
+    const queryRunner = buildQueryRunner([
+      { visibility: 'unlisted', join_policy: 'open', require_approval: 0 },
+      { visibility: 'unlisted', join_policy: 'request', require_approval: 1 },
+    ], { columnPresent: true });
+    await new MultiplayerVisibilityJoinPolicySplit1720000380000().up(queryRunner as any);
+
+    const ddl = queryRunner.query.mock.calls.map(([sql]) => String(sql));
+    expect(ddl.some((sql) => sql.includes('ADD COLUMN `require_approval`'))).toBe(false);
+    expect(ddl.some((sql) => sql.includes("MODIFY COLUMN `join_policy` ENUM('open','friends','request','invite_only','public')"))).toBe(true);
+    expect(queryRunner.rows).toEqual([
+      { visibility: 'private', join_policy: 'public', require_approval: 0 },
+      { visibility: 'private', join_policy: 'public', require_approval: 1 },
+    ]);
   });
 
   it('restores the legacy vocabulary on rollback', async () => {
