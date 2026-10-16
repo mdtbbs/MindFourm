@@ -7,7 +7,7 @@
 - [`docs/README.md`](docs/README.md)：中文文档索引和阅读入口。
 - `docs/product/*.md`：面向论坛用户与开发者的功能概览、产品更新日志和公开计划；在线入口为 `/api/v1/docs/product-*`。
 - [`docs/api/README.md`](docs/api/README.md)：Public V1 边界、认证、响应、OpenAPI 和客户端文档入口。
-- `docs/api/*.md`：Public V1 OAuth/PKCE、资源、游戏内容、多人联机、云存档、错误码、富文本、Changelog 和生命周期契约。
+- `docs/api/*.md`：Public V1 OAuth/PKCE、资源、游戏内容、多人联机（含[第三方联机接入指南](docs/api/multiplayer-guide.md)）、云存档、错误码、富文本、Changelog 和生命周期契约。公开导航按 Public API / Infrastructure-only 分栏；服务端集成、Relay Agent 机器接口与 LanLink 管理接口不进入公开导航。
 - [`docs/resource-storage.md`](docs/resource-storage.md)：RES 上传、binding 生命周期、历史兼容及手动迁移。
 - [`docs/resource-storage-reconciliation.md`](docs/resource-storage-reconciliation.md)：Forum↔RES 对账、审计和显式修复边界。
 - [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 的资源、版本、成员、审核、分析、manifest 与接口。

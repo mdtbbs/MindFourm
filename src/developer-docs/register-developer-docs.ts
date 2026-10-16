@@ -24,6 +24,13 @@ interface DocPage {
 const PUBLIC_SITE = 'https://mdtbbs.cn';
 const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 
+/**
+ * Navigation is split by contract status, not by subject: everything under a
+ * `Public API` group is served from the public V1 contract (OAuth + Multiplayer
+ * V1 among it), and the trailing `Infrastructure-only` group only carries the
+ * boundary statement. Internal machine interfaces never appear here — a table
+ * of contents is a promise, and linking their operation details would make one.
+ */
 const NAV_GROUPS = [
   {
     label: '论坛与版本',
@@ -41,7 +48,7 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: '认证',
+    label: 'Public API · 认证',
     items: [
       { href: '/api/v1/docs/oauth', label: '第三方客户端授权' },
       { href: '/api/v1/docs/authentication', label: '身份认证' },
@@ -49,18 +56,19 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: '核心 API',
+    label: 'Public API · 核心接口',
     items: [
       { href: '/api/v1/docs/first-party', label: '论坛 API' },
       { href: '/api/v1/docs/game-content', label: '游戏内容 API' },
       { href: '/api/v1/docs/resources', label: '资源中心 API' },
       { href: '/api/v1/docs/multiplayer', label: '多人联机 API' },
+      { href: '/api/v1/docs/multiplayer-guide', label: '第三方联机接入指南' },
       { href: '/api/v1/docs/cloud-saves', label: '云存档 API' },
       { href: '/api/v1/docs/blobs', label: 'Blob 存储 API' },
     ],
   },
   {
-    label: '参考',
+    label: 'Public API · 参考',
     items: [
       { href: '/api/v1/docs/errors', label: '错误代码' },
       { href: '/api/v1/docs/rich-content', label: '富文本格式' },
@@ -68,6 +76,12 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/changelog', label: 'API 更新记录' },
       { href: '/api/v1/docs/lifecycle', label: 'API 生命周期' },
       { href: '/api/v1/debugger', label: '在线调试' },
+    ],
+  },
+  {
+    label: 'Infrastructure-only · 不属公开契约',
+    items: [
+      { href: '/api/v1/docs/multiplayer-guide#公开-api-与仅基础设施边界', label: '公开 / 内部边界' },
     ],
   },
 ];
@@ -81,6 +95,7 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   'game-content': 'game-content-v1.md',
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
+  'multiplayer-guide': 'multiplayer-guide.md',
   'cloud-saves': 'cloud-saves-v1.md',
   blobs: 'blobs-v1.md',
   changelog: 'changelog-v1.md',
@@ -511,6 +526,7 @@ function renderHome(forumVersion: string): string {
         <a class="card" href="/api/v1/docs/resources"><strong>启动器与资源管理器</strong><span>浏览资源、读取清单、检查文件摘要、依赖和版本，再进行下载同步。</span></a>
         <a class="card" href="/api/v1/docs/oauth"><strong>桌面端、Android 与 Mod 登录</strong><span>使用 MindAuth OAuth 和 PKCE 获取用户授权，不在客户端收集密码。</span></a>
         <a class="card" href="/api/v1/docs/public-client"><strong>论坛客户端</strong><span>接入讨论、回复、用户资料、通知和社交能力。</span></a>
+        <a class="card" href="/api/v1/docs/multiplayer-guide"><strong>第三方联机接入</strong><span>从应用申请到会话、中继与实时事件的完整联机路径与凭据边界。</span></a>
       </div>`, 'scenarios')}
     ${section('先运行一个请求', `
       <p>下面的示例读取最近 10 张地图，可作为游戏内浏览器或启动器地图页的起点。</p>

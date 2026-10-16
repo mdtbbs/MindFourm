@@ -30,6 +30,11 @@
       script: npm run openapi:check
     - name: test Public V1 changelog guard
       script: npm run test:api-changelog
+    # Keep the runtime API guides free of dead links: the Markdown guide renderer
+    # rewrites `](file.md)` to served slugs, so a broken target or a removed
+    # `#anchor` only shows up as a 404 on the developer site otherwise.
+    - name: check runtime API guide links
+      script: npm run check:docs-links
 
 .frontend: &frontend
   name: frontend-quality-gates

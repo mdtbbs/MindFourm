@@ -90,6 +90,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # Lint the guides themselves: an unresolvable guide link or a stale
+      # `#anchor` is a dead link on the developer site, and neither the
+      # renderer nor the OpenAPI checks look at Markdown link targets.
+      - name: Check runtime guide links and anchors
+        run: npm run check:docs-links
+
       - name: Verify runtime Markdown guides are present
         run: |
           missing=0
@@ -101,6 +107,7 @@ jobs:
             game-content-v1.md \
             resources-v1-contract.md \
             multiplayer-v1.md \
+            multiplayer-guide.md \
             cloud-saves-v1.md \
             changelog-v1.md \
             lifecycle-v1.md; do

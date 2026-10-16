@@ -14,7 +14,9 @@
 | --- | --- | --- | --- |
 | 第三方客户端 V1 | `/api/v1` | 网页、官方客户端、Mindustry 模组、第三方启动器 | 稳定契约；OAuth 权限范围与论坛策略共同控制 |
 | 历史与内部接口 | `/api/*` | 论坛前端、后台和兼容代码 | 不承诺长期兼容第三方 |
-| 服务间集成 | 受信任的服务端调用 | 私有部署契约 |
+| 服务间集成 | 受信任的服务端调用 | 私有部署契约；机器接口不进入公开导航 |
+
+公开导航与公开 OpenAPI 只包含稳定 Public API（OAuth 与 Multiplayer V1 等）。服务端集成接口、Relay Agent 机器接口、LanLink Broker 与管理接口属于基础设施边界，不在本目录提供操作说明，也不从公开客户端文档链接到其操作细节。
 
 服务间集成是私有基础设施，不纳入第三方客户端接入示例，也不出现在公开 V1 OpenAPI 中，包括：External API Key（`/api/external/v1/*`）、LanLink 身份接口（`/api/external/v1/lanlink/*`、`/api/auth/validate-credentials`）与多中继 Agent 机器接口（`MULTIPLAYER_RELAY_MACHINE_CREDENTIAL`）。仓库侧的 [`external.md`](./external.md) 只作为部署方的服务端集成说明维护，不随公开门户发布。
 
@@ -44,6 +46,7 @@
 - [游戏内容 API V1](./game-content-v1.md)
 - [资源中心 API V1](./resources-v1-contract.md)：包含公开发现榜单、推荐算法版本、计分公式、候选窗口与隐私边界；在线地址为 `/api/v1/docs/resources`。
 - [多人联机 API V1](./multiplayer-v1.md)
+- [第三方联机接入指南](./multiplayer-guide.md)：从应用申请到会话、中继与实时事件的端到端路径；也记录公开 API / 基础设施边界的表达方式。
 - [云存档 API V1](./cloud-saves-v1.md)
 - [通用 Blob 存储 V1](./blobs-v1.md)
 - [公开 V1 错误代码](./errors-v1.md)

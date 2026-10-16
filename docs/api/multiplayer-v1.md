@@ -13,6 +13,28 @@
 
 公共 JSON 接口位于 `/api/v1/*`，成功响应使用 `{data, meta}`，错误通过稳定的 `error.code` 标识。论坛 Cookie 和移动端会话继续按第一方规则处理；MindAuth Bearer 按请求所需的权限范围校验。第三方联机功能还受站点开关和应用能力审核控制。
 
+## 接入角色与允许路径
+
+| 角色 | 允许的路径 | 当前状态 |
+| --- | --- | --- |
+| 第三方 Mod / 启动器 / 桌面客户端 | MindAuth 公开客户端 OAuth + `/api/v1/presence/*`、`/api/v1/multiplayer/*`、`/api/v1/realtime/*` | 公开；以站点开关与应用能力审核结果为准 |
+| 第三方游戏服务（server-to-server） | 无公共身份接口 | **未开放**；服务端凭证不属于公开客户端契约 |
+| Relay Agent operator | 无公开机器接口说明 | 未作为第三方产品开放，属于 MDTBBS 基础设施边界 |
+
+本页只描述上表第一行的公开契约。第三方客户端提交的 `client_id`、对端 role 一类身份字段不会被采纳：`client_id` 由服务端从 MindAuth 令牌内省结果派生，未被接口声明的字段由请求校验拒绝。
+
+## 三道独立门槛
+
+联机 API 同时受三道门槛约束，缺一即失败：
+
+| 门槛 | 控制方 | 失败表现 |
+| --- | --- | --- |
+| OAuth 权限范围（用户授权） | 用户在 MindAuth 授权页逐项同意；论坛按令牌实际授予的 scope 校验 | 403 `INSUFFICIENT_SCOPE` |
+| 应用能力（应用许可） | MindAuth 应用审核：`supports_multiplayer`、`supports_presence`、`supports_join_intent` | 403 `CLIENT_CAPABILITY_NOT_APPROVED` |
+| 站点功能开关（平台开放） | 站点运营配置：会话、邀请、中继与第三方联机开关 | 403 `FEATURE_DISABLED` |
+
+创建公开客户端是自助的，联机与在线状态能力需要审核；论坛不维护第二套应用 allowlist。能力检查按 MindAuth 标记的第一方分类放行：只有明确标记为第一方的 OAuth 客户端跳过第三方能力检查，其余令牌（包括缺少分类信息的）一律按第三方处理（fail-closed），`/api/v1/multiplayer/*` 的受保护操作检查 `supports_multiplayer`。Presence 的创建连接与发布活动对标记为第三方的令牌检查 `supports_presence`；其余 Presence 操作不重复校验该能力。
+
 ## 接口一览
 
 | 方法 | 路径 | 权限范围 | 用途 |
@@ -344,7 +366,7 @@ Content-Type: application/json
 }
 ```
 
-`credential` 是短期秘密，只允许放入 WSS 第一条 AUTH 文本帧，不可放在 URL、查询参数、日志或分析事件里。凭证使用方式和 HTTPS 代理服务协议见下文中继专节。
+`credential` 是短期秘密，只允许放入 WSS 第一条 AUTH 文本帧，不可放在 URL、查询参数、日志或分析事件里。中继凭证的时效、消费与撤销语义见[生命周期与时效](#生命周期与时效)，端到端接法见[第三方联机接入指南](./multiplayer-guide.md)。
 
 中继 Agent 向论坛边缘提交中继状态时使用的机器接口与 `MULTIPLAYER_RELAY_MACHINE_CREDENTIAL` 凭证属于私有基础设施：它们不面向第三方客户端，不出现在公开 V1 OpenAPI 中，也不能被客户端代码依赖。第三方客户端与中继服务之间的公开契约只有本文件描述的凭证分配与数据通道部分。
 
@@ -371,20 +393,94 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 
 服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。每条事件包含 `id`、`event`、`timestamp`、`data`；用户和会话事件可分别订阅。事件流最多保留 600 秒，恢复最多补发 200 条；游标已过期或无法恢复时，客户端应重新读取快照。对端状态以 API 返回的最新会话和对端快照为准。
 
+连接与协议约束：票据校验失败以关闭码 4401 `AUTH_REQUIRED` 拒绝；来源与站点不同源时以 4403 `ORIGIN_DENIED` 拒绝。`subscribe` 最多同时订阅 32 个会话，且调用者必须是这些会话的活跃对端，否则对该会话返回 `error` 帧 `SESSION_PERMISSION_DENIED`。单条客户端消息上限 16 KiB，超过时由协议层关闭连接；无法解析的消息返回 `error` 帧（当前实现为通用 `ACTIVITY_INVALID`）。`hello` 中的 `client_id` 来自票据签发时的已认证客户端，客户端无法在帧内替换。
+
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
 `multiplayer.join_request.approved` 发给申请者的原 OAuth 客户端，`data` 包含 `join_request_id`、`session_id` 和可传给启动器的 `intent_id`。批准事件会在处理完成前重发；`intent_id` 在批准后 10 分钟失效。相同用户和客户端在结果恢复窗口内重新使用意图会得到相同结果。客户端只有在成功使用意图后才发送确认消息；崩溃后收到新事件 ID 时，可重复使用意图并恢复结果。
 
 ## 功能可用性
 
-多人联机能力按站点配置和应用审核状态动态启用。客户端应先读取 `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities`，并在功能不可用时按稳定错误码提示用户。服务器部署、中继服务注册和运维配置不属于第三方公开 API。
+多人联机能力按站点配置与应用审核状态动态启用。客户端应先读取 `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities`，并在功能不可用时按稳定错误码提示用户。服务器部署、中继服务注册和运维配置不属于第三方公开 API；Relay Agent 的注册、心跳、分配确认与撤销只由基础设施侧使用，不在公开接口中。
 
-中继凭证是短期秘密。客户端只应在 WSS 建连后的首个认证帧中使用，并在内存中短暂保留；不得放入 URL、查询参数、子协议名、日志或分析事件。收到 `auth_ok` 后，后续二进制帧按已公布的客户端数据通道格式传输。
+## 限流
+
+限流按「已认证用户 > 会话 > IP」身份粒度、按接口独立计桶；达到上限返回 HTTP 429 `RATE_LIMITED`，并带 `Retry-After`（固定窗口剩余秒数）。未单独声明的读接口默认约 1200/60s，写接口默认约 180/60s。联机与在线状态的更严格限制：
+
+| 接口 | 限制 |
+| --- | --- |
+| `POST /sessions`、`POST /sessions/{id}/join-requests`、`POST /sessions/{id}/relay` | 10/60s |
+| `POST /sessions/{id}/join`、`POST /join-intents/{id}/consume` | 30/60s |
+| `POST /invites`、`POST /sessions/{id}/join-intents` | 20/60s |
+| `POST /sessions/{id}/candidates`、`GET .../peers/{peerId}/candidates` | 120/60s |
+| `POST /presence/connections` | 20/60s |
+| `POST /presence/connections/{id}/heartbeat` | 60/60s |
+| `PUT /presence/connections/{id}/activity`、`PATCH /social/privacy` | 30/60s |
+| `GET /social/friends/presence` | 60/60s |
+| `POST /realtime/tickets` | 30/60s |
+
+限额属于站点策略，运行时可能收紧；不要以“上次能通过”推断当前额度。
+
+## 撤销与生效边界
+
+| 事件 | 对新请求 | 对已建立的会话 / 连接 |
+| --- | --- | --- |
+| MindAuth OAuth 撤销 | 被拒绝；论坛内省缓存 30 秒，最迟约 30 秒内生效 | 不被主动断开；重连与刷新会失败 |
+| 账号封禁 | 被拒绝；封禁缓存最长 10 秒 | 不被主动断开，持续到自然结束 |
+| 应用能力撤销 | 被拒绝（含会话、邀请、加入、中继与 Presence 创建/活动） | 不被主动中止 |
+| 站点开关关闭 | 被拒绝 | 不被主动断开；中继开关关闭时不再分配新凭证，既有凭证到期即止 |
+
+这些时效是当前实现值，用于客户端设计，**不构成 SLA 承诺**。未承诺“撤销即断开”，客户端应自行处理凭证到期与状态快照。
+
+## 隐私与日志边界
+
+不得记录或外泄：访问令牌、刷新令牌、`client_secret`、论坛服务端资源服务器凭据、Relay 凭证、实时票据、Relay Agent 机器凭据、External API Key，以及邮箱、手机号、IP 等用户 PII 明细。候选 `metadata` 与活动文本也不要携带上述内容。排查问题时只保留 HTTP 状态、稳定错误码、`meta.request_id` 与散列后的标识。
+
+## 生命周期与时效
+
+逐项列出签发者、受众、TTL、续期与消费/重放语义。均为当前实现值，客户端据此设计超时；**未承诺 SLA**。
+
+| 对象 | 签发者 | 受众 / 绑定 | TTL | 续期 | 消费 / 重放 |
+| --- | --- | --- | --- | --- | --- |
+| OAuth 访问令牌 | MindAuth | 不透明令牌，客户端不解析 | 由 MindAuth 决定（[接入指南](./public-client-v1.md)记录约 1 小时） | refresh_token 轮换 | 刷新令牌按轮换语义，不重放旧值 |
+| Presence 连接 | 论坛 | 用户 + 客户端 | 90 秒 | 30 秒心跳 | 非一次性；删除即失效 |
+| 会话 | 论坛 | 房主账号 | 创建后 4 小时 | 不可续期 | 到期或关闭后不可加入 |
+| Peer 恢复令牌 | 论坛 | 用户 + OAuth 客户端 + 对端 | 随会话 | 每次恢复轮换 | 单次消费；旧令牌作废 |
+| 邀请 | 论坛 | 目标用户 | 5 分钟 | 不可续期 | 接受一次；重复接受按可恢复语义返回 |
+| 加入请求 | 论坛 | 房主 | 5 分钟 | 不可续期 | 批准一次；批准后意图 10 分钟 |
+| 加入意图 | 论坛 | 用户（批准类另绑定 OAuth 客户端） | 首次使用 60 秒 | 不可续期 | 单次消费；恢复窗口内重放返回同结果 |
+| 网络候选 | 客户端（论坛存储） | 同会话对端 | 90 秒 | 重复发布续期 | 非一次性；可删除 |
+| Relay 分配与凭证 | 论坛 | 指定 Relay Agent + 对端 | 120 秒 | 已连接可续期（同一连接身份） | Agent 单次消费；同连接重试允许 |
+| 实时票据 | 论坛 | 用户 + 客户端 | 60 秒 | 不可续期 | 单次消费；连接即失效 |
+| 实时事件流 | 论坛 | 会话对端 / 用户 | 保留 600 秒 | 不可续期 | 恢复最多补发 200 条 |
+
+Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_id`、`peer_id`、`agent_id` 与到期时间；它只对签发的那个 Agent 与该分配有效。**未承诺**固定网络路径、区域选择、时延指标或 Agent 侧 TCP/WSS 物理断开的时刻，这些属于基础设施边界。
 
 ## 错误码
 
-稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。客户端依据 `error.code` 和 HTTP 状态处理错误，不依赖提示文字。
+稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
+
+客户端依据 `error.code` 和 HTTP 状态处理错误，不依赖提示文字。主要码的语义：
+
+| code | HTTP | 可重试 | 幂等 / 重试纪律 |
+| --- | --- | --- | --- |
+| `INVALID_TOKEN` | 401 | 否 | 刷新或重新授权后再试 |
+| `INSUFFICIENT_SCOPE` | 403 | 否 | 用户重新授权补 scope |
+| `CLIENT_CAPABILITY_NOT_APPROVED` | 403 | 否 | 等待或修订应用审核状态 |
+| `FEATURE_DISABLED` | 403 | 否 | 站点未开放，隐藏入口 |
+| `SESSION_FULL` | 409 | 否 | 换会话或稍后重试 |
+| `SESSION_NOT_JOINABLE` / `JOIN_REQUEST_REQUIRED` | 400 / 409 | 否 | 换加入路径（邀请或审批） |
+| `PEER_RESUME_INVALID` | 403 | 否 | 恢复令牌单次消费，不得重放 |
+| `CANDIDATE_LIMIT_REACHED` | 429 | 是 | 已有上限内的候选，不必重复发布 |
+| `JOIN_INTENT_CONSUMED` | 409 | 否 | 仅恢复窗口内存活时重试才有意义 |
+| `JOIN_INTENT_RECOVERY_EXPIRED` | 410 | 否 | 重新走邀请 / 批准流程 |
+| `JOIN_INTENT_RECOVERY_UNAVAILABLE` | 503 | 是 | 指数退避 |
+| `RELAY_UNAVAILABLE` / `RELAY_LIMIT_REACHED` | 503 / 429 | 是 | 指数退避；已连接时沿用同一连接身份续期 |
+| `RATE_LIMITED` | 429 | 是 | 至少等待 `Retry-After` |
+
+个别路由可能在该码的注册状态之外返回 404（例如删除不存在的候选返回 404 `CANDIDATE_INVALID`）。控制流按 `error.code`，状态码只作辅助判断。
 
 ## 客户端恢复
 
-实时消息事件用于低延迟更新界面，不应取代 API 快照。断线或收到 `resume_failed` 后重新读取当前会话、好友和对端状态；对可重试的请求，按错误码、状态码和 `request_id` 处理。
+实时消息事件用于低延迟更新界面，不应取代 API 快照。断线或收到 `resume_failed` 后重新读取当前会话、好友和对端状态；对可重试的请求，按错误码、状态码和 `request_id` 处理。已消费的一次性凭据不因网络重试而恢复发放：按各资源的恢复语义处理，或回到快照重新建立状态。
+

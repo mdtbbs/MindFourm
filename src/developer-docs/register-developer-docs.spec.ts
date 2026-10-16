@@ -182,6 +182,33 @@ describe('developer docs routes', () => {
     expect(response.body).toContain('href="/api/v1/docs/lifecycle"');
   });
 
+  it('splits the navigation into Public API and Infrastructure-only sections', () => {
+    const html = renderDocumentationRoute('/api/v1');
+
+    expect(html).toContain('Public API · 认证');
+    expect(html).toContain('Public API · 核心接口');
+    expect(html).toContain('Infrastructure-only · 不属公开契约');
+    expect(html).toContain('href="/api/v1/docs/multiplayer-guide"');
+    // Internal machine interfaces must never become a navigation promise.
+    expect(html).not.toContain('/api/external/v1');
+    expect(html).not.toContain('/internal/v1/relay');
+  });
+
+  it('serves the third-party multiplayer guide with its end-to-end contract', () => {
+    const html = renderDocumentationRoute('/api/v1/docs/multiplayer-guide');
+
+    expect(html).toContain('<h1>第三方联机接入指南</h1>');
+    expect(html).toContain('三道独立门槛');
+    expect(html).toContain('CLIENT_CAPABILITY_NOT_APPROVED');
+    expect(html).toContain('FEATURE_DISABLED');
+    expect(html).toContain('INSUFFICIENT_SCOPE');
+    expect(html).toContain('公开 API 与仅基础设施边界');
+    // Confidential credentials must be named as forbidden, never demonstrated.
+    expect(html).toContain('client_secret');
+    expect(html).not.toContain('mfk_live');
+    expect(html).not.toContain('dev123');
+  });
+
   it('publishes the blob guide with its served-type rule', () => {
     const html = renderDocumentationRoute('/api/v1/docs/blobs');
 
