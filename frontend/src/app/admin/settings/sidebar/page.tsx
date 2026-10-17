@@ -57,7 +57,7 @@ export default function SidebarNavigationSettingsPage() {
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">侧栏导航</h2>
         <p className="text-xs text-surface-400 mt-1">
-          配置论坛侧边栏的导航项目，支持排序、启用/禁用和登录限制。
+          历史侧栏配置已保留供兼容读取；MDTBBS 固定 App Shell 不再使用这些项目生成主导航。
         </p>
       </div>
 
@@ -65,7 +65,8 @@ export default function SidebarNavigationSettingsPage() {
         {loadError && <Alert type="error" message={loadError} />}
 
         <div className="border border-surface-200 bg-surface-50 p-4 text-xs text-surface-600 space-y-2">
-          <div className="font-semibold text-surface-700">配置说明</div>
+          <div className="font-semibold text-surface-700">旧配置说明</div>
+          <div>保存这些项目不会改变前台桌面侧栏或移动底栏；主导航固定为首页、社区、资源、联机、工具和我的。</div>
           <div>每个项目需要一个唯一标识、显示标签、跳转链接和图标。</div>
           <div>链接只能使用以 <code>/</code> 开头的站内地址或 <code>https://</code> 外链。</div>
           <div>勾选「需要登录」后，未登录用户将看不到该项目。</div>

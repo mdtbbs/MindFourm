@@ -114,7 +114,7 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
           title={reaction.reacted ? t('reaction.cancel') : t('reaction.react')}
           className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
             reaction.reacted
-              ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
+              ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-text)]'
               : 'border-[var(--border)] bg-[var(--bg)] text-[var(--text-secondary)] hover:border-[var(--primary)]'
           }`}
         >
@@ -132,7 +132,7 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
         aria-label={t('reaction.add')}
         title={t('reaction.add')}
         data-testid={`reaction-add-${targetType}-${targetId}`}
-        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] p-1 text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] p-1 text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
       >
         <SmilePlus className="h-4 w-4" />
       </button>

@@ -178,7 +178,7 @@ export default function ResourceModerationTable() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setSelectedResource(r)}
-                      className="text-sm text-[var(--primary)] hover:underline"
+                      className="text-sm text-[var(--primary-text)] hover:underline"
                     >
                       <Eye className="w-4 h-4 inline" /> 查看
                     </button>

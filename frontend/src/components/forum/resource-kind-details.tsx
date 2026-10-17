@@ -5,6 +5,7 @@ import { resourceApi } from '@/lib/api/client';
 import { resourceCardFacts, resourceFileSummary } from '@/lib/resources/presentation';
 import { useI18n } from '@/i18n/provider';
 import PackManifestPanel from './resources/detail/pack-manifest-panel';
+import { normalizeMapWaves, summarizeMapTileResources } from '@/lib/resources/map-analysis';
 
 type ContentEntry = { name: string; icon: string | null };
 type ProductionEntry = { id: string; name?: string; rate?: number; produced?: number; consumed?: number; net?: number; estimated?: boolean };
@@ -68,24 +69,33 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
   const production = metadata.production && typeof metadata.production === 'object' ? metadata.production as Record<string, any> : null;
   const productionItems = (production?.items || {}) as ProductionFlow;
   const productionLiquids = (production?.liquids || {}) as ProductionFlow;
+  const mapWaves = kind === 'map' ? normalizeMapWaves(metadata.wave_groups) : [];
+  const mapResources = kind === 'map' ? summarizeMapTileResources(metadata.tile_layers) : [];
   const itemIds = [...new Set(requirements.map((item) => item.item).filter((id): id is string => typeof id === 'string' && id.length > 0))];
   const blockIds = [...new Set(blockTypes.map((item) => item.name).filter((id): id is string => typeof id === 'string' && id.length > 0))];
   const productionItemIds = [...new Set(['inputs', 'outputs', 'internal'].flatMap((part) => productionItems[part as keyof ProductionFlow] || []).map((entry) => entry.id))];
   const productionLiquidIds = [...new Set(['inputs', 'outputs', 'internal'].flatMap((part) => productionLiquids[part as keyof ProductionFlow] || []).map((entry) => entry.id))];
   const productionWarningBlockIds = Array.isArray(production?.warnings) ? production.warnings.map((warning: { blockId?: unknown }) => warning.blockId).filter((id: unknown): id is string => typeof id === 'string') : [];
-  const allItemIds = [...new Set([...itemIds, ...productionItemIds])];
-  const allBlockIds = [...new Set([...blockIds, ...productionWarningBlockIds])];
+  // Item deposits resolve as items, wall-ore deposits as blocks, and liquids
+  // through the liquid catalog, so each map deposit entry gets a real name and
+  // icon instead of its internal id.
+  const mapDepositItemIds = mapResources.filter((item) => item.resource_type === 'item').map((item) => item.internal_name);
+  const mapDepositBlockIds = mapResources.filter((item) => item.resource_type === 'ore').map((item) => item.internal_name);
+  const mapDepositLiquidIds = mapResources.filter((item) => item.resource_type === 'liquid').map((item) => item.internal_name);
+  const allItemIds = [...new Set([...itemIds, ...productionItemIds, ...mapDepositItemIds])];
+  const allBlockIds = [...new Set([...blockIds, ...productionWarningBlockIds, ...mapDepositBlockIds])];
+  const allLiquidIds = [...new Set([...productionLiquidIds, ...mapDepositLiquidIds])];
   const [contentMetadata, setContentMetadata] = useState<{ items: Record<string, ContentEntry>; blocks: Record<string, ContentEntry>; liquids: Record<string, ContentEntry> }>({ items: {}, blocks: {}, liquids: {} });
   useEffect(() => {
-    if (!allItemIds.length && !allBlockIds.length && !productionLiquidIds.length) { setContentMetadata({ items: {}, blocks: {}, liquids: {} }); return; }
+    if (!allItemIds.length && !allBlockIds.length && !allLiquidIds.length) { setContentMetadata({ items: {}, blocks: {}, liquids: {} }); return; }
     let active = true;
-    resourceApi.getMindustryContentMetadata(allItemIds, allBlockIds, productionLiquidIds)
+    resourceApi.getMindustryContentMetadata(allItemIds, allBlockIds, allLiquidIds)
       .then((result) => { if (active) setContentMetadata(result); })
       .catch(() => { if (active) setContentMetadata({ items: {}, blocks: {}, liquids: {} }); });
     return () => { active = false; };
   // The IDs form a stable content identity for each schematic metadata payload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allItemIds.join(','), allBlockIds.join(','), productionLiquidIds.join(',')]);
+  }, [allItemIds.join(','), allBlockIds.join(','), allLiquidIds.join(',')]);
   const sortedRequirements = [...requirements].sort((left, right) => (right.amount || 0) - (left.amount || 0));
   const sortedBlockTypes = [...blockTypes].sort((left, right) => (right.count || 0) - (left.count || 0));
   const extendedMapData = ([
@@ -139,6 +149,33 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
         {typeof metadata.waves === 'boolean' && <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.waves')}</dt><dd className="text-[var(--text)]">{metadata.waves ? t('resourceKindDetails.enabled') : t('resourceKindDetails.disabled')}</dd></div>}
         {typeof metadata.core_count === 'number' && <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.cores')}</dt><dd className="text-[var(--text)]">{t('resourceKindDetails.count', { count: new Intl.NumberFormat(locale).format(metadata.core_count) })}{Array.isArray(metadata.core_teams) && metadata.core_teams.length ? ` · ${metadata.core_teams.join('、')}` : ''}</dd></div>}
       </dl>
+      {(mapResources.length > 0 || mapWaves.length > 0) && <div className="mt-5 grid gap-5 border-t border-[var(--border)] pt-5 lg:grid-cols-2">
+        {mapResources.length > 0 && <section className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="text-base font-semibold text-[var(--text)]">{t('resourceKindDetails.mapResources')}</h3><span className="text-xs text-[var(--text-muted)]">{t('resourceKindDetails.mapResourcesNote')}</span></div>
+          <ul className="space-y-1.5">{mapResources.map((item) => {
+            const content = item.resource_type === 'liquid'
+              ? contentMetadata.liquids[item.internal_name]
+              : contentMetadata.items[item.internal_name] || contentMetadata.blocks[item.internal_name];
+            const resourceTypeLabel = item.resource_type === 'liquid'
+              ? t('resourceKindDetails.resourceTypeLiquid')
+              : item.resource_type === 'ore' ? t('resourceKindDetails.resourceTypeOre') : t('resourceKindDetails.resourceTypeItem');
+            return <li key={`${item.resource_type}-${item.internal_name}`} className="flex min-w-0 items-center gap-2 text-sm">
+              <ContentIcon entry={content} kind="item" />
+              <span className="min-w-0 flex-1 truncate text-[var(--text)]">{content?.name || item.internal_name}</span>
+              <span className="shrink-0 text-xs text-[var(--text-muted)]">{resourceTypeLabel}</span>
+              <span className="shrink-0 font-semibold tabular-nums text-[var(--text)]">{t('resourceKindDetails.mapTileCount', { count: new Intl.NumberFormat(locale).format(item.tiles) })}</span>
+            </li>;
+          })}</ul>
+        </section>}
+        {mapWaves.length > 0 && <section className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="text-base font-semibold text-[var(--text)]">{t('resourceKindDetails.mapWaves')}</h3><span className="text-xs text-[var(--text-muted)]">{t('resourceKindDetails.mapWavesNote')}</span></div>
+          <ul data-testid="map-wave-summary" className="space-y-2">{mapWaves.slice(0, 24).map((wave, index) => <li key={`${wave.wave_start}-${wave.wave_end}-${index}`} className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 font-medium text-[var(--text)]"><span>{t('resourceKindDetails.mapWaveRange', { start: new Intl.NumberFormat(locale).format(wave.wave_start), end: wave.wave_end === null ? t('resourceKindDetails.mapWaveOngoing') : new Intl.NumberFormat(locale).format(wave.wave_end) })}</span>{wave.is_spike && <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-300">{t('resourceKindDetails.mapWaveSpike')}</span>}</div>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{t('resourceKindDetails.mapWaveEnemies', { count: wave.enemy_count === null ? '—' : new Intl.NumberFormat(locale).format(wave.enemy_count) })}{wave.boss_count > 0 ? ` · ${t('resourceKindDetails.mapWaveBosses', { count: new Intl.NumberFormat(locale).format(wave.boss_count) })}` : ''}{wave.air_ratio !== null ? ` · ${t('resourceKindDetails.mapWaveAirRatio', { percent: Math.round(wave.air_ratio * 100) })}` : ''}</p>
+          </li>)}</ul>
+          {mapWaves.length > 24 && <p className="mt-2 text-xs text-[var(--text-muted)]">{t('resourceKindDetails.mapWaveMore', { count: new Intl.NumberFormat(locale).format(mapWaves.length - 24) })}</p>}
+        </section>}
+      </div>}
       {(extendedMapData.length > 0 || dependencies.length > 0 || Boolean(metadata.rules && typeof metadata.rules === 'object')) && <details className="mt-5 border-t border-[var(--border)] pt-4"><summary className="cursor-pointer text-sm font-medium text-[var(--text-secondary)]">{t('resourceKindDetails.moreMapRules')}</summary><div className="mt-4 space-y-3 text-sm">{extendedMapData.map(([label, value]) => <p key={label}><span className="text-[var(--text-muted)]">{label}: </span>{value}</p>)}{dependencies.length > 0 && <p><span className="text-[var(--text-muted)]">{t('resourceKindDetails.requiredMod')}: </span>{[...new Set(dependencies)].join('、')}</p>}{Boolean(metadata.rules && typeof metadata.rules === 'object') && <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-[var(--bg-elevated)] p-3 text-xs">{JSON.stringify(metadata.rules, null, 2)}</pre>}</div></details>}
     </>}
     {kind === 'schematic' && <>

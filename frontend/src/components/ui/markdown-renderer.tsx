@@ -27,7 +27,7 @@ function headingId(children: ReactNode): string {
 
 export default function MarkdownRenderer({ content, fallback, className, mode = 'full' }: MarkdownRendererProps) {
   if (!content || content.trim().length === 0) {
-    return fallback ? <p className="text-[var(--text-muted)]">{fallback}</p> : null;
+    return fallback ? <div className={`mdtbbs-rich-content mdtbbs-rich-content--readonly ${className || ''}`}><p>{fallback}</p></div> : null;
   }
 
   if (mode === 'excerpt') {
@@ -37,12 +37,13 @@ export default function MarkdownRenderer({ content, fallback, className, mode = 
   const normalizedContent = normalizeStoredContent(content);
 
   return (
-    <div className={`prose prose-sm dark:prose-invert max-w-none ${className || ''}`}>
+    <div className={`mdtbbs-rich-content mdtbbs-rich-content--readonly ${className || ''}`}>
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
           h2: ({ children }) => <h2 id={headingId(children)}>{children}</h2>,
           h3: ({ children }) => <h3 id={headingId(children)}>{children}</h3>,
+          table: ({ children }) => <div className="tableWrapper"><table>{children}</table></div>,
           // Content images do not affect the initial route shell. Decoding them off
           // the main rendering path reduces jank on long threads and resource pages.
           img: ({ alt, src, node: _node, ...props }) => (

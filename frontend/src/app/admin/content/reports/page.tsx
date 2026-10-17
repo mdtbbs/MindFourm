@@ -113,7 +113,7 @@ export default function AdminReportsPage() {
             onClick={() => setStatus(option.value)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               status === option.value
-                ? 'bg-[var(--primary)] text-white'
+                ? 'bg-[var(--primary-button)] text-white'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
@@ -151,7 +151,7 @@ export default function AdminReportsPage() {
                     {new Date(report.created_at).toLocaleString('zh-CN')}
                   </time>
                   {href && (
-                    <Link href={href} target="_blank" className="text-[var(--primary)] hover:underline">
+                    <Link href={href} target="_blank" className="text-[var(--primary-text)] hover:underline">
                       查看内容
                     </Link>
                   )}

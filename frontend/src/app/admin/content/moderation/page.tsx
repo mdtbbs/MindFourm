@@ -285,7 +285,7 @@ export default function ModerationPage() {
                   ['资源类型', selected.data.resource_kind || selected.data.resource_type],
                   ['版本', selected.data.version || '—'],
                   ['分类', selected.data.category_name || '—'],
-                  ['解析状态', selected.data.renderer_status || '—'],
+                  ['解析状态', selected.data.resource_kind === 'mod' ? '见下方 Mod 静态解析结果' : selected.data.renderer_status || '—'],
                 ].map(([label, value], index) => (
                   <div key={label} className={`px-4 py-3 ${index % 2 ? 'sm:border-l' : ''} ${index > 1 ? 'border-t' : ''} border-surface-200`}>
                     <div className="text-[10px] uppercase tracking-wide text-surface-400">{label}</div>
@@ -384,7 +384,7 @@ export default function ModerationPage() {
                   <div className="flex justify-between"><dt className="text-surface-400">类型</dt><dd>{selected.kind === 'resource' ? selected.data.resource_kind || selected.data.resource_type : selected.data.item_type}</dd></div>
                   {selected.kind === 'resource' ? (
                     <>
-                      <div className="flex justify-between"><dt className="text-surface-400">解析</dt><dd>{selected.data.renderer_status || '未提供'}</dd></div>
+                      <div className="flex justify-between"><dt className="text-surface-400">{selected.data.resource_kind === 'mod' ? 'Mod 解析' : '解析'}</dt><dd>{selected.data.resource_kind === 'mod' ? '见审核详情' : selected.data.renderer_status || '未提供'}</dd></div>
                       <div className="flex justify-between"><dt className="text-surface-400">完整性</dt><dd>{selected.data.integrity || '—'}</dd></div>
                     </>
                   ) : null}

@@ -125,4 +125,10 @@ describe('migration registry', () => {
     expect(names).toContain('SearchIndexMaintenance1720000320000');
     expect(names.indexOf('ResourceVersionStoragePreviews1720000310000')).toBeLessThan(names.indexOf('SearchIndexMaintenance1720000320000'));
   });
+
+  it('registers the resource publication date after the direct upload drafts schema', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('ResourcePublishedAt1720000350000');
+    expect(names.indexOf('ResourceDirectUploadDrafts1720000340000')).toBeLessThan(names.indexOf('ResourcePublishedAt1720000350000'));
+  });
 });

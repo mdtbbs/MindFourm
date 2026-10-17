@@ -532,7 +532,7 @@ export class ResourceVersionService {
         await manager.save(ResourceAnalysisRun, manager.create(ResourceAnalysisRun, {
           resource_id: resource.id, resource_version_id: created.id,
           analyzer: 'mod-static-analysis', parser_version: modAnalysis.parser_version, status: 'completed',
-          summary_json: { runtime_type: modAnalysis.runtime_type, content_count: modAnalysis.content.length, localization_count: modAnalysis.localizations.length, java: modAnalysis.java },
+          summary_json: { status: modAnalysis.status, runtime_type: modAnalysis.runtime_type, content_count: modAnalysis.content.length, localization_count: modAnalysis.localizations.length, java: modAnalysis.java },
           findings_json: findings, started_at: new Date(), completed_at: new Date(),
         }));
         await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {

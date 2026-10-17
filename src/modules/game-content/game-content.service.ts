@@ -57,7 +57,7 @@ export class GameContentService {
 
   /** Keep the legacy game-content request contract while making RES the durable byte store. */
   private async uploadGameContentToRes(file: StoredResourceFile) {
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const object = await this.resClient.uploadServerGeneratedObject({
       body: createReadStream(file.file_path), sizeBytes: file.file_size, sha256: file.content_hash,
       mimeType: file.mime_type || 'application/octet-stream', filename: file.file_name, purpose: 'resource_version',
@@ -152,7 +152,10 @@ export class GameContentService {
     await this.domain.getById(resource.id, viewer || undefined);
     const unreviewedQuarantinedBinary = this.isQuarantinedPath(resource.file_path);
     const renderer = unreviewedQuarantinedBinary ? {} : this.parseObject(resource.renderer_metadata_json);
-    if (!unreviewedQuarantinedBinary && type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
+    // Older revisions persisted renderer metadata before production rates,
+    // build-time estimates and tile layers existed. Re-parse those once so the
+    // public detail projection stops reporting them as unavailable.
+    if (!unreviewedQuarantinedBinary) this.previews.ensureAnalysisMetadata(resource);
     const resPreviewUrl = unreviewedQuarantinedBinary ? null : await this.previews.getResPreviewUrl?.(resource) || null;
     const metadata = this.parseObject(resource.metadata_json);
     const [likeCount, favoriteCount, viewerLike, viewerFavorite] = await Promise.all([

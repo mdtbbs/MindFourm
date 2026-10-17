@@ -113,5 +113,12 @@
       "copyright": "侵权",
       "other": "其他"
     }
+  },
+  "richPresentation": {
+    "mode": "正文显示模式",
+    "edit": "编辑",
+    "preview": "预览",
+    "untitled": "未命名帖子",
+    "saveLocal": "保存到设备"
   }
 }

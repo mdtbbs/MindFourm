@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { isCloudSaveStorageConfigured } from './cloud-save-storage-config';
+import { isAbsoluteStoragePath } from '@common/utils/storage-path.util';
 import { CloudSaveStorageService } from './cloud-save-storage.service';
 
 describe('CloudSaveStorageService', () => {
@@ -21,10 +21,10 @@ describe('CloudSaveStorageService', () => {
   afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
   it('accepts only absolute, normalized, non-root paths', () => {
-    expect(isCloudSaveStorageConfigured(root)).toBe(true);
-    expect(isCloudSaveStorageConfigured('relative/cloud-saves')).toBe(false);
-    expect(isCloudSaveStorageConfigured('/')).toBe(false);
-    expect(isCloudSaveStorageConfigured(`${root}/../elsewhere`)).toBe(false);
+    expect(isAbsoluteStoragePath(root)).toBe(true);
+    expect(isAbsoluteStoragePath('relative/cloud-saves')).toBe(false);
+    expect(isAbsoluteStoragePath('/')).toBe(false);
+    expect(isAbsoluteStoragePath(`${root}/../elsewhere`)).toBe(false);
   });
 
   it('writes files under opaque per-user object keys and verifies exact size and checksum', async () => {

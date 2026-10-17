@@ -5,6 +5,10 @@ import { SEARCH_INDEX_CATALOG, SearchIndexAction } from './search-index.catalog'
 
 const MAINTENANCE_LOCK = 'mindforum:search-index-maintenance';
 
+function field(row: Record<string, unknown> | undefined, lower: string, upper: string): unknown {
+  return row?.[lower] ?? row?.[upper];
+}
+
 @Injectable()
 export class SearchIndexMaintenanceService {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
@@ -22,22 +26,27 @@ export class SearchIndexMaintenanceService {
       const [latestRun] = await this.dataSource.query(`SELECT id, action, status, actor_user_id, details_json,
           error_message, started_at, completed_at
         FROM search_index_maintenance_runs WHERE index_key = ? ORDER BY id DESC LIMIT 1`, [index.key]);
+      const actualRow = actual as Record<string, unknown> | undefined;
+      const tableRow = table as Record<string, unknown> | undefined;
+      const actualType = String(field(actualRow, 'index_type', 'INDEX_TYPE') || '');
+      const actualColumns = String(field(actualRow, 'columns_in_order', 'COLUMNS_IN_ORDER') || '');
       const expectedColumns = index.columns.join(',');
-      const ready = actual?.index_type === 'FULLTEXT' && actual.columns_in_order === expectedColumns;
+      const ready = actualType === 'FULLTEXT' && actualColumns === expectedColumns;
       return {
         key: index.key,
         table: index.table,
         index_name: index.name,
         columns: [...index.columns],
         status: ready ? 'ready' : actual ? 'drift' : 'missing',
-        actual: actual ? { type: actual.index_type, columns: actual.columns_in_order } : null,
-        engine: table?.engine || null,
-        estimated_rows: Number(table?.table_rows || 0),
+        actual: actual ? { type: actualType, columns: actualColumns } : null,
+        engine: field(tableRow, 'engine', 'ENGINE') || null,
+        estimated_rows: Number(field(tableRow, 'table_rows', 'TABLE_ROWS') || 0),
         latest_run: latestRun || null,
       };
     }));
+    const version = versionRow as Record<string, unknown> | undefined;
     return {
-      engine_version: String(versionRow?.version || 'unknown'),
+      engine_version: String(field(version, 'version', 'VERSION') || 'unknown'),
       maintenance: 'MySQL FULLTEXT indexes update on INSERT, UPDATE, and DELETE. Repair and rebuild operate on one allowlisted index per request.',
       indexes: results,
     };
@@ -67,8 +76,6 @@ export class SearchIndexMaintenanceService {
         GROUP BY index_name, index_type`, [index.table, index.name]);
       const columns = index.columns.map((column) => `\`${column}\``).join(', ');
       if (actual) {
-        // A single ALTER keeps the known index name present at the DDL boundary;
-        // MySQL rebuilds the FULLTEXT structure without touching source rows.
         await runner.query(`ALTER TABLE \`${index.table}\` DROP INDEX \`${index.name}\`, ADD FULLTEXT INDEX \`${index.name}\` (${columns})`);
       } else {
         await runner.query(`ALTER TABLE \`${index.table}\` ADD FULLTEXT INDEX \`${index.name}\` (${columns})`);

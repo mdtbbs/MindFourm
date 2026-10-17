@@ -64,6 +64,23 @@ describe('CapabilitiesService', () => {
     expect(settings.getBoolean).toHaveBeenCalledWith('feature_resources_v1_read_enabled', true);
   });
 
+  it('advertises blob storage only when the switch is on and the path is usable', async () => {
+    const build = (enabled: boolean, path: string | null) => new CapabilitiesService(
+      {
+        get: jest.fn(async (key: string) => key === 'blobs_storage_path' ? path : null),
+        getBoolean: jest.fn(async (key: string, fallback: boolean) => key === 'blobs_enabled' ? enabled : fallback),
+      } as any,
+      new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any),
+    );
+
+    await expect(build(true, '/srv/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: true }));
+    // Enabled but the path is unusable: the endpoint would answer 503, so the
+    // client must not be told the feature is available.
+    await expect(build(true, 'relative/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+    await expect(build(true, '/').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+    await expect(build(false, '/srv/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+  });
+
   it('advertises previews only when the forum-owned renderer is configured', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
     const service = new CapabilitiesService({ getBoolean: jest.fn().mockResolvedValue(false), get: jest.fn() } as any, new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any));
@@ -77,14 +94,14 @@ describe('CapabilitiesService', () => {
     process.env.RES_BASE_URL = 'http://127.0.0.1:4100';
     process.env.RES_API_KEY = 'res-secret';
     const operations = [
-      'schematic.read', 'schematic.write', 'schematic.logic.read', 'schematic.logic.text.write',
-      'map.read', 'map.terrain.write', 'map.rules.read', 'map.rules.write', 'map.waves.read', 'map.waves.write',
+      'schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write', 'schematic.logic.read', 'schematic.logic.text.write',
+      'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write', 'map.waves.read', 'map.waves.write',
     ];
     global.fetch = jest.fn(async (input) => {
       const url = String(input);
       const body = url.includes(':6100') ? {
         status: 'ok', protocolVersion: 2, buildDigest: 'a'.repeat(64),
-        runtime: { artifactSha256: 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57' },
+        runtime: { artifactSha256: '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0' },
         supportedOperations: operations,
       } : { status: 'ok' };
       return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -95,6 +112,7 @@ describe('CapabilitiesService', () => {
     const [first, second] = await Promise.all([service.getCapabilities(), service.getCapabilities()]);
     expect(first).toMatchObject({ schematic_light_editor: true, schematic_full_editor: true, map_editor: true, wave_editor: true });
     expect(second).toMatchObject({ schematic_light_editor: true, schematic_full_editor: true, map_editor: true, wave_editor: true });
+    await expect(service.assertEditorAvailable('schematic')).rejects.toThrow('编辑器暂不可用');
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledWith('http://127.0.0.1:6100/health', expect.objectContaining({
       headers: { authorization: 'Bearer renderer-secret' },

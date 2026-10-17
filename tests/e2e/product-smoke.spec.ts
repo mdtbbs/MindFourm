@@ -27,8 +27,14 @@ test('Developer Center serves the Public V1 contract without private routes', as
   expect(paths.some((path) => path.includes('/relay-agent/'))).toBe(false);
 
   await page.goto('/api/v1', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('body')).toContainText('MDTBBS 开发者文档');
-  await expect(page.locator('body')).toContainText('公开 API v1.0.0');
+  await expect(page.locator('body')).toContainText('MDTBBS 文档中心');
+  await expect(page.locator('body')).toContainText(`API 契约${contract.info.version}`);
+  await expect(page.locator('body')).toContainText(`Public API ${contract.info.version}`);
+
+  await page.goto('/api/v1/docs/resources', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).toContainText('资源发现与推荐');
+  await expect(page.locator('body')).toContainText('resource-taste-v1');
+  await expect(page.locator('body')).toContainText('resource-bayesian-rating-v1');
 });
 
 adminTest('staff can open the Admin dashboard shell and navigation', async ({ authenticatedPage }) => {

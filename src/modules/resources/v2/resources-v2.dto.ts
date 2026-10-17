@@ -1,6 +1,19 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  ResourceV2SchematicBooleanArrayConfigDto, ResourceV2SchematicBooleanConfigDto,
+  ResourceV2SchematicColorConfigDto, ResourceV2SchematicConfigNoneDto,
+  ResourceV2SchematicContentConfigDto, ResourceV2SchematicDoubleConfigDto,
+  ResourceV2SchematicFloatConfigDto, ResourceV2SchematicIntegerArrayConfigDto,
+  ResourceV2SchematicIntegerConfigDto, ResourceV2SchematicLongConfigDto,
+  ResourceV2SchematicPointArrayConfigDto, ResourceV2SchematicPointConfigDto,
+  ResourceV2SchematicTeamConfigDto, ResourceV2SchematicTechNodeConfigDto,
+  ResourceV2SchematicTextConfigDto, ResourceV2SchematicUnitCommandConfigDto,
+  ResourceV2SchematicAccessConfigDto, ResourceV2SchematicVectorArrayConfigDto,
+  ResourceV2SchematicVectorConfigDto, ResourceV2SchematicPointPairDto,
+  ResourceV2SchematicVectorPairDto, type ResourceV2SchematicConfigDtoUnion,
+} from './resources-v2-write.dto';
 
 export class ResourceV2CursorDto {
   @ApiProperty({ nullable: true, type: String, example: 'eyJjcmVhdGVkX2F0IjoiMjAyNi0xMC0wNVQwMDowMDowMFoiLCJpZCI6MTAwfQ' })
@@ -460,6 +473,51 @@ export class ResourceV2ResolveModDto {
   @ApiProperty({ type: [String] }) aliases!: string[];
 }
 
+export class ResourceV2SchematicLogicConfigMetadataDto {
+  @ApiProperty({ enum: ['logic'] }) type!: 'logic';
+  @ApiProperty({ enum: [1] }) format_version!: 1;
+  @ApiProperty({ maxLength: 32_768 }) source!: string;
+  @ApiProperty({ type: 'array', items: { type: 'object', required: ['name', 'x', 'y'], properties: {
+    name: { type: 'string', maxLength: 100 }, x: { type: 'integer', minimum: 0, maximum: 127 }, y: { type: 'integer', minimum: 0, maximum: 127 },
+  } } }) links!: Array<{ name: string; x: number; y: number }>;
+}
+
+@ApiExtraModels(
+  ResourceV2SchematicLogicConfigMetadataDto, ResourceV2SchematicConfigNoneDto, ResourceV2SchematicIntegerConfigDto,
+  ResourceV2SchematicLongConfigDto, ResourceV2SchematicFloatConfigDto, ResourceV2SchematicDoubleConfigDto,
+  ResourceV2SchematicBooleanConfigDto, ResourceV2SchematicTextConfigDto, ResourceV2SchematicContentConfigDto,
+  ResourceV2SchematicTechNodeConfigDto, ResourceV2SchematicPointConfigDto, ResourceV2SchematicPointArrayConfigDto,
+  ResourceV2SchematicIntegerArrayConfigDto, ResourceV2SchematicBooleanArrayConfigDto, ResourceV2SchematicVectorConfigDto,
+  ResourceV2SchematicVectorArrayConfigDto, ResourceV2SchematicTeamConfigDto, ResourceV2SchematicAccessConfigDto,
+  ResourceV2SchematicUnitCommandConfigDto, ResourceV2SchematicColorConfigDto,
+  ResourceV2SchematicPointPairDto, ResourceV2SchematicVectorPairDto,
+)
+export class ResourceV2SchematicBlockPositionDto {
+  @ApiProperty({ nullable: true, type: Number, minimum: 0, maximum: 127 }) x!: number | null;
+  @ApiProperty({ nullable: true, type: Number, minimum: 0, maximum: 127 }) y!: number | null;
+  @ApiProperty({ nullable: true, type: Number, minimum: 0, maximum: 3 }) rotation!: number | null;
+  @ApiPropertyOptional({ minimum: 1, maximum: 64 }) size?: number;
+  @ApiPropertyOptional({ oneOf: [
+    ResourceV2SchematicLogicConfigMetadataDto, ResourceV2SchematicConfigNoneDto,
+    ResourceV2SchematicIntegerConfigDto, ResourceV2SchematicLongConfigDto,
+    ResourceV2SchematicFloatConfigDto, ResourceV2SchematicDoubleConfigDto,
+    ResourceV2SchematicBooleanConfigDto, ResourceV2SchematicTextConfigDto,
+    ResourceV2SchematicContentConfigDto, ResourceV2SchematicTechNodeConfigDto,
+    ResourceV2SchematicPointConfigDto, ResourceV2SchematicPointArrayConfigDto,
+    ResourceV2SchematicIntegerArrayConfigDto, ResourceV2SchematicBooleanArrayConfigDto,
+    ResourceV2SchematicVectorConfigDto, ResourceV2SchematicVectorArrayConfigDto,
+    ResourceV2SchematicTeamConfigDto, ResourceV2SchematicAccessConfigDto,
+    ResourceV2SchematicUnitCommandConfigDto, ResourceV2SchematicColorConfigDto,
+  ].map(type => ({ $ref: getSchemaPath(type) })), discriminator: { propertyName: 'type' } })
+  config?: ResourceV2SchematicConfigDtoUnion | ResourceV2SchematicLogicConfigMetadataDto;
+  @ApiPropertyOptional({ type: Boolean, description: 'True only when the parsed config type is in the v160.5 typed edit matrix and registered for this block.' }) config_editable?: boolean;
+  @ApiPropertyOptional({ type: 'array', items: { type: 'object', required: ['type'], properties: {
+    type: { type: 'string', enum: ['none', 'integer', 'long', 'float', 'double', 'boolean', 'text', 'content', 'tech_node', 'point', 'point_array', 'int_seq', 'int_array', 'boolean_array', 'vec2', 'vec2_array', 'team', 'l_access', 'unit_command', 'color', 'logic'] },
+    content_type: { type: 'string' },
+  } }, description: 'Typed config kinds registered by Mindustry for this block.' }) config_types?: Array<{ type: string; content_type?: string }>;
+  @ApiPropertyOptional({ type: Boolean }) logic_source_available?: boolean;
+}
+
 export class ResourceV2BlockDto {
   @ApiProperty({ example: 'conveyor' }) internal_name!: string;
   @ApiProperty({ nullable: true, type: String }) display_name!: string | null;
@@ -468,8 +526,8 @@ export class ResourceV2BlockDto {
   @ApiProperty({ nullable: true, type: Number }) y!: number | null;
   @ApiProperty({ nullable: true, type: Number }) rotation!: number | null;
   @ApiProperty({ nullable: true, type: Number }) team!: number | null;
-  @ApiProperty({ type: 'array', items: { type: 'object' }, description: 'Parsed grid positions; empty if the source did not retain them.' })
-  positions!: Array<Record<string, unknown>>;
+  @ApiProperty({ type: [ResourceV2SchematicBlockPositionDto], description: 'Parsed grid positions and v160.5 typed config values; empty if the source did not retain them.' })
+  positions!: ResourceV2SchematicBlockPositionDto[];
   @ApiProperty({ type: 'object' }) properties!: Record<string, unknown>;
 }
 

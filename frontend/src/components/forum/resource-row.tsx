@@ -4,7 +4,7 @@ import type { Resource } from '@/types';
 import { markdownToPlainExcerpt } from '@/lib/markdown/excerpt';
 import { formatDate } from '@/lib/utils';
 import { resourceKindLabel } from '@/lib/display-labels';
-import { resourceCardFacts, resolveResourceCardPresentation } from '@/lib/resources/presentation';
+import { resourceCardFacts, resolveResourceCardPresentation, resourcePublicationDate } from '@/lib/resources/presentation';
 import ResourceCardActions from './resource-card-actions';
 
 function KindFacts({ resource }: { resource: Resource }) {
@@ -32,20 +32,20 @@ export default function ResourceRow({ resource }: { resource: Resource }) {
       </Link>
       <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white">{resourceKindLabel(resource.resource_kind)}</span>
     </div> : <div className="flex min-w-0 items-start gap-4 border-b border-[var(--border)] p-4">
-      <Link href={resourceHref} aria-label={`查看 ${resource.title}`} className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary)]">
+      <Link href={resourceHref} aria-label={`查看 ${resource.title}`} className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary-text)]">
         {resource.preview_url ? <img src={resource.preview_url} alt="" loading="lazy" className="h-full w-full object-cover transition-[scale] duration-[var(--motion-normal)] group-hover:scale-[1.015] motion-reduce:scale-100" /> : <PreviewIcon className="h-7 w-7" aria-hidden />}
       </Link>
       <div className="min-w-0 flex-1">
         <span className="text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}</span>
-        <Link href={resourceHref} className="mt-0.5 block truncate text-base font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{resource.title}</Link>
+        <Link href={resourceHref} className="mt-0.5 block truncate text-base font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]">{resource.title}</Link>
         <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">{summary || '暂无简介'}</p>
       </div>
     </div>}
     <div className="p-4">
-      {isGallery && <div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0 flex-1"><Link href={resourceHref} className="block truncate text-base font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{resource.title}</Link><p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[var(--text-secondary)]">{summary || '暂无简介'}</p></div><span className="shrink-0 text-xs text-[var(--text-muted)]">{resource.download_count.toLocaleString()} 次下载</span></div>}
+      {isGallery && <div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0 flex-1"><Link href={resourceHref} className="block truncate text-base font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]">{resource.title}</Link><p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[var(--text-secondary)]">{summary || '暂无简介'}</p></div><span className="shrink-0 text-xs text-[var(--text-muted)]">{resource.download_count.toLocaleString()} 次下载</span></div>}
       <KindFacts resource={resource} />
       {!isGallery && <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--text-muted)]"><span className="shrink-0">{resource.download_count.toLocaleString()} 次下载</span><span className="truncate">{resourceFileLabel(resource)}</span></div>}
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--text-muted)]"><Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 items-center gap-1.5 truncate hover:text-[var(--primary)]"><User className="h-3.5 w-3.5 shrink-0" />{resource.username || '未知作者'}</Link><time className="shrink-0">{formatDate(resource.updated_at || resource.created_at)}</time></div>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--text-muted)]"><Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 items-center gap-1.5 truncate hover:text-[var(--primary-text)]"><User className="h-3.5 w-3.5 shrink-0" />{resource.username || '未知作者'}</Link><time dateTime={resourcePublicationDate(resource)} className="shrink-0">{formatDate(resourcePublicationDate(resource))}</time></div>
       <div className="mt-2 flex justify-end"><ResourceCardActions resourceId={resource.id} resourceHref={resourceHref} initialLiked={resource.is_liked} initialLikeCount={resource.like_count} commentCount={resource.comment_count} /></div>
     </div>
   </article>;

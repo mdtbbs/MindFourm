@@ -4,43 +4,117 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
-## 尚未发布
+## Public API 1.5.0
 
-### 2.7.0 计划发布内容
+本次新增面向任意业务的通用 Blob 存储接口 `/api/v1/blobs`，契约版本从 `1.4.1` 更新为 `1.5.0`。既有操作、路由、必填参数和响应字段均未改动，纯新增，旧客户端不受影响。
 
-- Resource Center 增加 metadata-first direct upload 和基于官方 renderer 的蓝图/地图新版本编辑流程。上传对象在论坛 complete 阶段重新校验，编辑永远创建新 revision 并进入现有审核；公开客户端继续使用已有 V1 文件和版本接口。
-- 统一搜索资源筛选增加 `game_version`、`author`、`tag`、`dependency`、`release_channel`，旧兼容搜索也按登录 viewer 应用屏蔽和资源可见性；这些字段是可选增量参数。
-- 能力发现会在 renderer 协议/运行时哈希或 RES 不满足时关闭编辑能力。客户端必须把 `false` 当作当前不可用，不应自行重试绕过开关。
+此前论坛只有三条各自封闭的上传通道：公开图片、资源文件、游戏云存档。每一条都把自己的业务规则（图片格式校验、资源审核、存档 Slot）写死在接口里，新功能要存文件就得再造一张表和一套下载接口。`/api/v1/blobs` 把「存字节」这件事单独抽出来：业务方自己决定 namespace、key、元数据和引用，存储层统一负责内容去重、引用计数、延迟回收和所有者绑定。
 
 ### Added
 
-- `POST /api/v1/resources/uploads/init` 和 `/uploads/complete` 增加资源上下文直传：`resource.upload`、登录与站点验证要求不变，限流 10/60s；init 必须携带 pending/draft 版本 UUID、文件名、大小、MIME 和 SHA-256，返回短期 RES 上传信息或去重对象，均需 complete 进行服务端验证与私有绑定。失败可返回 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404)、`RESOURCE_STORAGE_REJECTED` (422)。
-
-### Changed
-
-- 新 RES 文件下载与预览返回 302；下载仍由论坛授权并记录 DownloadGrant。旧 managed/MFL/external 文件保持兼容，客户端应跟随跳转。
-
-### Deprecated
-
-- 暂无。
-
-### Removed
-
-- 暂无。
-
-### Fixed
-
-- 暂无。
+- `GET /api/v1/blobs/quota`：查询当前所有者的已用字节、配额、单对象上限与有效 blob 数量；进行中的上传会预占额度。
+- `GET /api/v1/blobs`：列出当前所有者的有效 blob，支持 `namespace`、`ref_type`、`ref_id` 过滤与游标分页。
+- `POST /api/v1/blobs`：登记目标 key、文件名、大小、`sha256`、MIME 与可见性，返回上传会话。相同内容已存在时返回 `deduplicated: true` 且无需上传，但**仍需调用 commit**，客户端只需实现一条流程。
+- `PUT /api/v1/blobs/uploads/{uploadId}/content`：上传原始字节，必须使用 `application/octet-stream`。服务端边写边校验声明的大小与 SHA-256，不一致即拒绝并丢弃数据。
+- `POST /api/v1/blobs/uploads/{uploadId}/commit`：复核存储对象后创建可读写 blob。
+- `DELETE /api/v1/blobs/uploads/{uploadId}`：放弃上传会话。
+- `GET /api/v1/blobs/{blobId}`：读取 blob 元数据。`public` blob 无需登录；其他账号的 `private` blob 与不存在的 blob 返回相同的 404。
+- `GET /api/v1/blobs/{blobId}/content`：下载原始字节，携带 `ETag`（`sha256-<摘要>`）、`Last-Modified` 与 `X-Content-Type-Options: nosniff`。
+- `PATCH /api/v1/blobs/{blobId}`：更新 key、文件名、可见性、元数据、标签与业务引用；内容本身不可变。
+- `DELETE /api/v1/blobs/{blobId}`：软删除绑定，对象在引用数归零并经过宽限期后被回收。
 
 ### Security
 
-- 暂无。
+- 存储的 MIME 类型来自上传者，无法被内容嗅探证伪，因此只在白名单内（PNG/JPEG/GIF/WebP/AVIF、常见音视频、PDF、纯文本）内联渲染，其余一律以 `application/octet-stream` + `attachment` 返回。这样上传者无法把一个声明为 `text/html` 或 `image/svg+xml` 的文件变成可执行内容。
+- 服务端从不信任客户端提交的大小与哈希：落盘后重新读取并校验通过，才写入可读行。
+- 对象 key 由服务端生成并严格匹配 `blobs/<namespace>/<owner 摘要>/<uuid>`，路径解析前重新校验，目录穿越与篡改行都读不到存储目录之外。
 
-## 已发布版本
+### Notes
 
-### Public V1 — OpenAPI `info.version` `1.0.0`
+- 内容去重按 `(namespace, owner_type, owner_id, sha256, size)` 唯一，不做全局共享：全局 CAS 会让「删除我自己的文件」与「他人的同一份文件」产生歧义。
+- 新增 OAuth scope：`blob.read`、`blob.write`、`blob.delete`。
+- 新增错误码前缀 `BLOB_*`（含 `BLOBS_DISABLED`、`BLOB_NOT_FOUND`、`BLOB_KEY_CONFLICT`、`BLOB_QUOTA_EXCEEDED`、`BLOB_FILE_TOO_LARGE`、`BLOB_UPLOAD_*`、`BLOB_STORAGE_UNAVAILABLE`）。
+- 功能开关：`blobs_enabled`（默认关闭）。`GET /api/v1/capabilities` 新增 `blobs_v1` 字段，表示功能已开启且存储目录可用。
+- 账号删除会连带清理该账号的 blob 绑定与上传会话。
 
-仓库将 Public V1 契约标记为 `1.0.0`。Git 历史可以确认以下功能已合入当前 `master`，但没有记录一个统一的 V1 对外发布日期；此处不推定发布日期，也不把论坛应用版本号当作 API 版本。
+Ref: #38
+
+## Public API 1.4.1
+
+本次将资源发现响应中已提供的 `published_at` 明确纳入公开 OpenAPI 契约，契约版本从 `1.4.0` 更新为 `1.4.1`。既有字段、路由和必填参数不变；新增字段为兼容性新增。
+
+### Added
+
+- `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}` 的公开资源卡片将已提供的 `published_at` 纳入 OpenAPI schema：该字段表示资源首次对外可见的时间。此前的 `updated_at` 是通用写入时间戳，浏览和下载计数也会推进它，客户端无法据此得到发布日期；`published_at` 只在资源通过审核时写入一次，后续编辑不改变它。历史资源回填为 `created_at`。
+- `GET /api/resources`（论坛内部列表接口）同步新增 `published_at`，并允许以 `published_at` 作为排序键。
+
+### Changed
+
+- `updated_at` 不再被浏览/下载计数推进，仅反映真实的编辑写入。依赖“任何活动都会更新 `updated_at`”的客户端应改用 `published_at`（发布日期）或 `updated_at`（最后编辑时间），二者语义现已分离。
+
+Ref: #14
+
+## Public API 1.4.0
+
+本次修订把云存档上传、冲突、下载和配额在实际运行中的行为写回契约，并补上客户端做分支判断需要的字段。所有既有操作、必填参数和响应字段保持不变；新增字段为兼容性新增，旧客户端可忽略。
+
+### Added
+
+- `POST /api/v1/game-saves/{slotId}/uploads` 在云端已有相同内容摘要时返回 `no_upload_required: true` 并附带一个**已提交**的 `upload_id`。此前该分支只返回 `snapshot_id`，按文档流程“拿到 `upload_id` 就 PUT”的客户端会拿到空值；现在两种响应形状一致，客户端按 `upload_id` 走完整流程即可。该分支一直存在，本次将其文档化并补齐字段。
+- 冲突响应的 `details[0]` 新增 `suggested_resolution`：`normal` 策略遇到云端新版本时为 `create_conflict_copy`。上传 PUT 的限流从 20 次/5 分钟调整为 60 次/10 分钟，避免断点续传在会话有效期内被限流。
+- `POST /api/v1/game-saves/{slotId}/snapshots/{snapshotId}/download` 新增 `expires_at`（固定为 `null`）和 `reusable: true`，明确该地址不是签名地址、可重复使用；二进制 GET 响应新增 `ETag`（`sha256-<摘要>`）与 `Last-Modified`。
+
+### Fixed
+
+- 文档中云存档列表的 `limit` 默认值从 `20` 更正为 `30`，与实现一致。
+- 修正云存档接口中混入的繁体中文文案。
+- 提交阶段配额校验失败时会把上传会话置为 `failed`，暂存文件随维护任务回收，不再留下永远无法提交的悬空会话。
+
+Ref: #12
+
+## Public API 1.3.0
+
+- `POST /api/v1/resources/{id}/versions/{versionId}/schematic-editor/export` 和 `map-editor/export` 支持匿名导出已审核公开资源的已发布版本副本；携带 OAuth Bearer 时需要 `resource.read`。私有资源仍校验 Owner/Maintainer，发布新版本仍需 `resource.upload` 和原角色。CSRF、封禁、限流、源文件 SHA-256、官方读写校验继续生效。
+- 蓝图 `add_blocks` 增加可选 `copy_from_x`/`copy_from_y`、类型化 `config` 和纯文本 `logic_source`，用于保留复制方块配置；地图对象新增 `rotate`（0–3，出生点不支持）。原字段兼容，非法配置和越界引用返回 400。
+- `GET /api/v1/resources/{id}/workbench` 新增可选 `version_public_id`，详情和分析严格匹配所选版本。旧版本缺少结构化索引时可从校验后的源文件读取，不写回数据库。
+- 新增 `GET /api/v1/resources/{id}/versions/{versionId}/editor-data` 与 `map-editor/region?x=…&y=…`。前者返回官方编辑元数据和有界方块列表（5 次/分钟），后者读取最多 128×128 的地图分区（20 次/分钟）。公开版本匿名可读；OAuth Bearer 要求 `resource.read`。私有版本保留角色验证；编辑器未就绪返回 503、非法坐标返回 400、不存在的已发布版本返回 404。
+- `GET /api/v1/resources/{id}/versions/{versionId}/editor-data` 的限流从 5 次提高到 60 次/分钟；权限、响应和错误语义不变。
+
+## Public API 1.2.0
+
+本次为发现榜单补充可机器读取的算法版本标识，并公布各算法的评分口径。既有路由、筛选、排序和隐私行为不变；新响应字段是兼容性新增，旧客户端可忽略未知字段。算法版本或分数权重改变时会更新算法 ID，并同步文档与 OpenAPI。
+
+### Added
+
+- `GET /api/v1/resources/discovery/home` 的每个 section 新增 `algorithm` 字段：`resource-featured-v1`、`resource-trending-v1`、`resource-rising-v1`、`resource-bayesian-rating-v1`、`resource-newest-v1`。`hot`、`for-you` 和 `related` 继续返回对应算法 ID；OpenAPI 为这些字段声明了枚举值。评分公式、信号窗口、候选上限、reason 和隐私边界见[资源中心 API V1 的资源发现与推荐算法说明](./resources-v1-contract.md)。
+
+## Public API 1.1.0
+
+本次契约修订在初始 `1.0.0` 基础上增加了公开操作和可选查询参数。所有既有公开操作、必填参数和字段语义均保留。OpenAPI `info.version` 使用语义版本；兼容新增提升次版本号，破坏性契约变更需要新的路径主版本和迁移说明。API 基础路径仍是 `/api/v1`。
+
+### Added
+
+- 资源中心新增 Mod、Map、Schematic 的类型化详情、清单、版本、依赖、关系和分析操作；增加协作者管理、审核记录、GitHub Release 来源同步和安全的编辑导出操作。完整接口见[资源中心 API V1](./resources-v1-contract.md)。
+- 增加 `POST /api/v1/resources/uploads/init` 与 `POST /api/v1/resources/uploads/complete`。二者要求 `resource.upload`；init 创建短期上传会话，complete 会重新校验对象并建立待审核资源绑定。相关错误包括 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404) 和 `RESOURCE_STORAGE_REJECTED` (422)。
+- 游戏内容 API 增加按名称读取和搜索内容的操作，以及地图和资源的类型化读取能力。
+- 新增 `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}`，公开精选、趋势、近 7 天上升、评分榜、最新、下载榜、猜你喜欢和相关推荐，匿名可读；携带 MindAuth Bearer 时需要 `resource.read`。响应声明稳定 `reasons`、榜单候选窗口分页、公开资源卡片和 V1 request-id envelope。推荐排除删除、未审核、私有和停用主题资源；相关推荐对不可公开源资源统一返回 404。限流分别为 60、60、45、60 次/分钟。匿名推荐不读取个人行为；个性化只用当前公开资源上的站内点赞/收藏。
+
+### Changed
+
+- `GET /api/v1/search` 增加可选 `resource_kind` 与 `content_language` 查询参数，并扩展排序和结果分组值。原有 `post`、`user`、`global` 搜索类型仍保留为兼容输入。`GET /api/v1/search/posts` 保留原有类型值，但该路径始终返回帖子。
+- 资源文件下载和预览在使用新文件交付方式时可能返回 HTTP `302`。客户端应跟随重定向；论坛仍负责访问授权，历史文件来源继续兼容。
+
+### Deprecated
+
+- 当前没有已弃用的公开操作。
+
+### Removed
+
+- 当前没有移除公开操作；既有 V1 路径、必填参数和已记录的字段语义均保留。
+
+## Public V1 当前能力摘要
+
+以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本见本文档最新一节（`src/openapi/api-version.ts` 的 `API_V1_VERSION` 是唯一来源）。论坛应用版本与 API 契约版本相互独立。
 
 #### Added
 

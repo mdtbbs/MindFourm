@@ -74,7 +74,7 @@ export default function NotificationsPage() {
   const typeIcon = (type: string) => {
     switch (type) {
       case 'reply':
-        return <MessageSquare className="w-5 h-5 text-[var(--primary)]" />;
+        return <MessageSquare className="w-5 h-5 text-[var(--primary-text)]" />;
       case 'mention':
         return <AtSign className="w-5 h-5 text-[var(--warning)]" />;
       case 'post_like':
@@ -85,7 +85,7 @@ export default function NotificationsPage() {
       case 'best_answer':
         return <CheckCheck className="w-5 h-5 text-[var(--success)]" />;
       case 'friend_request':
-        return <UserPlus className="w-5 h-5 text-[var(--primary)]" />;
+        return <UserPlus className="w-5 h-5 text-[var(--primary-text)]" />;
       case 'friend_accepted':
         return <UserCheck className="w-5 h-5 text-[var(--success)]" />;
       case 'system':
@@ -174,7 +174,7 @@ export default function NotificationsPage() {
             onClick={() => setFilter(f)}
             className={`min-h-11 rounded-[var(--radius)] px-3 py-1 text-sm transition-colors ${
               filter === f
-                ? 'bg-[var(--primary)] text-white'
+                ? 'bg-[var(--primary-button)] text-white'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
             }`}
           >
@@ -211,7 +211,7 @@ export default function NotificationsPage() {
                   {n.post_title && (
                     <Link
                       href={`/posts/${n.post_id}${n.reply_id ? `#reply-${n.reply_id}` : ''}`}
-                      className="break-words text-sm text-[var(--primary)] hover:text-[var(--primary-dark)]"
+                      className="break-words text-sm text-[var(--primary-text)] hover:text-[var(--primary-dark)]"
                     >
                       {n.post_title}
                     </Link>
@@ -223,7 +223,7 @@ export default function NotificationsPage() {
                     {!n.is_read && (
                       <button
                         onClick={() => handleMarkRead(n.id)}
-                        className="min-h-11 text-xs text-[var(--text-secondary)] hover:text-[var(--primary)]"
+                        className="min-h-11 text-xs text-[var(--text-secondary)] hover:text-[var(--primary-text)]"
                       >
                         {t('notificationPage.markRead')}
                       </button>
@@ -260,7 +260,7 @@ export default function NotificationsPage() {
                   aria-current={p === pagination.page ? 'page' : undefined}
                   className={`min-h-11 rounded-[var(--radius)] px-3 py-1 ${
                     p === pagination.page
-                      ? 'bg-[var(--primary)] text-white'
+                      ? 'bg-[var(--primary-button)] text-white'
                       : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >

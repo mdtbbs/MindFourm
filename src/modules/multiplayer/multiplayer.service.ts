@@ -1,13 +1,12 @@
-import {
-  BadRequestException, ConflictException, ForbiddenException, GoneException, HttpException, Injectable, Logger, NotFoundException,
-  OnModuleDestroy, OnModuleInit, ServiceUnavailableException,
-} from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { isIP } from 'net';
 import { DataSource, EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import axios from 'axios';
+import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
+import { lookupV1ErrorCode } from '../../common/contracts/v1-error-codes';
 import { RedisService } from '../../database/redis.service';
 import { Friendship } from '../../entities/friendship.entity';
 import { MultiplayerAuditLog } from '../../entities/multiplayer-audit-log.entity';
@@ -159,14 +158,19 @@ function isMultiplayerV1Endpoint(value: string): boolean {
 }
 
 function fail(status: number, code: string): never {
-  const payload = { code, message: code };
-  if (status === 400) throw new BadRequestException(payload);
-  if (status === 403) throw new ForbiddenException(payload);
-  if (status === 404) throw new NotFoundException(payload);
-  if (status === 409) throw new ConflictException(payload);
-  if (status === 410) throw new GoneException(payload);
-  if (status === 429) throw new HttpException(payload, 429);
-  throw new ServiceUnavailableException(payload);
+  // Prefer the status, message and retryability declared in the V1 error
+  // registry; it also keeps SESSION_PERMISSION_DENIED (403) from being emitted
+  // as a 400. The literal statuses passed below stay the fallback for codes the
+  // registry does not know about.
+  const definition = lookupV1ErrorCode(code);
+  throw new ApiV1Exception(
+    code,
+    (definition?.httpStatus ?? status) as HttpStatus,
+    definition?.defaultMessage ?? code,
+    definition?.retryable ?? false,
+    [],
+    status,
+  );
 }
 
 @Injectable()

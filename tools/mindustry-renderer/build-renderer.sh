@@ -3,7 +3,8 @@ set -euo pipefail
 
 renderer_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_dir="$(cd "$renderer_dir/../.." && pwd)"
-server_jar="${MINDUSTRY_SERVER_JAR:-/opt/mindfourm-renderer/mindustry-server-v160.2.jar}"
+server_jar="${MINDUSTRY_SERVER_JAR:-/opt/mindfourm-renderer/mindustry-server-v160.5.jar}"
+expected_server_sha256="0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0"
 classes_dir="$renderer_dir/build/classes/java/main"
 runtime_dir="$repo_dir/renderer-runtime"
 releases_dir="$runtime_dir/releases"
@@ -17,6 +18,13 @@ if [[ ! -r "$server_jar" ]]; then
   exit 1
 fi
 
+actual_server_sha256="$(sha256sum "$server_jar" | awk '{print tolower($1)}')"
+if [[ "$actual_server_sha256" != "$expected_server_sha256" ]]; then
+  printf 'Mindustry server runtime digest mismatch: expected %s, got %s (%s)\n' \
+    "$expected_server_sha256" "$actual_server_sha256" "$server_jar" >&2
+  exit 1
+fi
+
 rm -rf "$classes_dir"
 mkdir -p "$classes_dir" "$releases_dir"
 chmod 755 "$runtime_dir" "$releases_dir"
@@ -25,7 +33,7 @@ if [[ "${#java_sources[@]}" -eq 0 ]]; then
   printf 'No renderer Java sources found under %s\n' "$renderer_dir/src/main/java" >&2
   exit 1
 fi
-javac --release 17 -cp "$server_jar" -d "$classes_dir" "${java_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$server_jar" -d "$classes_dir" "${java_sources[@]}"
 if [[ -d "$renderer_dir/src/main/resources" ]]; then
   cp -R "$renderer_dir/src/main/resources/." "$classes_dir/"
 fi
@@ -37,7 +45,10 @@ jar --create --file "$stage_dir/mindfourm-mindustry-renderer.jar" \
   -C "$classes_dir" .
 chmod 644 "$stage_dir/mindfourm-mindustry-renderer.jar"
 chmod 755 "$stage_dir"
-ln -s "$server_jar" "$stage_dir/mindustry-server.jar"
+# Copy the verified runtime into the immutable release instead of linking an
+# external path that could change after the health metadata was established.
+cp "$server_jar" "$stage_dir/mindustry-server.jar"
+chmod 644 "$stage_dir/mindustry-server.jar"
 
 release_dir="$releases_dir/$revision"
 if [[ ! -e "$release_dir" ]]; then

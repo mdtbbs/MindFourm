@@ -13,6 +13,7 @@ import { ResourceDuplicateService, ResourceDuplicateResult } from './resource-du
 import { ResourceStorageClientService } from './resource-storage-client.service';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceFileProviderService } from './resource-file-provider.service';
+import type { ResourceV2MapObjectOperationInput } from './v2/resources-v2-write.dto';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -59,8 +60,8 @@ export type ConsumedResourcePreviewDraft = {
 export class ResourcePreviewService {
   private readonly logger = new Logger(ResourcePreviewService.name);
   private readonly drafts = new Map<string, PreviewDraft>();
-  private readonly productionBackfills = new Set<number>();
-  private readonly productionBackfillAttempts = new Map<number, number>();
+  private readonly analysisBackfills = new Set<number>();
+  private readonly analysisBackfillAttempts = new Map<number, number>();
 
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
@@ -76,7 +77,7 @@ export class ResourcePreviewService {
   async storePreviewInRes(resource: Resource, previewKey: string): Promise<void> {
     if (!this.isValidPreviewKey(previewKey, resource.resource_kind, resource.content_hash)) return;
     if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const preview = await readFile(path.resolve(this.previewRoot, previewKey));
     if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
     const object = await this.resClient.uploadServerGeneratedObject({
@@ -99,7 +100,7 @@ export class ResourcePreviewService {
   }> {
     if (!this.isValidPreviewKey(previewKey, resource.resource_kind, version.content_hash)) throw new BadRequestException('版本预览文件无效');
     if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const preview = await readFile(path.resolve(this.previewRoot, previewKey));
     if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
     const object = await this.resClient.uploadServerGeneratedObject({
@@ -126,7 +127,7 @@ export class ResourcePreviewService {
   async setVersionResPreviewVisibility(resource: Resource, version: ResourceVersion, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
     if (!version.renderer_preview_object_id) return;
     if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const binding = await this.resClient.createBinding(version.renderer_preview_object_id, {
       namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id,
       visibility: visibility === 'public' && this.isVersionPreviewPublic(resource, version) ? 'public' : 'private',
@@ -141,13 +142,14 @@ export class ResourcePreviewService {
   async getVersionResPreviewUrl(resource: Resource, version: ResourceVersion): Promise<string | null> {
     if (!version.renderer_preview_object_id || !this.resClient) return null;
     if (this.isVersionPreviewPublic(resource, version)) return this.resClient.buildPublicDownloadUrl(version.renderer_preview_object_id, 'preview.png');
+    if (!this.resClient.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(version.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
   }
 
   async setResPreviewVisibility(resource: Resource, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
     if (resource.renderer_preview_object_id) {
       if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
-      if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
       const binding = await this.resClient.createBinding(resource.renderer_preview_object_id, {
         namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id,
         visibility: visibility === 'public' && this.isResourcePreviewPublic(resource) ? 'public' : 'private',
@@ -170,6 +172,7 @@ export class ResourcePreviewService {
     if (this.isResourcePreviewPublic(resource as Partial<Resource>)) {
       return this.resClient.buildPublicDownloadUrl(resource.renderer_preview_object_id, 'preview.png');
     }
+    if (!this.resClient.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(resource.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
   }
 
@@ -181,19 +184,21 @@ export class ResourcePreviewService {
   async transformSchematic(fileName: string, source: Buffer, operations: {
     rotation_quarters: number; mirror_x: boolean; delete_positions: Array<{ x: number; y: number }>;
     move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
-    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number; copy_from_x?: number; copy_from_y?: number; config?: Record<string, unknown>; logic_source?: string }>;
     logic_configs?: Array<{ x: number; y: number; source: string }>;
+    config_edits?: Array<{ x: number; y: number; config: object }>;
   }): Promise<{ data: Buffer; sha256: string }> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
     const positions = operations?.delete_positions;
     const moves = operations?.move_positions || [];
     const additions = operations?.add_blocks || [];
     const logicConfigs = operations?.logic_configs || [];
+    const configEdits = operations?.config_edits || [];
     if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
       || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
       || !Array.isArray(moves) || moves.length > 5_000 || !Array.isArray(additions) || additions.length > 5_000
-      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000
-      || positions.length + moves.length + additions.length + logicConfigs.length > 10_000
+      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000 || !Array.isArray(configEdits) || configEdits.length > 5_000
+      || positions.length + moves.length + additions.length + logicConfigs.length + configEdits.length > 10_000
     ) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
@@ -229,6 +234,13 @@ export class ResourcePreviewService {
         throw new BadRequestException('蓝图编辑操作无效');
       }
       addedPositions.add(key);
+      if ((addition.copy_from_x === undefined) !== (addition.copy_from_y === undefined)
+        || (addition.copy_from_x !== undefined && (![addition.copy_from_x, addition.copy_from_y].every(Number.isInteger)
+          || addition.copy_from_x < 0 || addition.copy_from_x > 127 || addition.copy_from_y! < 0 || addition.copy_from_y! > 127))
+        || (addition.config !== undefined && (!addition.config || typeof addition.config !== 'object' || Array.isArray(addition.config)))
+        || (addition.logic_source !== undefined && (typeof addition.logic_source !== 'string' || addition.logic_source.length > 32768 || addition.logic_source.includes('\0')))) {
+        throw new BadRequestException('蓝图复制配置无效');
+      }
     }
     const logicPositions = new Set<string>();
     for (const edit of logicConfigs) {
@@ -237,6 +249,31 @@ export class ResourcePreviewService {
         || typeof edit.source !== 'string' || edit.source.length > 32_768 || edit.source.includes('\0')
         || !key || logicPositions.has(key)) throw new BadRequestException('蓝图处理器文本无效');
       logicPositions.add(key);
+    }
+    const typedConfigPositions = new Set<string>();
+    const allowedConfigKeys: Record<string, string[]> = {
+      none: ['type'], integer: ['type', 'value'], long: ['type', 'value'], float: ['type', 'value'],
+      double: ['type', 'value'], boolean: ['type', 'value'], text: ['type', 'value'],
+      content: ['type', 'content_type', 'name'], tech_node: ['type', 'content_type', 'name'],
+      point: ['type', 'x', 'y'], point_array: ['type', 'points'], int_seq: ['type', 'values'],
+      int_array: ['type', 'values'], boolean_array: ['type', 'values'], vec2: ['type', 'x', 'y'],
+      vec2_array: ['type', 'points'], team: ['type', 'name'], l_access: ['type', 'name'],
+      unit_command: ['type', 'name'], color: ['type', 'value'],
+    };
+    for (const edit of configEdits) {
+      const key = edit && `${edit.x}:${edit.y}`;
+      const config = edit?.config as Record<string, unknown> | undefined;
+      if (!edit || !Number.isInteger(edit.x) || !Number.isInteger(edit.y) || edit.x < 0 || edit.x > 127 || edit.y < 0 || edit.y > 127
+        || !key || typedConfigPositions.has(key) || logicPositions.has(key) || !config || typeof config !== 'object' || Array.isArray(config)) {
+        throw new BadRequestException('蓝图配置编辑无效');
+      }
+      const type = config.type;
+      if (typeof type !== 'string' || !allowedConfigKeys[type]
+        || Object.keys(config).some((property) => !allowedConfigKeys[type].includes(property))
+        || allowedConfigKeys[type].some((property) => !(property in config))) {
+        throw new BadRequestException('蓝图配置类型或字段无效');
+      }
+      typedConfigPositions.add(key);
     }
     if (!fileName.toLowerCase().endsWith('.msch') || source.length < 5 || source.length > MAX_RENDER_BYTES
       || source.subarray(0, 4).toString('ascii') !== 'msch') {
@@ -260,6 +297,7 @@ export class ResourcePreviewService {
           move_positions: moves,
           add_blocks: additions,
           logic_configs: logicConfigs,
+          config_edits: configEdits,
         }),
         signal: AbortSignal.timeout(60_000),
       });
@@ -297,12 +335,15 @@ export class ResourcePreviewService {
     terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
     rule_changes?: Record<string, unknown>;
     wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+    object_operations?: ResourceV2MapObjectOperationInput[];
   }): Promise<{ data: Buffer; sha256: string }> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
     const terrain = operations?.terrain_changes || [];
     const waves = operations?.wave_operations || [];
+    const objects = operations?.object_operations || [];
     const rules = operations?.rule_changes || {};
     if (!Array.isArray(terrain) || terrain.length > 5_000 || !Array.isArray(waves) || waves.length > 1_000
+      || !Array.isArray(objects) || objects.length > 2_000
       || !rules || typeof rules !== 'object' || Array.isArray(rules) || Object.keys(rules).length > 100) {
       throw new BadRequestException('地图编辑操作无效');
     }
@@ -325,9 +366,33 @@ export class ResourcePreviewService {
         throw new BadRequestException('地图波次编辑操作无效');
       }
     }
-    if (Buffer.byteLength(JSON.stringify({ rules, waves })) > 512 * 1024
-      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES
-      || source.subarray(0, 4).toString('ascii') !== 'MSAV') {
+    const objectActions = new Set(['add', 'delete', 'move', 'team', 'rotate']);
+    const objectTypes = new Set(['core', 'spawn', 'building']);
+    for (const operation of objects) {
+      if (!operation || !objectActions.has(String(operation.action)) || !objectTypes.has(String(operation.object_type))) {
+        throw new BadRequestException('地图对象编辑操作无效');
+      }
+      const coords = operation.action === 'move'
+        ? [operation.from_x, operation.from_y, operation.to_x, operation.to_y]
+        : [operation.x, operation.y];
+      if (!coords.every(value => Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 32_767)) {
+        throw new BadRequestException('地图对象编辑坐标无效');
+      }
+      if (operation.action === 'add'
+        && (typeof operation.name !== 'string' || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(operation.name)
+          || (operation.object_type !== 'spawn' && (typeof operation.team !== 'string' || !/^[a-zA-Z0-9_#-]{1,40}$/.test(operation.team)))
+          || (operation.object_type === 'spawn' && (operation.team !== undefined || (operation.rotation !== undefined && operation.rotation !== 0)))
+          || (operation.rotation !== undefined && (!Number.isInteger(operation.rotation) || Number(operation.rotation) < 0 || Number(operation.rotation) > 3)))) {
+        throw new BadRequestException('地图对象编辑内容无效');
+      }
+      if (operation.action === 'rotate' && (!Number.isInteger(operation.rotation) || operation.rotation < 0 || operation.rotation > 3)) throw new BadRequestException('地图对象旋转无效');
+      if (operation.action === 'team' && (!['core', 'building'].includes(String(operation.object_type))
+        || typeof operation.team !== 'string' || !/^[a-zA-Z0-9_#-]{1,40}$/.test(operation.team))) {
+        throw new BadRequestException('地图对象队伍无效');
+      }
+    }
+    if (Buffer.byteLength(JSON.stringify({ rules, waves, objects })) > 512 * 1024
+      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES) {
       throw new BadRequestException('地图文件无效或编辑数据超过大小限制');
     }
     const sourceHash = createHash('sha256').update(source).digest('hex');
@@ -345,6 +410,7 @@ export class ResourcePreviewService {
           terrain_changes: terrain,
           rule_changes: rules,
           wave_operations: waves,
+          object_operations: objects,
         }),
         signal: AbortSignal.timeout(60_000),
       });
@@ -353,7 +419,7 @@ export class ResourcePreviewService {
         const code = typeof error.errorCode === 'string' ? error.errorCode : '';
         if ([
           'INVALID_MAP_OPERATION', 'INVALID_WAVE_OPERATION', 'UNSUPPORTED_MAP_CONTENT', 'UNSUPPORTED_MAP_SIZE',
-          'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
+          'UNSUPPORTED_MAP_OBJECT', 'INVALID_MAP_OBJECT_OPERATION', 'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
         ].includes(code)) {
           const message = code === 'UNSUPPORTED_MAP_CONTENT'
             ? '地图包含当前编辑器无法安全保留的 Mod 或未知内容，未生成文件'
@@ -372,7 +438,7 @@ export class ResourcePreviewService {
       }
       const data = Buffer.from(result.dataBase64, 'base64');
       const digest = createHash('sha256').update(data).digest('hex');
-      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'MSAV'
+      if (!data.length || data.length > MAX_RENDER_BYTES
         || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
         throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
       }
@@ -421,6 +487,45 @@ export class ResourcePreviewService {
     }
   }
 
+  async editorCatalog(): Promise<{ items: unknown[] }> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('游戏内容服务暂不可用');
+    const response = await fetch(`${this.rendererUrl}/v2/editor-catalog`, {
+      headers: process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {},
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new ServiceUnavailableException('游戏内容服务暂不可用');
+    const data = await response.json() as { items?: unknown[] };
+    if (!Array.isArray(data.items) || data.items.length > 5_000) throw new ServiceUnavailableException('游戏内容数据无效');
+    return { items: data.items };
+  }
+
+  async mapRegion(source: Buffer, x: number, y: number): Promise<{ terrain: Array<{ x: number; y: number; floor: string; overlay: string }> }> {
+    if (!this.isConfigured() || ![x, y].every(value => Number.isInteger(value) && value >= 0 && value <= 32767)
+      || source.length > MAX_RENDER_BYTES) throw new BadRequestException('地图分区坐标无效');
+    const response = await fetch(`${this.rendererUrl}/v2/map-region`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}) },
+      body: JSON.stringify({ dataBase64: source.toString('base64'), sha256: createHash('sha256').update(source).digest('hex'), x, y }), signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) throw new BadRequestException('无法读取地图分区');
+    const result = await response.json() as { terrain: Array<{ x: number; y: number; floor: string; overlay: string }> };
+    if (!Array.isArray(result.terrain) || result.terrain.length > 16384) throw new BadRequestException('地图分区数据无效');
+    return result;
+  }
+
+  async analyzeEditorBytes(kind: 'map' | 'schematic', filename: string, source: Buffer) {
+    if (!this.isConfigured() || source.length > MAX_RENDER_BYTES) throw new ServiceUnavailableException('编辑解析服务暂不可用');
+    const hash = createHash('sha256').update(source).digest('hex');
+    const response = await fetch(`${this.rendererUrl}/v1/analyze`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}) },
+      body: JSON.stringify({ filename, resourceType: kind, sha256: hash, dataBase64: source.toString('base64') }), signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) throw new BadRequestException('无法解析编辑源文件');
+    const result = await response.json() as { metadata?: unknown; previewKey?: string; parserVersion?: string };
+    if (!this.isValidPreviewKey(result.previewKey, kind, hash)) throw new BadRequestException('编辑解析结果无效');
+    try { return { metadata: this.safeMetadata(result.metadata), parser_version: result.parserVersion || null }; }
+    finally { await this.removePreviewKey(result.previewKey); }
+  }
+
   private validateContentMetadata(value: unknown, allowedIds: string[]): Record<string, { name: string; icon: string | null }> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     const result: Record<string, { name: string; icon: string | null }> = {};
@@ -449,7 +554,7 @@ export class ResourcePreviewService {
     if (!this.isConfigured()) throw new BadRequestException('预览服务暂不可用，请稍后重试');
     if (file.file_size <= 0 || file.file_size > MAX_RENDER_BYTES) throw new BadRequestException('文件大小不支持生成预览');
     await this.makeRoomForDraft(userId);
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
 
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的 Mindustry 地图或蓝图');
@@ -497,6 +602,17 @@ export class ResourcePreviewService {
     };
   }
 
+  /** Stateless tools: no upload draft, permanent binding, or user file survives this request. */
+  async analyzeEditorFile(kind: 'map' | 'schematic', file: StoredResourceFile) {
+    if (!this.isConfigured() || !this.supports({ resource_kind: kind })) {
+      throw new ServiceUnavailableException('编辑解析服务暂不可用');
+    }
+    const rendered = await this.render({ resource_kind: kind, ...file });
+    if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的地图或蓝图');
+    try { return { resource_kind: kind, metadata: this.safeMetadata(rendered.preview.metadata), parser_version: rendered.preview.parserVersion }; }
+    finally { await this.removePreviewKey(rendered.preview.previewKey); }
+  }
+
   /** Generic resource files use the same durable quarantine draft without a game renderer. */
   async createUploadDraft(userId: number, kind: string, file: StoredResourceFile) {
     if (!/^[a-z][a-z0-9_]{1,49}$/.test(kind)) throw new BadRequestException('资源类型格式不正确');
@@ -536,7 +652,7 @@ export class ResourcePreviewService {
   async getDraftResPreviewUrl(userId: number, id: string): Promise<string | null> {
     const draft = await this.requireDraft(userId, id);
     if (!draft.previewObjectId) return null;
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(draft.previewObjectId, { filename: 'preview.png', expires_in: 300 })).url;
   }
 
@@ -609,32 +725,55 @@ export class ResourcePreviewService {
     } catch { await this.fail(resource.id, 'RENDER_FAILED'); }
   }
 
-  /** Rebuilds legacy schematic metadata at most once per resource per process. */
-  ensureProduction(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash' | 'renderer_status' | 'renderer_metadata_json'>): void {
-    if (resource.resource_kind !== 'schematic' || resource.renderer_status !== 'ready' || !this.isConfigured()) return;
+  /**
+   * Re-parses a legacy map or schematic when the metadata persisted for it
+   * predates the analysis projections the reader now depends on (production
+   * rates, build-time estimate, tile layers, wave groups). Guards keep a busy
+   * public detail page from stampeding the renderer: at most one attempt per
+   * resource per hour per process, and at most 24 in flight. A healed resource
+   * no longer matches the predicate, so this converges to a no-op.
+   */
+  ensureAnalysisMetadata(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash' | 'renderer_status' | 'renderer_metadata_json'>): void {
+    const kind = resource.resource_kind;
+    if ((kind !== 'schematic' && kind !== 'map') || resource.renderer_status !== 'ready' || !this.isConfigured()) return;
+    const metadata = this.parseMetadataRecord(resource.renderer_metadata_json);
+    // The renderer always emits these keys for the kind, so an absent key — not
+    // a null value — is what marks metadata written by an older revision.
+    const outdated = kind === 'schematic'
+      ? !('production' in metadata) || !('estimated_build_time_seconds' in metadata)
+      : !('tile_layers' in metadata) || !('wave_groups' in metadata);
+    if (!outdated) return;
+
     const now = Date.now();
-    for (const [id, attemptedAt] of this.productionBackfillAttempts) if (now - attemptedAt > 60 * 60 * 1000) this.productionBackfillAttempts.delete(id);
-    const existingProduction = resource.renderer_metadata_json?.production;
-    if ((existingProduction && typeof existingProduction === 'object' && !Array.isArray(existingProduction)) || this.productionBackfills.has(resource.id)
-      || (this.productionBackfillAttempts.get(resource.id) && now - this.productionBackfillAttempts.get(resource.id)! < 60 * 60 * 1000)
-      || this.productionBackfills.size >= 24) return;
-    if (this.productionBackfillAttempts.size >= 500) this.productionBackfillAttempts.delete(this.productionBackfillAttempts.keys().next().value!);
-    this.productionBackfillAttempts.set(resource.id, now);
-    this.productionBackfills.add(resource.id);
+    for (const [id, attemptedAt] of this.analysisBackfillAttempts) if (now - attemptedAt > 60 * 60 * 1000) this.analysisBackfillAttempts.delete(id);
+    if (this.analysisBackfills.has(resource.id)
+      || (this.analysisBackfillAttempts.get(resource.id) && now - this.analysisBackfillAttempts.get(resource.id)! < 60 * 60 * 1000)
+      || this.analysisBackfills.size >= 24) return;
+    if (this.analysisBackfillAttempts.size >= 500) this.analysisBackfillAttempts.delete(this.analysisBackfillAttempts.keys().next().value!);
+    this.analysisBackfillAttempts.set(resource.id, now);
+    this.analysisBackfills.add(resource.id);
     void (async () => {
       try {
         const rendered = await this.render(resource);
-        if (!rendered.preview?.metadata?.production || typeof rendered.preview.metadata.production !== 'object') return;
+        const healed = this.safeMetadata(rendered.preview?.metadata);
+        if (!healed) return;
         await this.resources.update(resource.id, {
-          renderer_metadata_json: this.safeMetadata(rendered.preview.metadata) as any,
-          renderer_parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
+          renderer_metadata_json: healed as any,
+          renderer_parser_version: typeof rendered.preview?.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
         });
       } catch (error) {
-        this.logger.warn(`Mindustry production metadata backfill failed for resource ${resource.id}: ${(error as Error).message}`);
+        this.logger.warn(`Mindustry analysis metadata backfill failed for resource ${resource.id}: ${(error as Error).message}`);
       } finally {
-        this.productionBackfills.delete(resource.id);
+        this.analysisBackfills.delete(resource.id);
       }
     })();
+  }
+
+  private parseMetadataRecord(value: unknown): Record<string, unknown> {
+    if (typeof value === 'string') {
+      try { value = JSON.parse(value); } catch { return {}; }
+    }
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   }
 
   async readPreview(resource: Pick<Resource, 'renderer_status' | 'renderer_preview_key'>): Promise<Buffer | null> {
@@ -689,6 +828,11 @@ export class ResourcePreviewService {
       'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
       'power_consumption', 'net_power', 'labels', 'production',
+      // Analysis projections the renderer already emits and the detail page,
+      // build-compatibility panel, and duplicate detection read back.
+      'estimated_build_time_seconds', 'estimated_build_time_method',
+      'schematic_format_version', 'save_format_version', 'map_build_metadata', 'parser_runtime',
+      'compatibility', 'unknown_content', 'structure_hash', 'normalized_structure_hash',
     ]);
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
@@ -699,11 +843,21 @@ export class ResourcePreviewService {
       const safe = this.sanitizeMetadataValue(item);
       if (safe !== undefined) result[key] = safe;
     }
+    const layers = result.tile_layers as Record<string, unknown> | undefined;
+    const originalLayers = (value as Record<string, unknown>).tile_layers as Record<string, unknown> | undefined;
+    if (layers && originalLayers) {
+      // `sanitizeMetadataValue` caps every array at 10k entries. A map larger
+      // than that loses deposits silently, and the reader needs to know the
+      // counts it sees are a lower bound.
+      const oversize = (key: string) => Array.isArray(originalLayers[key]) && (originalLayers[key] as unknown[]).length > 10000;
+      if (oversize('terrain') || ['resources', 'ores', 'liquid'].some(oversize)) result.tile_layers_truncated = true;
+      if (['buildings', 'enemy_spawns'].some(oversize)) layers.objects_truncated = true;
+    }
     return result;
   }
 
   private sanitizeMetadataValue(value: unknown, depth = 0): unknown {
-    if (depth > 4) return undefined;
+    if (depth > 8) return undefined;
     if (typeof value === 'string') return value.slice(0, 32_768);
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
     if (typeof value === 'boolean' || value === null) return value;

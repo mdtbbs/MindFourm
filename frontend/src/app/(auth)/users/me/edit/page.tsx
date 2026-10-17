@@ -86,7 +86,7 @@ export default function ProfileEditPage() {
         <button
           type="button"
           onClick={loadProfile}
-          className="text-sm text-[var(--primary)] underline"
+          className="text-sm text-[var(--primary-text)] underline"
         >
           {t('profileEdit.retry')}
         </button>
@@ -147,7 +147,7 @@ export default function ProfileEditPage() {
         {error && <Alert type="error" message={error} />}
 
         <div className="flex gap-3 justify-end pt-4 border-t border-[var(--border-light)] dark:border-gray-800">
-          <Link href="/settings" className="flex items-center gap-1 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors mr-auto">
+          <Link href="/settings" className="flex items-center gap-1 text-sm text-[var(--text-secondary)] hover:text-[var(--primary-text)] transition-colors mr-auto">
             <Bell className="w-4 h-4" />
             {t('profileEdit.notificationSettings')}
           </Link>

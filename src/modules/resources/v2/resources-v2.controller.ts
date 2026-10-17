@@ -140,7 +140,7 @@ export class ResourcesV2Controller {
   @Get(':id/workbench')
   @publicUuidParam()
   @v2ReadResponse(ResourceWorkbenchV2Dto, 'getResourceWorkbenchV2', '读取公开或有权限访问的 Resource V2 工作台', 60)
-  workbench(@Param('id') id: string, @Req() request: any) { return this.resources.getWorkbench(id, request.user || null); }
+  workbench(@Param('id') id: string, @Req() request: any, @Query() query: ResourceV2VersionQueryDto) { return this.resources.getWorkbench(id, request.user || null, query.version_public_id); }
 
   @Get('mods/:id')
   @publicUuidParam()

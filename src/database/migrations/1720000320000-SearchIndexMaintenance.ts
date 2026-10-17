@@ -35,12 +35,9 @@ export class SearchIndexMaintenance1720000320000 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE \`${index.table}\` DROP INDEX \`${index.name}\``);
       }
     }
-    const [{ count = 0 } = {}] = await queryRunner.query('SELECT COUNT(*) AS count FROM search_index_maintenance_runs');
-    if (Number(count) === 0) {
-      await queryRunner.query('DROP TABLE IF EXISTS search_index_maintenance_runs');
-    }
-    // Keep maintenance audit rows when they exist; derived indexes are removed
-    // safely, while operational history remains available after rollback.
+    // A reverted migration must restore the pre-migration schema. Audit rows
+    // belong to this additive table and are intentionally removed with it.
+    await queryRunner.query('DROP TABLE IF EXISTS search_index_maintenance_runs');
   }
 
   private async hasIndex(queryRunner: QueryRunner, table: string, name: string): Promise<boolean> {
@@ -57,10 +54,6 @@ export class SearchIndexMaintenance1720000320000 implements MigrationInterface {
       WHERE table_schema = DATABASE() AND table_name IN (${placeholders})`, tables);
     const found = new Map<string, string>();
     for (const column of columns) {
-      // mysql2 preserves the driver's column-label casing for information_schema
-      // rows. In CI/prod this can be uppercase (TABLE_NAME/COLUMN_NAME/DATA_TYPE),
-      // while mocks and some drivers return the requested lowercase labels.
-      // Normalize both forms before validating the allowlisted catalog.
       const tableName = column.table_name ?? column.TABLE_NAME;
       const columnName = column.column_name ?? column.COLUMN_NAME;
       const dataType = column.data_type ?? column.DATA_TYPE;

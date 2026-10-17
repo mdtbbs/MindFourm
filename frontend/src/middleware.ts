@@ -3,7 +3,7 @@
  *
  * This middleware runs before page components and:
  * 1. Protects admin routes (/admin/*) - requires authentication
- * 2. Protects authenticated routes (/notifications, /messages, /bookmarks, /settings)
+ * 2. Protects authenticated routes, including private workspaces and cloud saves
  * 3. Redirects unauthenticated users to /login
  */
 
@@ -18,11 +18,22 @@ const AUTH_REQUIRED_ROUTES = [
   "/messages",
   "/bookmarks",
   "/settings",
+  "/me",
+  "/friends",
+  "/resources/my",
+  "/tools/cloud-saves",
   "/apply-server",
 ];
 
 // Routes that require admin role (checked at component level)
 const ADMIN_ROUTES = ["/admin"];
+
+export function requiresAuthentication(pathname: string): boolean {
+  // This user route was deliberately removed. Let Next return its regular 404
+  // even for guests instead of turning the deleted URL into a login redirect.
+  if (pathname === '/settings/cloud-saves') return false;
+  return AUTH_REQUIRED_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -59,9 +70,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Check if route requires authentication
-  const requiresAuth = AUTH_REQUIRED_ROUTES.some((route) =>
-    pathname.startsWith(route),
-  );
+  const requiresAuth = requiresAuthentication(pathname);
 
   const isAdminRoute = ADMIN_ROUTES.some((route) => pathname.startsWith(route));
 

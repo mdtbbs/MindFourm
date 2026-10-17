@@ -4,9 +4,13 @@ import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 
 export type NormalizedSaveMetadata = {
   game_version: string | null; game_build: number | null; map_name: string | null;
-  wave: number | null; playtime_seconds: string | null;
+  wave: number | null; playtime_seconds: string | null; // string: MySQL BIGINT UNSIGNED comes back as a string
   mods_manifest_json: Array<Record<string, string | null>> | null; mods_manifest_hash: string | null;
 };
+
+// Same shape as class-validator's IsUUID('4'); the loose length check let
+// cursor values like "------------------------------------" reach the query.
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function shouldCreateConflictCopy(resolution: string, hasConflict: boolean): boolean {
   return resolution === 'create_conflict_copy' && hasConflict;
@@ -63,7 +67,7 @@ export function decodeSaveCursor(cursor?: string): { updated_at: string; id: str
   if (!cursor) return null;
   try {
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    if (typeof value?.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.id) || !Number.isFinite(Date.parse(value.updated_at))) throw new Error();
+    if (typeof value?.id !== 'string' || !UUID_V4_PATTERN.test(value.id) || !Number.isFinite(Date.parse(value.updated_at))) throw new Error();
     return { updated_at: new Date(value.updated_at).toISOString(), id: value.id };
   } catch {
     throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '分页游标无效。');

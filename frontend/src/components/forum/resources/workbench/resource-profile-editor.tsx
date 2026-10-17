@@ -84,6 +84,6 @@ export default function ResourceProfileEditor({
     {sourceChanged && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-[var(--text-secondary)]">{t('resourceWorkbenchV2.sourceReviewNotice')}</p>}
     {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
     {saved && <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{t('resourceWorkbenchV2.profileSaved')}</p>}
-    <button type="submit" disabled={!canEdit || !changed || !title.trim() || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{saving ? t('resourceWorkbenchV2.saving') : t('resourceWorkbenchV2.saveProfile')}</button>
+    <button type="submit" disabled={!canEdit || !changed || !title.trim() || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--primary-button)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{saving ? t('resourceWorkbenchV2.saving') : t('resourceWorkbenchV2.saveProfile')}</button>
   </form>;
 }

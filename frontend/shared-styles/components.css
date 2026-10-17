@@ -690,7 +690,7 @@
 
 .user-card-title {
   font-size: 0.6875rem;
-  color: var(--primary);
+  color: var(--primary-text);
   margin-bottom: 0.5rem;
 }
 
@@ -952,7 +952,7 @@
 
 .sidebar-link.active {
   background: var(--bg-elevated);
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 500;
 }
 
@@ -991,7 +991,7 @@
 }
 
 .sidebar-quick-link:hover {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* ===== 响应式调整 ===== */
@@ -1145,5 +1145,5 @@
 
 .theme-toggle:hover {
   border-color: var(--primary) !important;
-  color: var(--primary) !important;
+  color: var(--primary-text) !important;
 }

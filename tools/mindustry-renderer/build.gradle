@@ -25,9 +25,9 @@ tasks.named('test') { dependsOn(tasks.named('rendererRegression')) }
 // the bundled Mindustry build.  The forum preview service must be able to
 // render maps authored by the current official client.
 // Keep renderer parsing and fixture verification reproducible across CI and local builds.
-def mindustryVersion = 'v160.2'
-def mindustryServerSha256 = 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57'
-def mindustryDesktopSha256 = '7f210295dfffb4c17b582b27bab41f4dde83f557f00f0877572fdac943f40539'
+def mindustryVersion = 'v160.5'
+def mindustryServerSha256 = '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0'
+def mindustryDesktopSha256 = 'c2fd5a5dcb8d306525bb47ff28121237d4d25f53868562946491f2ef261dc272'
 def mindustryJar = file("$buildDir/deps/server-release-${mindustryVersion}.jar")
 def mindustryDesktopJar = file("$buildDir/deps/Mindustry-${mindustryVersion}.jar")
 def textureAssetsDir = file("$buildDir/assets")

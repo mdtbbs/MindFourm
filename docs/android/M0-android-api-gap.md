@@ -1,6 +1,8 @@
 # Android M0：API 缺口清单
 
-**状态：** Accepted；**范围：** Android 一期（Reader + Community Client）。
+**状态：** Accepted（契约目标仍有效）；**范围：** Android 一期（Reader + Community Client）。
+
+> 阅读提示：本文件的「当前实现」列描述的是 **M0 规划时** 的后端状态。其中多数「新增 V1」项目此后已经落地，当前后端契约、客户端实际接入程度和阻塞项以 [`ANDROID-CLIENT-STATUS.md`](./ANDROID-CLIENT-STATUS.md) 为准，改造顺序见 [`ANDROID-DEVELOPMENT-PLAN.md`](./ANDROID-DEVELOPMENT-PLAN.md)，接口有无以 `src/openapi/public-v1-operation-allowlist.ts` 为准（仓库内 OpenAPI JSON 是快照，可能落后于白名单）。
 
 ## 结论
 
@@ -9,6 +11,13 @@
 一期后端目标是把下表“新增 V1”项目落实为同一份版本化契约；旧 `/api/*` 不删除、不改语义，Web 继续兼容。
 
 ## 已有能力与缺口
+
+> 下表记录的是 **M0 规划时** 的判断，保留作为决策背景。当时标记为「新增 V1」的项目现在大多已经实现：
+> 分类/标签只读 V1、threads 读写、replies 与子回复、like/bookmark、reports、notifications V1、
+> `uploads/images`、Mobile Auth，以及计划外的 `home`、`discover`、`messages`、`friends`、`presence`、
+> `multiplayer`、`game-saves`、`game-content` 和资源 V2 全套。唯一至今不存在的是 `GET /api/v1/me/posts`。
+> 客户端实际接了多少、哪些路由尚未进入公开白名单，见 [`ANDROID-CLIENT-STATUS.md`](./ANDROID-CLIENT-STATUS.md)。
+
 
 | Android 场景 | 当前实现 | 结论 / M0 决策 |
 | --- | --- | --- |

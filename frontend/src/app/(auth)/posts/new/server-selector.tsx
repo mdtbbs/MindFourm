@@ -43,7 +43,7 @@ export function ServerSelector({ value, onChange, postType, onPostTypeChange }: 
       <div className="text-sm text-[var(--text-muted)] flex items-center gap-2">
         <Link2 className="w-4 h-4" />
         <span>您还没有服务器，</span>
-        <a href="/apply-server" className="text-[var(--primary)] hover:text-[var(--primary-dark)]">
+        <a href="/apply-server" className="text-[var(--primary-text)] hover:text-[var(--primary-dark)]">
           申请一个
         </a>
       </div>
@@ -53,7 +53,7 @@ export function ServerSelector({ value, onChange, postType, onPostTypeChange }: 
   return (
     <div className="space-y-3 p-4 bg-[var(--bg-elevated)] rounded-[var(--radius)]">
       <div className="flex items-center gap-2">
-        <ServerIcon className="w-4 h-4 text-[var(--primary)]" />
+        <ServerIcon className="w-4 h-4 text-[var(--primary-text)]" />
         <span className="text-sm font-medium text-[var(--text)]">关联服务器（可选）</span>
       </div>
 

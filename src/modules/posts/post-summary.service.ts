@@ -92,7 +92,7 @@ export class PostSummaryService {
       source: post.source || 'USER',
       slug: post.slug ?? null,
       title: post.title,
-      excerpt: this.buildExcerpt(post.content_text || post.content),
+      excerpt: this.buildExcerpt(post.content_text || post.content, 120, post.title),
       content_language: post.content_language || 'unknown',
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
@@ -115,13 +115,22 @@ export class PostSummaryService {
     };
   }
 
-  buildExcerpt(content: string | null | undefined, maxLength: number = 120): string {
+  buildExcerpt(content: string | null | undefined, maxLength: number = 120, title?: string | null): string {
     const stripped = this.stripMarkdown(content || '');
-    if (stripped.length <= maxLength) {
-      return stripped;
+    // Most members restate the title as the first line of the body. Echoing it
+    // back under the same title in every list is pure noise, so drop a leading
+    // repeat before truncating. Only the head is compared: a title-shaped line
+    // further down is usually real content.
+    const leading = title ? this.stripMarkdown(title) : '';
+    const withoutEcho = leading && stripped.startsWith(leading)
+      ? stripped.slice(leading.length).replace(/^[\s\u3000:：,，.。!！?？\-—–|、]+/, '')
+      : stripped;
+    const excerpt = withoutEcho || stripped;
+    if (excerpt.length <= maxLength) {
+      return excerpt;
     }
 
-    return `${stripped.slice(0, maxLength)}...`;
+    return `${excerpt.slice(0, maxLength)}...`;
   }
 
   private stripMarkdown(input: string): string {

@@ -320,12 +320,12 @@ export class RequestLoggerMiddleware implements NestMiddleware {
 
 ---
 
-## Docker 健康检查
+## 进程健康检查
 
-```dockerfile
-# Dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+本项目不使用 Docker，健康检查由反向代理或监控系统直接探测后端端点：
+
+```bash
+curl -f http://127.0.0.1:4000/api/health
 ```
 
 ---
@@ -337,7 +337,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 - 使用 `grep` 过滤：`grep "error" logs/combined-2026-06-07.log`
 
 ### 生产环境
-- Docker logs：`docker logs forum-backend --follow`
+- PM2 日志：`pm2 logs mindforum-api --lines 200`
 - 可选集成：ELK Stack（Elasticsearch + Logstash + Kibana）或 Grafana Loki
 
 ### 日志保留策略（统一 90 天）

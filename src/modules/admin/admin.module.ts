@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
+import { OperationAuditService } from './operation-audit.service';
+import { OperationAuditController } from './operation-audit.controller';
 import { StatsModule } from '../stats/stats.module';
 import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
@@ -32,8 +34,8 @@ import { PostsModule } from '../posts/posts.module';
     PostsModule,
     EventsModule,
   ],
-  controllers: [AdminController],
-  providers: [AdminService],
-  exports: [AdminService],
+  controllers: [AdminController, OperationAuditController],
+  providers: [AdminService, OperationAuditService],
+  exports: [AdminService, OperationAuditService],
 })
 export class AdminModule {}

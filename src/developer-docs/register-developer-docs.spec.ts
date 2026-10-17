@@ -5,8 +5,10 @@ function requestDocumentationRoute(route: string, document: any = {}) {
   const registered = new Map<string, (request: any, response: any) => void>();
   registerDeveloperDocs({
     getHttpAdapter: () => ({
-      get: (registeredRoute: string, callback: (request: any, response: any) => void) => {
-        registered.set(registeredRoute, callback);
+      // Routes register as `get(path, rateLimiter, handler)`. Keep the trailing
+      // handler so the page-rendering assertions are unaffected by the limiter.
+      get: (registeredRoute: string, ...chain: Array<(request: any, response: any) => void>) => {
+        registered.set(registeredRoute, chain[chain.length - 1]);
       },
     }),
   } as any, document, '2.6.1');
@@ -170,6 +172,7 @@ describe('developer docs routes', () => {
   it.each([
     ['/api/v1/docs/changelog', '公开 API 更新记录'],
     ['/api/v1/docs/lifecycle', '公开 V1 API 生命周期'],
+    ['/api/v1/docs/blobs', '通用 Blob 存储 V1'],
   ])('renders the Markdown guide %s with its title and navigation', (route, title) => {
     const response = requestDocumentationRoute(route);
 
@@ -177,6 +180,14 @@ describe('developer docs routes', () => {
     expect(response.body).toContain(`<h1>${title}</h1>`);
     expect(response.body).toContain('href="/api/v1/docs/changelog"');
     expect(response.body).toContain('href="/api/v1/docs/lifecycle"');
+  });
+
+  it('publishes the blob guide with its served-type rule', () => {
+    const html = renderDocumentationRoute('/api/v1/docs/blobs');
+
+    expect(html).toContain('href="/api/v1/docs/blobs"');
+    expect(html).toContain('application/octet-stream');
+    expect(html).toContain('blob.read');
   });
 
   it.each([
@@ -190,14 +201,25 @@ describe('developer docs routes', () => {
     expect(response.body).toContain(title);
   });
 
+  it('serves the public resource ranking algorithms in the online API guide', () => {
+    const response = requestDocumentationRoute('/api/v1/docs/resources');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('资源发现与推荐');
+    expect(response.body).toContain('resource-bayesian-rating-v1');
+    expect(response.body).toContain('resource-taste-v1');
+    expect(response.body).toContain('completed_downloads_7d');
+    expect(response.body).toContain('匿名调用不建立个人画像');
+  });
+
   it.each(['/api/docs/v1', '/api/docs/v1/'])(
     'redirects the former Swagger UI entry point %s to the Chinese API reference',
     (route) => {
       let handler: ((request: any, response: any) => void) | undefined;
       registerDeveloperDocs({
         getHttpAdapter: () => ({
-          get: (registeredRoute: string, callback: (request: any, response: any) => void) => {
-            if (registeredRoute === route) handler = callback;
+          get: (registeredRoute: string, ...chain: Array<(request: any, response: any) => void>) => {
+            if (registeredRoute === route) handler = chain[chain.length - 1];
           },
         }),
       } as any, {} as any, '2.6.2');

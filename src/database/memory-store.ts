@@ -117,6 +117,17 @@ export class MemoryStore {
     return next;
   }
 
+  /**
+   * Arm the TTL that the next `incr` should carry.
+   *
+   * Redis applies INCR and EXPIRE-on-first-hit inside one Lua script. Without a
+   * script here the window has to be armed explicitly before the first increment,
+   * because once the counter exists, "is this the first hit" is unanswerable.
+   */
+  expireAfterNextIncr(key: string, seconds: number): void {
+    this.data.set(key, { value: String(this.get(key) ?? 0), expiresAt: Date.now() + seconds * 1000 });
+  }
+
   keys(pattern: string): string[] {
     const regex = patternToRegExp(pattern);
     const matches: string[] = [];

@@ -72,6 +72,8 @@ jobs:
       RES_ENABLED: 'true'
       RES_BASE_URL: http://127.0.0.1:4100
       RES_API_KEY: e2e-res-key
+      RESOURCE_RENDERER_URL: http://127.0.0.1:6100
+      RESOURCE_RENDERER_TOKEN: e2e-renderer-key
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -104,6 +106,20 @@ jobs:
           npx typeorm migration:revert -d dist/database/data-source.js
           npx typeorm migration:run -d dist/database/data-source.js
 
+      - name: Set up Java 17 for the official editor worker
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify and compile the pinned official editor runtime
+        shell: bash
+        run: |
+          mkdir -p tools/mindustry-renderer/build/deps
+          curl --fail --location --retry 3 https://github.com/Anuken/Mindustry/releases/download/v160.5/server-release.jar --output tools/mindustry-renderer/build/deps/server-release-v160.5.jar
+          curl --fail --location --retry 3 https://github.com/Anuken/Mindustry/releases/download/v160.5/Mindustry.jar --output tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar
+          bash tools/mindustry-renderer/test-renderer.sh
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
@@ -115,6 +131,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$CLOUD_SAVES_STORAGE_PATH"
+          STORAGE_ROOT="$PWD/uploads/previews" ASSETS_ROOT="$PWD/tools/mindustry-renderer/build/pr-verification/assets" WORKER_TOKEN="$RESOURCE_RENDERER_TOKEN" WORKER_PORT=6100 nohup java -Djava.awt.headless=true -cp tools/mindustry-renderer/build/deps/server-release-v160.5.jar:tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar:tools/mindustry-renderer/build/pr-verification/classes/main cn.mdtbbs.renderer.MapRenderer > "$RUNNER_TEMP/mindfourm-renderer.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/mindfourm-renderer.pid"
           nohup node scripts/e2e-resource-storage.cjs > "$RUNNER_TEMP/mindfourm-res.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/mindfourm-res.pid"
           nohup npm run start:prod > "$RUNNER_TEMP/mindfourm-api.log" 2>&1 &
@@ -125,7 +143,8 @@ jobs:
             echo $! > "$RUNNER_TEMP/mindfourm-web.pid"
           )
           for attempt in $(seq 1 90); do
-            if curl --silent --fail http://127.0.0.1:4100/health >/dev/null \
+            if curl --silent --fail http://127.0.0.1:6100/health >/dev/null \
+              && curl --silent --fail http://127.0.0.1:4100/health >/dev/null \
               && curl --silent --fail http://127.0.0.1:4000/api/health >/dev/null \
               && curl --silent --fail http://127.0.0.1:3000/ >/dev/null; then
               exit 0
@@ -146,6 +165,7 @@ jobs:
           tests/e2e/rich-content.spec.ts
           tests/e2e/resource.spec.ts
           tests/e2e/resource-v2-review.spec.ts
+          tests/e2e/player-resource-editors.spec.ts
           tests/e2e/admin.spec.ts
           tests/e2e/product-smoke.spec.ts
 
@@ -169,6 +189,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            ${{ runner.temp }}/mindfourm-renderer.log
             ${{ runner.temp }}/mindfourm-res.log
             ${{ runner.temp }}/mindfourm-api.log
             ${{ runner.temp }}/mindfourm-web.log

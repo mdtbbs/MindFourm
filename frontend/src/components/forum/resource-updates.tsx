@@ -36,7 +36,7 @@ export default function ResourceUpdates({ resource }: ResourceUpdatesProps) {
                 <h3 className="font-bold text-[var(--text)] mb-1">
                   {version.version}
                   {index === 0 && (
-                    <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-[var(--primary-soft)] text-[var(--primary)]">
+                    <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-[var(--primary-soft)] text-[var(--primary-text)]">
                       最新版本
                     </span>
                   )}

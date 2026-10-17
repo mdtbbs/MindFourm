@@ -1,18 +1,22 @@
 import { Metadata } from 'next';
 import FriendSearch from '@/components/lanlink/FriendSearch';
 import FriendsList from '@/components/forum/friends-list';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
-export const metadata: Metadata = {
-  title: '好友',
-  description: '管理好友、在线状态与联机邀请',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  return { title: translate(locale, 'friends.title'), description: translate(locale, 'friends.description') };
+}
 
-export default function FriendsPage() {
+export default async function FriendsPage() {
+  const locale = await getRequestLocale();
+  const t = (key: string) => translate(locale, key);
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">好友</h1>
-        <p className="text-muted-foreground mt-1">查看好友在线状态、活动和联机权限</p>
+        <h1 className="text-2xl font-bold">{t('friends.heading')}</h1>
+        <p className="text-muted-foreground mt-1">{t('friends.pageDescription')}</p>
       </div>
       <FriendsList />
 

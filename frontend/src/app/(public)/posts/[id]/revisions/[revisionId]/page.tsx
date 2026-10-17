@@ -35,7 +35,7 @@ export default async function PostRevisionPage({
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link
         href={`/posts/${postId}/revisions`}
-        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] mb-6"
+        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary-text)] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         返回编辑历史

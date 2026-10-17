@@ -182,7 +182,7 @@ const tagVariants: Variants = {
   hover: {
     scale: 1.05,
     background: 'var(--primary-soft)',
-    color: 'var(--primary)',
+    color: 'var(--primary-text)',
   },
 };
 
@@ -316,7 +316,7 @@ export function ServerCard({
                 <motion.span
                   whileHover={{ scale: 1.1, color: 'var(--primary-dark)' }}
                   whileTap={{ scale: 0.9 }}
-                  style={{ fontSize: 11, color: 'var(--primary)', cursor: 'pointer' }}
+                  style={{ fontSize: 11, color: 'var(--primary-text)', cursor: 'pointer' }}
                   onClick={onEdit}
                 >
                   ✏️ 编辑
@@ -536,7 +536,7 @@ export function ServerCard({
               <span>
                 服主：<motion.span
                   whileHover={{ color: 'var(--primary-dark)' }}
-                  style={{ color: 'var(--primary)', cursor: 'pointer' }}
+                  style={{ color: 'var(--primary-text)', cursor: 'pointer' }}
                 >
                   @{owner.username}
                 </motion.span>

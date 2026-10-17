@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePresence, usePresences } from '@/store';
 import { presenceApi } from '@/lib/api/client';
+import { useI18n } from '@/i18n/provider';
 
 interface OnlineIndicatorProps {
   userId: number;
@@ -17,11 +18,11 @@ const sizeConfig = {
   lg: { dot: 'w-3 h-3', text: 'text-base' },
 };
 
-const statusConfig = {
-  online: { color: 'bg-green-500', text: '在线' },
-  hosting: { color: 'bg-blue-500', text: '开房中' },
-  playing: { color: 'bg-yellow-500', text: '游戏中' },
-  offline: { color: 'bg-gray-400', text: '离线' },
+const statusConfig: Record<'online' | 'hosting' | 'playing' | 'offline', { color: string; labelKey: string }> = {
+  online: { color: 'bg-green-500', labelKey: 'friends.online' },
+  hosting: { color: 'bg-blue-500', labelKey: 'friends.hosting' },
+  playing: { color: 'bg-yellow-500', labelKey: 'friends.playing' },
+  offline: { color: 'bg-gray-400', labelKey: 'friends.offline' },
 };
 
 /**
@@ -49,21 +50,23 @@ export function OnlineIndicator({
   showText = false,
   className = '',
 }: OnlineIndicatorProps) {
+  const { t } = useI18n();
   const status = usePresence(userId);
   const config = sizeConfig[size];
   const statusStyle = statusConfig[status];
+  const label = t(statusStyle.labelKey);
 
   return (
     <span
       className={`inline-flex items-center gap-1.5 ${className}`}
-      title={statusStyle.text}
+      title={label}
     >
       <span
         className={`${config.dot} ${statusStyle.color} rounded-full ring-2 ring-background`}
       />
       {showText && (
         <span className={`${config.text} text-muted-foreground`}>
-          {statusStyle.text}
+          {label}
         </span>
       )}
     </span>
@@ -126,13 +129,14 @@ interface StatusDotProps {
  * 用于已经获取到在线状态数据的场景，不需要再次请求。
  */
 export function StatusDot({ status = 'offline', size = 'md' }: StatusDotProps) {
+  const { t } = useI18n();
   const config = sizeConfig[size];
   const statusStyle = statusConfig[status];
 
   return (
     <span
       className={`${config.dot} ${statusStyle.color} rounded-full ring-2 ring-background inline-block`}
-      title={statusStyle.text}
+      title={t(statusStyle.labelKey)}
     />
   );
 }

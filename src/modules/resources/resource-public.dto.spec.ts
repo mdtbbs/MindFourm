@@ -26,6 +26,13 @@ describe('public resource boundary', () => {
     for (const column of ['resource.content', 'resource.content_json', 'resource.description', 'user.email', 'user.phone', 'resource.file_path']) expect(RESOURCE_CARD_COLUMNS).not.toContain(column);
     expect(RESOURCE_CARD_COLUMNS).toContain('resource.rating_average');
   });
+  it('publishes published_at on both cards and details, and opts it into the card query', () => {
+    const published = { ...resource, published_at: new Date('2026-06-01T08:00:00.000Z') };
+    expect(toPublicResource(published)).toHaveProperty('published_at');
+    expect(toPublicResource(published, true)).toHaveProperty('published_at');
+    expect(RESOURCE_CARD_COLUMNS).toContain('resource.published_at');
+  });
+
   it('retains rejection feedback for an authorized nonpublic read', () => {
     expect(toPublicResource({ ...resource, status: 'rejected' })).toHaveProperty('reject_reason', 'moderation note');
   });

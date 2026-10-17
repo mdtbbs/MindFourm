@@ -22,6 +22,7 @@ import { MultiplayerModule } from '../modules/multiplayer/multiplayer.module';
 import { PresenceModule } from '../modules/presence/presence.module';
 import { RealtimeGatewayModule } from '../modules/realtime/realtime-gateway.module';
 import { GameSavesModule } from '../modules/game-saves/game-saves.module';
+import { BlobsModule } from '../modules/blobs/blobs.module';
 import { PacksModule } from '../modules/packs/packs.module';
 import { API_V1_VERSION } from './api-version';
 import { PUBLIC_V1_OPERATION_ALLOWLIST } from './public-v1-operation-allowlist';
@@ -251,6 +252,7 @@ export function createInternalV1OpenApiDocument(app: INestApplication): OpenAPIO
       UploadsModule,
       GameContentModule,
       GameSavesModule,
+      BlobsModule,
       PacksModule,
       SearchModule,
       NotificationsModule,

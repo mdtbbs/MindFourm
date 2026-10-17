@@ -35,7 +35,7 @@ export default async function TagsPage() {
           <Link
             key={tag.id}
             href={`/tags/${tag.slug}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-sm text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-sm text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary-text)] transition-colors"
           >
             <span>{tag.name}</span>
             <span className="text-xs text-[var(--text-muted)]">{new Intl.NumberFormat(locale).format(tag.post_count)}</span>

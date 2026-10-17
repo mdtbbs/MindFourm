@@ -90,6 +90,10 @@ export class GameSavesController {
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Referrer-Policy', 'no-referrer');
+    // Snapshot bytes never change, so the digest doubles as a stable validator
+    // for a client that re-checks a previously downloaded file.
+    res.setHeader('ETag', `"sha256-${file.sha256}"`);
+    if (file.last_modified) res.setHeader('Last-Modified', file.last_modified.toUTCString());
     file.stream.on('error', () => {
       if (res.headersSent) res.destroy();
       else res.status(500).end();
@@ -135,7 +139,10 @@ export class GameSavesController {
 
   @Put('uploads/:uploadId/file')
   @OAuthProtected('game_content.saves.write')
-  @RateLimit({ max: 20, window: 300 })
+  // A single PUT counts as one request no matter how long the body takes, but
+  // resume/retry loops hit the same bucket. 10 minutes leaves room for several
+  // retries inside the 10-minute upload session window.
+  @RateLimit({ max: 60, window: 600 })
   @ApiConsumes('application/octet-stream')
   @ApiOperation({ summary: '上传存档文件', description: '使用当前 OAuth Bearer 将原始文件流写入论坛持久化目录，服务端校验大小和 SHA-256。' })
   uploadFile(@Req() req: any, @Param('uploadId') uploadId: string) {
@@ -145,7 +152,7 @@ export class GameSavesController {
   @Post('uploads/:uploadId/commit')
   @OAuthProtected('game_content.saves.write')
   @RateLimit({ max: 30, window: 300 })
-  @ApiHeader({ name: 'Idempotency-Key', required: false, description: '按账号重放同一提交操作，保留 24 小時。' })
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: '按账号重放同一提交操作，保留 24 小时。' })
   @ApiOperation({ summary: '校验并提交上传', description: '控制面流式读取对象校验大小与 SHA-256，然后在短事务中锁定 Slot 并创建不可变 Snapshot。' })
   commit(@Req() req: any, @Param('uploadId') uploadId: string, @Headers('idempotency-key') key?: string) {
     return this.saves.commitUpload(req.user.id, uploadId, this.actor(req), key);

@@ -55,7 +55,7 @@ export default function ServerSidebar() {
                 href={`/servers?section=${item.key}`}
                 className={`flex items-center gap-3 px-3 py-2 rounded-[var(--radius)] text-sm transition-colors ${
                   isActive
-                    ? 'bg-[var(--primary)]/10 text-[var(--primary)] font-medium'
+                    ? 'bg-[var(--primary)]/10 text-[var(--primary-text)] font-medium'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
                 }`}
               >

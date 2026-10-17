@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { resolve } from 'node:path';
 import { SettingsService } from '../settings/settings.service';
 import { SiteConfigService } from '../../config/site-profile';
-import { isCloudSaveStorageConfigured } from '../game-saves/cloud-save-storage-config';
+import { isAbsoluteStoragePath } from '@common/utils/storage-path.util';
 
 export type ClientCapabilities = {
   site: {
@@ -28,6 +28,8 @@ export type ClientCapabilities = {
   messages: { available: boolean; third_party_access: boolean };
   game_content: { maps: { read: boolean; download: boolean; upload: boolean }; schematics: { read: boolean; download: boolean; upload: boolean } };
   cloud_saves_v1: boolean;
+  /** Generic Blob API: enabled by settings and backed by a writable path. */
+  blobs_v1: boolean;
   client: { minimum_supported_version: string | null; recommended_version: string | null };
   resource_read: boolean;
   resource_files: boolean;
@@ -71,10 +73,10 @@ type EditorReadiness = {
 
 // Kept in sync with tools/mindustry-renderer/test-renderer.sh and the runtime
 // artifact reported by the renderer's health endpoint.
-const REQUIRED_MINDUSTRY_SERVER_SHA256 = 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57';
+const REQUIRED_MINDUSTRY_SERVER_SHA256 = '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0';
 const READINESS_CACHE_MS = 10_000;
 const READINESS_FAILURE_CACHE_MS = 2_000;
-const READINESS_TIMEOUT_MS = 1_000;
+const READINESS_TIMEOUT_MS = 10_000;
 
 @Injectable()
 export class CapabilitiesService {
@@ -86,7 +88,7 @@ export class CapabilitiesService {
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
       notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
-      cloudSavesEnabled, cloudSavePath, resourceCenterEnabled] = await Promise.all([
+      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -103,21 +105,26 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('feature_third_party_multiplayer_v1_enabled', false),
       this.settingsService.getBoolean('cloud_saves_enabled', false),
       this.settingsService.get('cloud_saves_storage_path'),
+      this.settingsService.getBoolean('blobs_enabled', false),
+      this.settingsService.get('blobs_storage_path'),
       this.settingsService.getBoolean('feature_resources_enabled', true),
     ]);
-    const cloudSavesAvailable = cloudSavesEnabled && isCloudSaveStorageConfigured(
+    const cloudSavesAvailable = cloudSavesEnabled && isAbsoluteStoragePath(
       cloudSavePath || process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
+    );
+    const blobsAvailable = blobsEnabled && isAbsoluteStoragePath(
+      blobsPath || process.env.BLOBS_STORAGE_PATH || resolve(process.cwd(), 'storage', 'blobs'),
     );
     const resourceCenterAvailable = Boolean(this.siteConfig.current.features.resources && resourceCenterEnabled && resourceRead);
     const editorReadiness = resourceCenterAvailable && resourceUpload
       ? await this.getEditorReadiness()
       : { rendererOperations: new Set<string>(), storageReady: false };
     const schematicLightEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
-      && this.hasRendererOperations(editorReadiness, ['schematic.read', 'schematic.write']);
+      && this.hasRendererOperations(editorReadiness, ['schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write']);
     const schematicFullEditor = schematicLightEditor
       && this.hasRendererOperations(editorReadiness, ['schematic.logic.read', 'schematic.logic.text.write']);
     const mapEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
-      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.terrain.write', 'map.rules.read', 'map.rules.write']);
+      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write']);
     const waveEditor = mapEditor
       && this.hasRendererOperations(editorReadiness, ['map.waves.read', 'map.waves.write']);
     return {
@@ -150,8 +157,8 @@ export class CapabilitiesService {
         schematics: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
       },
       cloud_saves_v1: cloudSavesAvailable,
+      blobs_v1: blobsAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
-      // Legacy aliases remain until official clients migrate to nested capabilities.
       resource_read: resourceRead,
       resource_files: resourceRead,
       download_grants: resourceRead && resourceDownload,
@@ -178,6 +185,15 @@ export class CapabilitiesService {
       map_editor: mapEditor,
       wave_editor: waveEditor,
     };
+  }
+
+  async assertEditorAvailable(kind: 'map' | 'schematic') {
+    const capabilities = await this.getCapabilities();
+    const readiness = await this.getEditorReadiness();
+    const operations = kind === 'schematic' ? ['editor.catalog', 'schematic.copy.write'] : ['editor.catalog', 'map.region.read', 'map.objects.rotate'];
+    if (!(kind === 'schematic' ? capabilities.schematic_full_editor : capabilities.wave_editor) || !this.hasRendererOperations(readiness, operations)) {
+      throw new ServiceUnavailableException('编辑器暂不可用，请稍后重试；需要就绪的官方解析器与资源存储服务');
+    }
   }
 
   private hasRendererOperations(readiness: EditorReadiness, operations: string[]): boolean {

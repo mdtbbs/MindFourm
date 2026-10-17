@@ -43,7 +43,9 @@ export default function PrivacyNotice() {
         <button
           type="button"
           onClick={handleDismiss}
-          className="mt-0.5 shrink-0 rounded p-1 text-sky-700 hover:bg-sky-100 hover:text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:text-sky-200 dark:hover:bg-sky-900/70 dark:hover:text-white"
+          // 44px on touch, 32px on pointer: the previous `p-1` + 16px icon gave a
+          // 24px target, well under the accessible minimum.
+          className="-mr-1 -mt-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-[var(--primary-text)] transition-colors hover:bg-[var(--bg-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] sm:h-8 sm:w-8"
           aria-label="关闭隐私与服务提示"
           title="关闭"
         >

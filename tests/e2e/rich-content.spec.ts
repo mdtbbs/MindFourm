@@ -1,6 +1,7 @@
 import { test as authTest, expect } from '../fixtures/auth.fixture';
 import type { Page } from '@playwright/test';
 import { TEST_USERS } from '../fixtures/test-users';
+import presentationFixture from '../fixtures/rich-presentation.json';
 import {
   API_URL,
   approveAsAdmin,
@@ -144,6 +145,18 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     await expect(post.getByText('ordered item', { exact: true })).toBeVisible();
   });
 
+  // The highlighter is loaded on first use (`import()`), not at module scope, so
+  // this asserts the deferred path still ends up colouring real published content
+  // rather than only that the text survives. See rich-code-block.tsx.
+  authTest('2b. code block renders its source and gains syntax tokens', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const code = visiblePostContent(authenticatedPage).locator('pre code');
+    await expect(code).toHaveText('const schemaVersion = 2;');
+    // highlight.js wraps keywords and identifiers in spans. Their absence would
+    // mean the deferred import never resolved for a reader.
+    await expect(code.locator('span').first()).toBeVisible();
+  });
+
   authTest('3. task-list checkboxes are visible and read-only', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const checkboxes = visiblePostContent(authenticatedPage).getByTestId('rich-task-checkbox');
@@ -259,4 +272,36 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     await expect(authenticatedPage.getByTestId('reply-input').locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-reply-id', String(hostReplyId));
     await expect(authenticatedPage.getByTestId('reply-input').locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-post-id', String(hostPostId));
   });
+});
+
+
+// This case uses the real API and authentication fixtures. The independent
+// presentation fixture suite is not a substitute for this publication check.
+authTest('Presentation contract: preview and real published post share styles', async ({ authenticatedPage: page, request }) => {
+  const fixture = presentationFixture;
+  const document = { ...fixture, content: fixture.content.filter((node) => !['attachment', 'postQuote', 'replyQuote'].includes(node.type)).map((node) => node.type === 'paragraph' ? { ...node, content: node.content?.filter((child: any) => child.type !== 'customEmoji') } : node) };
+  await page.evaluate((json) => localStorage.setItem('draft:post:new', JSON.stringify({ timestamp: Date.now(), values: { title: `E2E Presentation ${Date.now()}`, content: 'Presentation projection', contentJson: json, status: 'published' } })), document);
+  await page.goto('/posts/new');
+  await page.getByRole('button', { name: /恢复草稿/ }).click();
+  await expect(page.getByTestId('post-content-editor').locator('h1')).toBeVisible();
+  await page.getByTestId('post-preview-tab').click();
+  const preview = page.getByTestId('post-preview').getByTestId('rich-content-renderer');
+  // Capture common nodes present in this real-API fixture; ID-sensitive cards
+  // are covered by the existing permission/binding tests above.
+  const snapshot = async (root: ReturnType<typeof page.locator>) => root.locator('p,h1,h2,h3,blockquote,ul,ol,li,code,pre,table,th,td,img:not(.rich-custom-emoji):not(.ProseMirror-separator)').evaluateAll((nodes) => nodes.map((element) => {
+    const style = getComputedStyle(element);
+    return ['fontSize','lineHeight','fontWeight','marginTop','marginBottom','paddingLeft','paddingRight','backgroundColor','borderLeftWidth','borderTopWidth','listStyleType'].map((key) => style[key as keyof CSSStyleDeclaration]);
+  }));
+  const styles = await snapshot(preview);
+  const response = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/posts');
+  await page.getByTestId('publish-button').click();
+  const created = await response;
+  expect(created.ok()).toBeTruthy();
+  const post = unwrap(await created.json());
+  const id = Number(post?.id ?? post?.post?.id);
+  await approveAsAdmin(request, 'post', id);
+  await page.goto(`/posts/${id}`);
+  const published = visiblePostContent(page).getByTestId('rich-content-renderer');
+  await expect(published).toBeVisible();
+  expect(await snapshot(published)).toEqual(styles);
 });

@@ -140,7 +140,7 @@ export default function BookmarksPage() {
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               filter === f
-                ? 'bg-[var(--primary)] text-white'
+                ? 'bg-[var(--primary-button)] text-white'
                 : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300 hover:bg-surface-200 dark:hover:bg-gray-600'
             }`}
           >
@@ -152,7 +152,7 @@ export default function BookmarksPage() {
       {/* Breadcrumb */}
       <div className="mb-6">
         <nav className="flex items-center gap-2 text-sm text-surface-500 dark:text-gray-400">
-          <Link href="/" className="hover:text-[var(--primary)]">{t('bookmarks.home')}</Link>
+          <Link href="/" className="hover:text-[var(--primary-text)]">{t('bookmarks.home')}</Link>
           <span>/</span>
           <span className="text-surface-700 dark:text-gray-200">{t('bookmarks.title')}</span>
         </nav>
@@ -172,7 +172,7 @@ export default function BookmarksPage() {
           </p>
           <Link
             href="/"
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary-button)] text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             {t('bookmarks.browse')}
             <ExternalLink className="w-4 h-4" />
@@ -190,7 +190,7 @@ export default function BookmarksPage() {
                   {/* Title */}
                   <Link
                     href={`/posts/${bookmark.post_id}`}
-                    className="block font-medium text-surface-900 dark:text-gray-100 hover:text-[var(--primary)] truncate mb-2"
+                    className="block font-medium text-surface-900 dark:text-gray-100 hover:text-[var(--primary-text)] truncate mb-2"
                   >
                     {bookmark.title || t('bookmarks.untitled')}
                   </Link>
@@ -202,7 +202,7 @@ export default function BookmarksPage() {
                     {bookmark.category_name && (
                       <Link
                         href={`/categories/${bookmark.category_id}`}
-                        className="text-surface-500 dark:text-gray-400 hover:text-[var(--primary)]"
+                        className="text-surface-500 dark:text-gray-400 hover:text-[var(--primary-text)]"
                       >
                         {bookmark.category_name}
                       </Link>
@@ -218,7 +218,7 @@ export default function BookmarksPage() {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/posts/${bookmark.post_id}`}
-                    className="p-2 text-surface-500 dark:text-gray-400 hover:text-[var(--primary)] hover:bg-surface-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    className="p-2 text-surface-500 dark:text-gray-400 hover:text-[var(--primary-text)] hover:bg-surface-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     title={t('bookmarks.view')}
                   >
                     <ExternalLink className="w-4 h-4" />

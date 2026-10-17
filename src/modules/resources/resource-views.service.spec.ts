@@ -14,7 +14,10 @@ function createDataSource(recent = false) {
     }),
     manager: {
       insert: jest.fn().mockResolvedValue(undefined),
-      increment: jest.fn().mockResolvedValue({ affected: 1 }),
+      // Counting goes through raw SQL so no `updated_at` is written alongside it.
+      query: jest.fn(async (sql: string) => (
+        sql.startsWith('UPDATE `resources` SET `view_count`') ? { affectedRows: 1 } : { affectedRows: 0 }
+      )),
     },
     commitTransaction: jest.fn().mockResolvedValue(undefined),
     rollbackTransaction: jest.fn().mockResolvedValue(undefined),
@@ -91,7 +94,12 @@ describe('ResourceViewsService', () => {
       user_id: 12,
       referrer_category: 'search',
     }));
-    expect(queryRunner.manager.increment).toHaveBeenCalledWith(expect.anything(), { id: 3 }, 'view_count', 1);
+    expect(queryRunner.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE `resources` SET `view_count`'),
+      [1, 3],
+    );
+    // A view is traffic, not an edit: it must never move the resource's dates.
+    expect(queryRunner.manager.query.mock.calls.some(([sql]) => String(sql).includes('updated_at'))).toBe(false);
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
@@ -111,7 +119,7 @@ describe('ResourceViewsService', () => {
     })).resolves.toBe(false);
 
     expect(queryRunner.manager.insert).not.toHaveBeenCalled();
-    expect(queryRunner.manager.increment).not.toHaveBeenCalled();
+    expect(queryRunner.manager.query).not.toHaveBeenCalled();
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
   });
 

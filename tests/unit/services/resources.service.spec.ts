@@ -517,6 +517,7 @@ describe('ResourcesService - Public Visibility', () => {
         'resource.is_public = :isPublic',
         { isPublic: 1 },
       );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith("(resource.visibility IS NULL OR resource.visibility = 'public')");
       expect(defaultQb.andWhere).toHaveBeenCalledWith(
         '(category.id IS NULL OR category.is_active = :categoryActive)',
         { categoryActive: 1 },
@@ -529,7 +530,8 @@ describe('ResourcesService - Public Visibility', () => {
 
       await service.getPublicResources();
 
-      expect(defaultQb.where).toHaveBeenCalledWith(
+      expect(defaultQb.where).toHaveBeenCalledWith('resource.deleted_at IS NULL');
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
         'resource.status IN (:...statuses)',
         { statuses: ['approved', 'published'] },
       );

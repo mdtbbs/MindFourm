@@ -59,7 +59,7 @@ export function ErrorBoundary({
         {/* Retry button */}
         <button
           onClick={reset}
-          className="mt-4 px-4 py-2 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
+          className="mt-4 px-4 py-2 rounded-lg bg-[var(--primary-button)] text-white font-medium hover:opacity-90 transition-opacity"
         >
           重试
         </button>
@@ -67,7 +67,7 @@ export function ErrorBoundary({
         {/* Home link */}
         <Link
           href="/"
-          className="mt-2 block text-[var(--primary)] hover:underline text-sm"
+          className="mt-2 block text-[var(--primary-text)] hover:underline text-sm"
         >
           返回首页
         </Link>

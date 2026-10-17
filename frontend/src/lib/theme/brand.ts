@@ -74,6 +74,10 @@ export function buildBrandCssVariables(settings?: Record<string, string> | null)
 
   return {
     '--primary': primary,
+    // Deliberately NOT set here: `--primary-text` must differ per theme (dark
+    // keeps the raw brand colour), and these variables are applied inline on
+    // <html>, so an inline value would defeat the `[data-theme="dark"]` rule.
+    // It is derived from `--primary` in shared-styles/variables.css instead.
     '--primary-dark': `color-mix(in srgb, ${primary} 82%, black)`,
     '--primary-light': `color-mix(in srgb, ${primary} 72%, white)`,
     '--primary-50': `color-mix(in srgb, ${primary} 8%, white)`,

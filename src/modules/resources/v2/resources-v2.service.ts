@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -6,6 +6,7 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { escapeLike } from '@common/utils/search.util';
 import { ResourceReadAdapterService } from '../resource-read-adapter.service';
+import { ResourcesV2WriteService } from './resources-v2-write.service';
 import { ResourcePreviewService } from '../resource-preview.service';
 import {
   ResourceV2DependencyResolutionDto,
@@ -46,12 +47,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 @Injectable()
 export class ResourcesV2Service {
+  private readonly legacyEditorMetadata = new Map<string, { expires: number; metadata: Record<string, unknown> }>();
   private readonly tableAvailability = new Map<string, Promise<boolean>>();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly resourceReadAdapter: ResourceReadAdapterService,
     private readonly resourcePreview: ResourcePreviewService,
+    @Optional() private readonly editorReads?: ResourcesV2WriteService,
   ) {}
 
   private async tableExists(table: string): Promise<boolean> {
@@ -644,7 +647,7 @@ export class ResourcesV2Service {
     };
   }
 
-  async getWorkbench(publicId: string, viewer: any): Promise<ResourceWorkbenchV2Dto> {
+  async getWorkbench(publicId: string, viewer: any, versionPublicId?: string): Promise<ResourceWorkbenchV2Dto> {
     if (!this.isUuid(publicId)) return this.notFound();
     const resource = await this.findResourceByPublicId(publicId);
     if (!resource) return this.notFound();
@@ -656,9 +659,43 @@ export class ResourcesV2Service {
     const resourceDto = await this.toPublicResourceDto(resource);
     const versionPage = await this.listVersionRows(resource, { limit: 100 }, Boolean(role));
     const versions = await this.hydrateVersions(resource, versionPage.items);
-    const selected = await this.selectedVersion(resource, undefined, Boolean(role));
+    const selected = await this.selectedVersion(resource, versionPublicId, Boolean(role));
     const selectedDto = selected ? versions.find(version => version.public_id === selected.public_id) : null;
     this.setSelectedPreview(resource, resourceDto, selectedDto?.preview_url);
+    if (selected && ['map', 'schematic'].includes(resource.resource_kind || '')) {
+      const kind = resource.resource_kind as 'map' | 'schematic';
+      const table = kind === 'map' ? 'map_version_metadata' : 'schematic_version_metadata';
+      const row = (await this.rowsFrom(table, `SELECT * FROM ${table} WHERE resource_version_id = ? LIMIT 1`, [selected.id]))[0];
+      // Root renderer projections may describe another revision. Only version-scoped
+      // fields are used here; absent historical data remains explicitly unavailable.
+      const source = this.safePublicJson(this.objectValue(row?.source_renderer_metadata_json), null);
+      const fields = row ? { width: this.nullableNumber(row.width), height: this.nullableNumber(row.height),
+        ...(kind === 'schematic' ? { block_count: this.nullableNumber(row.block_count), min_supported_build: this.nullableNumber(row.min_supported_build) }
+          : { game_mode: row.game_mode || null, planet: row.planet || null }), parser_version: row.parser_version || null } : null;
+      let selectedFields = fields;
+      let selectedSource: Record<string, unknown> | null = source;
+      if ((!fields?.width || !fields?.height) && selected.status === 'published' && this.editorReads) {
+        const key = `${resource.public_id}:${selected.public_id}`;
+        try {
+          let cached = this.legacyEditorMetadata.get(key);
+          if (!cached || cached.expires < Date.now()) {
+            const result = await this.editorReads.editorData(publicId, selected.public_id, viewer?.id);
+            cached = { expires: Date.now() + 300_000, metadata: this.safePublicJson(result.metadata, {}) };
+            if (this.legacyEditorMetadata.size >= 100) this.legacyEditorMetadata.delete(this.legacyEditorMetadata.keys().next().value!);
+            this.legacyEditorMetadata.set(key, cached);
+          }
+          selectedSource = cached.metadata;
+          selectedFields = { width: Number(cached.metadata.width) || null, height: Number(cached.metadata.height) || null,
+            ...(kind === 'schematic' ? { block_count: Number(cached.metadata.block_count ?? cached.metadata.blocks) || null, min_supported_build: Number(cached.metadata.min_supported_build ?? cached.metadata.build) || null }
+              : { game_mode: String(cached.metadata.game_mode || ''), planet: String(cached.metadata.planet || '') }), parser_version: String(cached.metadata.parser_version || 'Mindustry v160.5') };
+        } catch { /* Unreadable legacy bytes remain explicitly unavailable. */ }
+      }
+      (resourceDto.metadata as any)[kind] = selectedFields;
+      if (resourceDto.renderer) {
+        resourceDto.renderer.public_metadata = selectedSource;
+        resourceDto.renderer.parser_version = selectedFields?.parser_version || null;
+      }
+    }
     const analysis = selected ? await this.analysisFor(resource, selected, resource.resource_kind || 'other') : null;
     const relations = this.isResourcePublic(resource) ? await this.relationPage(resource, { limit: 100 }) : this.emptyPage<ResourceV2RelationDto>();
     return {
@@ -1471,6 +1508,7 @@ export class ResourcesV2Service {
       rules: this.safePublicJson(this.objectValue(row?.rules_json), null),
       tile_layers: this.safePublicJson(this.objectValue(renderer.tile_layers), {}),
       tile_layers_truncated: renderer.tile_layers_truncated === true,
+      cores: this.safePublicJson(Array.isArray(renderer.cores) ? renderer.cores : [], []),
     };
   }
 

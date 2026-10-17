@@ -60,7 +60,7 @@ function NavLinkItem({ item, currentPathname }: { item: SiteNavLink; currentPath
       prefetch={!external && !item.newTab ? undefined : false}
       className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
         active
-          ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+          ? 'bg-[var(--primary-soft)] text-[var(--primary-text)]'
           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
       }`}
     >
@@ -90,7 +90,7 @@ function QuickActionButton({
 
   const className = `flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
     isPrimary
-      ? 'bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]'
+      ? 'bg-[var(--primary-button)] text-white hover:bg-[var(--primary-dark)]'
       : 'bg-[var(--bg-elevated)] text-[var(--text)] hover:bg-[var(--bg-hover)]'
   }`;
 

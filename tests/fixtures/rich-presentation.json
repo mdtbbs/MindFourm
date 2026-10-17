@@ -1,0 +1,535 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 1 标题"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 2
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 2 标题"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 3
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 3 标题"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 4
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 4 标题"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 5
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 5 标题"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 6
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Heading 6 标题"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Paragraph 段落中文，emoji 🌻 and "
+        },
+        {
+          "type": "text",
+          "text": "strong",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " italic",
+          "marks": [
+            {
+              "type": "italic"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " deleted",
+          "marks": [
+            {
+              "type": "strike"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " underlined",
+          "marks": [
+            {
+              "type": "underline"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " code",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Second paragraph verifies block spacing."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Color and highlight",
+          "marks": [
+            {
+              "type": "textColor",
+              "attrs": {
+                "color": "#336699"
+              }
+            },
+            {
+              "type": "highlight",
+              "attrs": {
+                "color": "yellow"
+              }
+            },
+            {
+              "type": "fontSize",
+              "attrs": {
+                "size": "18px"
+              }
+            },
+            {
+              "type": "fontFamily",
+              "attrs": {
+                "family": "serif-cn"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " super",
+          "marks": [
+            {
+              "type": "superscript"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " sub",
+          "marks": [
+            {
+              "type": "subscript"
+            }
+          ]
+        },
+        {
+          "type": "mention",
+          "attrs": {
+            "userId": 1,
+            "username": "presentation-user"
+          }
+        },
+        {
+          "type": "customEmoji",
+          "attrs": {
+            "id": 1,
+            "shortcode": "test",
+            "name": "Test emoji"
+          }
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "attrs": {
+        "tight": true
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Bullet"
+                }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "attrs": {
+                "tight": true
+              },
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Nested bullet"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": {
+        "start": 3,
+        "tight": true,
+        "type": "a"
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Ordered"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "taskList",
+      "content": [
+        {
+          "type": "taskItem",
+          "attrs": {
+            "checked": false
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Task paragraph"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Second task paragraph"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "taskItem",
+          "attrs": {
+            "checked": true
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Completed task"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Quoted paragraph"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Another quoted paragraph"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "codeBlock",
+      "attrs": {
+        "language": "ts"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "const presentation = \"shared\";\nlong_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_long_code_"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "https://example.invalid/long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-long-url-",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://example.invalid/"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "image",
+          "attrs": {
+            "src": "/favicon.ico",
+            "alt": "presentation image",
+            "width": 96,
+            "height": 96
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": "center"
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Header"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Other header"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Cell text"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Long table cell text 宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格宽表格"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "horizontalRule"
+    },
+    {
+      "type": "spoiler",
+      "attrs": {
+        "title": "Presentation spoiler",
+        "open": true
+      },
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Spoiler body"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "video",
+      "attrs": {
+        "provider": "bilibili",
+        "videoId": "BV1xx411c7mD",
+        "src": null,
+        "title": "Shared video presentation"
+      }
+    },
+    {
+      "type": "attachment",
+      "attrs": {
+        "attachmentId": null,
+        "draftToken": "presentation-draft-token"
+      }
+    },
+    {
+      "type": "postQuote",
+      "attrs": {
+        "postId": 123
+      }
+    },
+    {
+      "type": "replyQuote",
+      "attrs": {
+        "postId": 123,
+        "replyId": 456
+      }
+    }
+  ]
+}

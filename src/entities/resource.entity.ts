@@ -131,8 +131,20 @@ export class Resource {
   @CreateDateColumn()
   created_at: Date;
 
+  /**
+   * TypeORM's automatic update timestamp. Unrelated writes move it, including the
+   * view/download counter increments, so it is not a publication date. Display
+   * `published_at` instead; keep reading this only as an operational field.
+   */
   @UpdateDateColumn()
   updated_at: Date;
+
+  /**
+   * When the resource first became publicly visible. Author-facing, monotonic,
+   * and only written by the approval transition — never by a counter bump.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  published_at: Date | null;
 
   // The `deleted_at` column already existed in the schema but was not declared
   // here, so nothing filtered on it and ResourcesService hard-deleted instead —

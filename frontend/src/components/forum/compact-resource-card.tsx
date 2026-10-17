@@ -23,12 +23,12 @@ export default function CompactResourceCard({ resource, highlightTerm }: { resou
   const href = `/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ''}`;
 
   return <Link href={href} className="group flex min-w-0 items-center gap-3 border-b border-[var(--border)] px-3 py-3 transition-colors last:border-b-0 hover:bg-[var(--bg-hover)] sm:px-4">
-    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary)]">
+    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary-text)]">
       {resource.preview_url ? <img src={resource.preview_url} alt="" loading="lazy" className={`h-full w-full ${isMap || isSchematic ? 'object-contain' : 'object-cover'}`} /> : <Icon aria-hidden="true" className="h-5 w-5" />}
     </span>
     <span className="min-w-0 flex-1">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="truncate text-sm font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{highlightTerm ? <SearchHighlight text={resource.title} query={highlightTerm} /> : resource.title}</span>
+        <span className="truncate text-sm font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]">{highlightTerm ? <SearchHighlight text={resource.title} query={highlightTerm} /> : resource.title}</span>
         <span className="shrink-0 text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}</span>
       </span>
       {resource.description && <span className="mt-1 block line-clamp-1 text-xs text-[var(--text-secondary)]">{highlightTerm ? <SearchHighlight text={resource.description} query={highlightTerm} /> : resource.description}</span>}

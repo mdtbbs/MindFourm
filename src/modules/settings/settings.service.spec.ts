@@ -158,6 +158,52 @@ describe('SettingsService', () => {
     ]))).rejects.toThrow('单个存档文件上限必须为正整数，且不能超过每用户额度。');
   });
 
+  it('creates the blob storage directory and rejects a per-owner quota under the object limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mindfourm-blob-settings-'));
+    try {
+      const service = new SettingsService({ query: jest.fn(async () => []) } as any);
+      jest.spyOn(service, 'get').mockResolvedValue(null);
+      jest.spyOn(service, 'getNumber').mockResolvedValue(null);
+
+      const values = new Map([
+        ['blobs_storage_path', root],
+        ['blobs_owner_quota_bytes', '1048576'],
+        ['blobs_max_object_bytes', '524288'],
+      ]);
+      await (service as any).validateBlobsSettings(values);
+      expect(values.get('blobs_storage_path')).toBe(root);
+      await expect(readdir(root)).resolves.toEqual([]);
+
+      await expect((service as any).validateBlobsSettings(new Map([
+        ['blobs_owner_quota_bytes', '100'],
+        ['blobs_max_object_bytes', '101'],
+      ]))).rejects.toThrow('单个 blob 对象上限必须为正整数，且不能超过每所有者额度。');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a blob switch value that is neither true nor false and a root storage path', async () => {
+    const service = new SettingsService({ query: jest.fn(async () => []) } as any);
+    jest.spyOn(service, 'get').mockResolvedValue(null);
+    jest.spyOn(service, 'getNumber').mockResolvedValue(null);
+
+    await expect((service as any).validateBlobsSettings(new Map([['blobs_enabled', 'yes']])))
+      .rejects.toThrow('blob 存储开关必须为 true 或 false。');
+    await expect((service as any).validateBlobsSettings(new Map([['blobs_storage_path', '/']])))
+      .rejects.toThrow('blob 存储目录必须是绝对路径，且不能是文件系统根目录。');
+    await expect((service as any).validateBlobsSettings(new Map([['blobs_storage_path', 'relative/dir']])))
+      .rejects.toThrow('blob 存储目录必须是绝对路径，且不能是文件系统根目录。');
+  });
+
+  it('rejects blob settings that do not belong to the category', async () => {
+    const service = new SettingsService({ query: jest.fn(async () => []) } as any);
+    jest.spyOn(service, 'get').mockResolvedValue(null);
+    jest.spyOn(service, 'getNumber').mockResolvedValue(null);
+    await expect((service as any).validateBlobsSettings(new Map([['cloud_saves_enabled', 'true']])))
+      .rejects.toThrow('Unsupported blob setting: cloud_saves_enabled');
+  });
+
   it('loads basic settings from legacy rows stored under the general category', async () => {
     const { service } = createService([
       {

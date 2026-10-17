@@ -138,7 +138,7 @@ export default function PhoneVerificationForm({
             type="button"
             onClick={send}
             disabled={busy}
-            className="h-11 w-full bg-[var(--primary)] px-4 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 w-full bg-[var(--primary-button)] px-4 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "发送中…" : "获取验证码"}
           </button>
@@ -154,7 +154,7 @@ export default function PhoneVerificationForm({
             type="button"
             onClick={verify}
             disabled={busy || code.length !== 6}
-            className="h-11 w-full bg-[var(--primary)] px-4 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 w-full bg-[var(--primary-button)] px-4 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "验证中…" : "完成验证"}
           </button>
@@ -168,7 +168,7 @@ export default function PhoneVerificationForm({
                 type="button"
                 onClick={send}
                 disabled={busy}
-                className="font-medium text-[var(--primary)] disabled:opacity-50"
+                className="font-medium text-[var(--primary-text)] disabled:opacity-50"
               >
                 重新发送验证码
               </button>
@@ -181,7 +181,7 @@ export default function PhoneVerificationForm({
                 setError("");
               }}
               disabled={busy}
-              className="font-medium text-[var(--primary)] disabled:opacity-50"
+              className="font-medium text-[var(--primary-text)] disabled:opacity-50"
             >
               更换手机号
             </button>

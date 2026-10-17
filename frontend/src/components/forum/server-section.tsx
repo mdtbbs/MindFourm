@@ -14,7 +14,7 @@ function ServerCard({ server }: { server: Server }) {
         <span
           className={`border px-2 py-0.5 text-[11px] uppercase tracking-[0.14em] ${
             server.status === 'running'
-              ? 'border-[var(--primary-border-soft)] text-[var(--primary)]'
+              ? 'border-[var(--primary-border-soft)] text-[var(--primary-text)]'
               : 'border-[var(--border)] text-[var(--muted-foreground)]'
           }`}
         >
@@ -105,7 +105,7 @@ export function ServerSection() {
         <h2 className="text-sm font-semibold text-[var(--foreground)]">
           在线服务器 ({runningServers.length})
         </h2>
-        <Link href="/servers" className="text-sm text-[var(--primary)] hover:text-[var(--primary-dark)]">
+        <Link href="/servers" className="text-sm text-[var(--primary-text)] hover:text-[var(--primary-dark)]">
           查看全部
         </Link>
       </div>

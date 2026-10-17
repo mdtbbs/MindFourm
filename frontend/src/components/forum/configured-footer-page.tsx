@@ -51,7 +51,7 @@ export default async function ConfiguredFooterPage({
               <details className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 lg:sticky lg:top-24 lg:block lg:border-0 lg:bg-transparent lg:p-0" open>
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--text)] lg:list-none">{tableOfContentsLabel}</summary>
                 <nav aria-label={tableOfContentsLabel} className="mt-3 space-y-2 border-l border-[var(--border)] pl-3">
-                  {tableOfContents.map((item, index) => <a key={`${item.id}-${index}`} href={`#${item.id}`} className="block text-sm leading-5 text-[var(--text-muted)] hover:text-[var(--primary)]">{item.title}</a>)}
+                  {tableOfContents.map((item, index) => <a key={`${item.id}-${index}`} href={`#${item.id}`} className="block text-sm leading-5 text-[var(--text-muted)] hover:text-[var(--primary-text)]">{item.title}</a>)}
                 </nav>
               </details>
             </aside>

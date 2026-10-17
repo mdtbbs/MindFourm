@@ -1,4 +1,4 @@
-import { BadRequestException, HttpStatus } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpStatus } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { ApiV1Exception } from '../exceptions/api-v1.exception';
 
@@ -66,5 +66,36 @@ describe('AllExceptionsFilter', () => {
       },
       meta: { request_id: 'req-500' },
     });
+  });
+
+  it('resolves message, status and retryability from the registry for bare codes', () => {
+    // `MultiplayerService.fail()` used to throw `HttpException({ code })` with the
+    // code as its own message, leaking `SESSION_FULL` to users and reporting the
+    // wrong retryability. The registry now supplies the published contract.
+    const { host, response, json } = hostFor('/api/v1/multiplayer/sessions/ses_x/join-intents');
+    filter.catch(new ConflictException({ code: 'SESSION_FULL' }), host);
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.CONFLICT);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.objectContaining({
+        code: 'SESSION_FULL', message: '联机会话人数已满', retryable: false,
+      }),
+    }));
+  });
+
+  it('keeps the published HTTP status for a registered code (no breaking renumbering)', () => {
+    // SESSION_PERMISSION_DENIED now carries the registry status on the exception
+    // object, but the response must keep the 400 the endpoint already returned.
+    const { host, response } = hostFor('/api/v1/multiplayer/sessions/ses_x/join-intents');
+    filter.catch(new BadRequestException({ code: 'SESSION_PERMISSION_DENIED' }), host);
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+  });
+
+  it('keeps an explicit service message when one is present', () => {
+    const { host, json } = hostFor('/api/v1/multiplayer/sessions/ses_x/join-intents');
+    filter.catch(new BadRequestException({ code: 'SESSION_NOT_JOINABLE', message: '该房间已锁定' }), host);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.objectContaining({ message: '该房间已锁定' }),
+    }));
   });
 });

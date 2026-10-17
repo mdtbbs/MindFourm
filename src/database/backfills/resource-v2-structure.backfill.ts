@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { summarizeTileLayerResources } from '@modules/resources/analyzers/map-analyzer';
 
 export type ResourceV2StructureResult = {
   map_metadata_created: number;
@@ -238,6 +239,11 @@ function mapResourceRows(renderer: Record<string, any>): Array<{ resourceType: s
     const name = shortString(value.internal_name ?? value.item ?? value.name ?? value.id, 191);
     const resourceType = shortString(value.resource_type ?? value.type ?? 'item', 32);
     if (name && resourceType) output.push({ resourceType, name, amount: value.amount ?? value.count, distribution: value.distribution });
+  }
+  // Legacy rows store the renderer's per-tile deposit layers, not the aggregate
+  // list the first loop expects. Fold them the same way the live analyzer does.
+  for (const entry of summarizeTileLayerResources(renderer.tile_layers)) {
+    output.push({ resourceType: entry.resource_type, name: entry.internal_name, amount: entry.amount, distribution: entry.distribution_json });
   }
   return dedupeRows(output, (row) => `${row.resourceType}\0${row.name}`);
 }

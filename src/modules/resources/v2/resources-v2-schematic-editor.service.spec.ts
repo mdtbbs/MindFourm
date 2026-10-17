@@ -35,7 +35,7 @@ describe('ResourcesV2WriteService schematic export', () => {
     expect(storage.readManagedFile).toHaveBeenCalledWith('/managed/resources/source.msch', 20 * 1024 * 1024);
     expect(previews.transformSchematic).toHaveBeenCalledWith('../source.msch', source, {
       rotation_quarters: 1, mirror_x: true, delete_positions: [{ x: 1, y: 2 }],
-      move_positions: [], add_blocks: [], logic_configs: [],
+      move_positions: [], add_blocks: [], logic_configs: [], config_edits: [],
     });
     expect(source.subarray(0, 5)).toEqual(Buffer.from([0x6d, 0x73, 0x63, 0x68, 1]));
   });

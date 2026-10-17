@@ -74,7 +74,7 @@ export default function MyResourcesPage() {
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary-text)]" />
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function MyResourcesPage() {
           <p className="text-red-600 dark:text-red-400">{error}</p>
           <button
             onClick={loadResources}
-            className="mt-4 text-sm text-[var(--primary)] hover:underline"
+            className="mt-4 text-sm text-[var(--primary-text)] hover:underline"
           >
             {t('myResources.retry')}
           </button>
@@ -104,7 +104,7 @@ export default function MyResourcesPage() {
         </div>
         <Link
           href="/resources/submit"
-          className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
+          className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
           {t('myResources.submit')}
         </Link>
@@ -116,7 +116,7 @@ export default function MyResourcesPage() {
           <p className="mb-4 text-[var(--text-muted)]">{t('myResources.empty')}</p>
           <Link
             href="/resources/submit"
-            className="inline-block rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
+            className="inline-block rounded-[var(--radius)] bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
           >
             {t('myResources.submitFirst')}
           </Link>
@@ -138,11 +138,11 @@ export default function MyResourcesPage() {
               {resources.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-elevated)]">
                   <td className="px-4 py-3">
-                    <Link href={`/resources/${r.id}`} className="font-medium text-[var(--text)] hover:text-[var(--primary)]">
+                    <Link href={`/resources/${r.id}`} className="font-medium text-[var(--text)] hover:text-[var(--primary-text)]">
                       {r.title}
                     </Link>
                     {r.version && (
-                      <span className="ml-2 rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-xs font-mono text-[var(--primary)]">
+                      <span className="ml-2 rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-xs font-mono text-[var(--primary-text)]">
                         {r.version}
                       </span>
                     )}
@@ -171,13 +171,13 @@ export default function MyResourcesPage() {
                     <div className="flex gap-2">
                       {r.public_id && <Link
                         href={`/resources/${encodeURIComponent(r.public_id)}/workbench`}
-                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary)] hover:bg-[var(--bg-elevated)]"
+                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary-text)] hover:bg-[var(--bg-elevated)]"
                       >
                         <LayoutDashboard className="h-3 w-3" /> {t('resourceWorkbenchV2.openWorkbench')}
                       </Link>}
                       <Link
                         href={`/resources/${r.id}/edit`}
-                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary)] hover:bg-[var(--bg-elevated)]"
+                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary-text)] hover:bg-[var(--bg-elevated)]"
                       >
                         <Edit className="h-3 w-3" /> {t('myResources.edit')}
                       </Link>

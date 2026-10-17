@@ -34,15 +34,36 @@ import { ScheduleModule } from '@nestjs/schedule';
     PerformanceTelemetryModule,
     // Avatars and public embeds are public by design. Private attachment and
     // resource files continue to be streamed through their visibility checks.
+    //
+    // `exclude` keeps every file request off @nestjs/serve-static's render
+    // fallback: without it a missing file is handled by `res.sendFile` on the
+    // mount root, which throws ENOENT for the whole mount (500 for a deleted
+    // avatar instead of 404). Excluding the mount makes express.static the only
+    // handler, so a miss falls through to the app's own 404. `fallthrough: true`
+    // is required for that to happen at all.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads', 'avatars'),
       serveRoot: '/uploads/avatars',
+      exclude: ['/uploads/avatars/(.*)'],
+      serveStaticOptions: { fallthrough: true },
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads', 'public-images'),
       serveRoot: '/uploads/public-images',
+      exclude: ['/uploads/public-images/(.*)'],
+      serveStaticOptions: { fallthrough: true },
     }),
-    ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'public'), serveRoot: '/public' }),
+    // Browser-served public images. The static root is `uploads/public-images`
+    // (the backend's public image directory) rather than the repository
+    // `public/` directory, which the production image does not ship: when the
+    // directory is missing, the render fallback throws ENOENT for every request
+    // under the mount and turns it into a 500.
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads', 'public-images'),
+      serveRoot: '/public',
+      exclude: ['/public/(.*)'],
+      serveStaticOptions: { fallthrough: true },
+    }),
     CommunityCoreModule,
     MdtbbsDomainModule,
   ],

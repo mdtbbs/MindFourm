@@ -86,7 +86,7 @@ export default function AuthorLink({
     <Link
       href={`/users/${userId}`}
       className={cn(
-        'group inline-flex min-w-0 items-center gap-3 text-left hover:text-[var(--primary)]',
+        'group inline-flex min-w-0 items-center gap-3 text-left hover:text-[var(--primary-text)]',
         layout === 'stacked' && 'items-start',
         className,
       )}
@@ -108,7 +108,7 @@ export default function AuthorLink({
 
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className={cn('truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary)]', classes.name)}>
+          <span className={cn('truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]', classes.name)}>
             {displayName}
           </span>
           {roleLabel ? (

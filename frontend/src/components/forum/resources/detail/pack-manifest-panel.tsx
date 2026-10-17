@@ -41,11 +41,11 @@ export default function PackManifestPanel({ resource, selectedVersionPublicId }:
     <section className="border-b border-[var(--border)] py-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--text)]"><Package className="h-5 w-5 text-[var(--primary)]" />{t('packDetails.title')}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--text)]"><Package className="h-5 w-5 text-[var(--primary-text)]" />{t('packDetails.title')}</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">{t('packDetails.description')}</p>
         </div>
         {manifestPath ? (
-          <a href={buildPublicApiUrl(manifestPath)} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">
+          <a href={buildPublicApiUrl(manifestPath)} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary-text)]">
             <ExternalLink className="h-4 w-4" />{t('packDetails.openManifest')}
           </a>
         ) : null}
@@ -79,7 +79,7 @@ export default function PackManifestPanel({ resource, selectedVersionPublicId }:
                         <code className="mt-1 block break-all font-mono text-[11px] text-[var(--text-secondary)]">{member.sha256}</code>
                       </details>
                     </div>
-                    <a href={buildPublicApiUrl(member.download_url)} className="inline-flex min-h-8 items-center justify-center gap-1.5 border border-[var(--border)] px-2.5 text-xs text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                    <a href={buildPublicApiUrl(member.download_url)} className="inline-flex min-h-8 items-center justify-center gap-1.5 border border-[var(--border)] px-2.5 text-xs text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary-text)]">
                       <Download className="h-3.5 w-3.5" />{t('packDetails.downloadFile')}
                     </a>
                   </li>

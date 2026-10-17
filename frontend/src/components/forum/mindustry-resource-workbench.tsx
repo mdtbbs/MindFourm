@@ -234,7 +234,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       {draft.saveError && <p role="status" className="mb-4 rounded-[var(--radius)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 p-3 text-sm text-[var(--text-secondary)]">{draft.saveError}</p>}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-xs font-medium text-[var(--primary)]"><ShieldCheck className="h-3.5 w-3.5" />{t('resourceWorkbench.hostedBadge')}</p>
+          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-xs font-medium text-[var(--primary-text)]"><ShieldCheck className="h-3.5 w-3.5" />{t('resourceWorkbench.hostedBadge')}</p>
           <h1 className="text-2xl font-bold text-[var(--text)]">{text.title}</h1>
           <p className="mt-2 text-sm text-[var(--text-muted)]">{text.short} {t('resourceWorkbench.noExternal')}</p>
         </div>
@@ -259,7 +259,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
 
           {!usePastedCode ? (
             <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files?.[0]); }} className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-5 text-center hover:border-[var(--primary)]/60">
-              <Upload className="mb-2 h-7 w-7 text-[var(--primary)]" />
+              <Upload className="mb-2 h-7 w-7 text-[var(--primary-text)]" />
               <span className="text-sm font-medium text-[var(--text)]">{file?.name || t('resourceWorkbench.selectExtensionFile', { extension: text.extension })}</span>
               <span className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.maxUpload')}</span>
               <input type="file" accept={text.extension} className="hidden" onChange={(event) => selectFile(event.target.files?.[0])} />
@@ -271,7 +271,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
             </div>
           )}
 
-          <button type="button" onClick={generatePreview} disabled={isPreviewing} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+          <button type="button" onClick={generatePreview} disabled={isPreviewing} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary-button)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
             {isPreviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
             {isPreviewing ? t('resourceWorkbench.parseLoading') : t('resourceWorkbench.parseAction')}
           </button>
@@ -307,8 +307,8 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
           <p className="mb-4 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.onlyYouPreview')}</p>
           {preview ? (
             <>
-              {previewExpired && <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--warning)]/10 p-3 text-xs text-[var(--text-secondary)]"><span>{t('resourceWorkbench.previewExpired')}</span><button type="button" onClick={generatePreview} disabled={isPreviewing} className="shrink-0 font-medium text-[var(--primary)] underline">{t('resourceWorkbench.regenerate')}</button></div>}
-              {preview.duplicate?.exact && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-[var(--text)]"><p>{t('resourceWorkbench.existingSubmitted')}</p>{preview.duplicate.existing_resources[0] && <a className="mt-1 inline-block text-[var(--primary)] underline" href={preview.duplicate.existing_resources[0].url}>{t('resourceWorkbench.viewExisting', { title: preview.duplicate.existing_resources[0].title })}</a>}<p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.ownershipError')}</p></div>}
+              {previewExpired && <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--warning)]/10 p-3 text-xs text-[var(--text-secondary)]"><span>{t('resourceWorkbench.previewExpired')}</span><button type="button" onClick={generatePreview} disabled={isPreviewing} className="shrink-0 font-medium text-[var(--primary-text)] underline">{t('resourceWorkbench.regenerate')}</button></div>}
+              {preview.duplicate?.exact && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-[var(--text)]"><p>{t('resourceWorkbench.existingSubmitted')}</p>{preview.duplicate.existing_resources[0] && <a className="mt-1 inline-block text-[var(--primary-text)] underline" href={preview.duplicate.existing_resources[0].url}>{t('resourceWorkbench.viewExisting', { title: preview.duplicate.existing_resources[0].title })}</a>}<p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.ownershipError')}</p></div>}
               {preview.duplicate?.structure && !preview.duplicate.exact && <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-[var(--text)]">{t('resourceWorkbench.structureDuplicate')}</div>}
               {preview.duplicate?.normalized && !preview.duplicate.structure && <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-secondary)]">{t('resourceWorkbench.similarDuplicate')}</div>}
               <div className={`overflow-hidden rounded-xl bg-[#101419] ${kind === 'map' ? 'aspect-video' : 'aspect-square'}`}><img src={preview.preview_url} alt={t(kind === 'map' ? 'resourceWorkbench.mapPreview' : 'resourceWorkbench.schematicPreview')} className="h-full w-full object-contain" /></div>
@@ -321,7 +321,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
           ) : (
             <div className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-center"><Map className="mb-3 h-8 w-8 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbench.chooseGenerate')}</p></div>
           )}
-          <button type="submit" disabled={!preview || previewExpired || isSubmitting || Boolean(preview?.duplicate?.exact) || Boolean(preview?.duplicate?.structure && !duplicateNote.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? t('resourceWorkbench.submitting') : text.action}</button>
+          <button type="submit" disabled={!preview || previewExpired || isSubmitting || Boolean(preview?.duplicate?.exact) || Boolean(preview?.duplicate?.structure && !duplicateNote.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary-button)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? t('resourceWorkbench.submitting') : text.action}</button>
         </aside>
       </div>
     </form>

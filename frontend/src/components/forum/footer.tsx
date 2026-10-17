@@ -31,7 +31,7 @@ const CLUB_POLICY_LINKS = [
 
 function FooterAnchor({ href, children, className = '' }: { href: string; children: React.ReactNode; className?: string }) {
   const external = isExternalHref(href);
-  const commonClass = `transition-colors hover:text-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${className}`;
+  const commonClass = `transition-colors hover:text-[var(--primary-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${className}`;
 
   if (external) {
     return (
@@ -56,9 +56,9 @@ function FriendlyLinkCard({ link }: { link: FooterFriendlyLink }) {
       href={link.href}
       className="group rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-left hover:border-[var(--primary)]"
     >
-      <span className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--text)] group-hover:text-[var(--primary)]">
+      <span className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--text)] group-hover:text-[var(--primary-text)]">
         <span className="truncate">{link.label}</span>
-        {external && <ExternalLink className="h-3 w-3 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--primary)]" aria-hidden="true" />}
+        {external && <ExternalLink className="h-3 w-3 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--primary-text)]" aria-hidden="true" />}
       </span>
       {link.description && (
         <span className="mt-0.5 block truncate text-[11px] leading-4 text-[var(--text-muted)]">
@@ -93,7 +93,7 @@ export default function Footer() {
           <section className="mb-5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3" aria-labelledby="footer-friendly-links">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 id="footer-friendly-links" className="text-xs font-semibold text-[var(--text)]">{t('footer.friendly')}</h2>
-              <Link href="/links" className="text-xs font-medium text-[var(--primary)] hover:underline">
+              <Link href="/links" className="text-xs font-medium text-[var(--primary-text)] hover:underline">
                 {t('footer.more')} →
               </Link>
             </div>
@@ -107,7 +107,7 @@ export default function Footer() {
 
         <nav aria-label={t('footer.navigation')} className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]">
           {[...FOOTER_LINKS, ...(siteProfile.profile === 'mindustry-club' ? CLUB_POLICY_LINKS : [])].map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-[var(--primary)] hover:underline">
+            <Link key={link.href} href={link.href} className="hover:text-[var(--primary-text)] hover:underline">
               {t(link.key)}
             </Link>
           ))}

@@ -13,7 +13,7 @@
 | 动画组件 | Magic UI + Framer Motion |
 | 样式框架 | Tailwind CSS |
 | Markdown 渲染 | react-markdown + remark-gfm |
-| 主题 | 浅色/深色跟随系统切换 |
+| 主题 | 浅色（默认）/深色，用户手动切换并记忆 |
 
 > **注意**：前端使用 Next.js 14 App Router 架构，所有页面默认使用 SSR 渲染，确保 SEO 友好和首屏加载性能。
 
@@ -21,74 +21,79 @@
 
 ## 品牌色
 
+以下为当前 `shared-styles/variables.css` 的实际取值；主色可由站点设置 `brand_primary` 覆盖。
+
 | 颜色 | 值 | 用途 |
 |------|------|------|
-| 主色（浅蓝） | `#3b82f6` | 按钮、链接、高亮 |
-| 深色（深蓝） | `#1e3a5f` | 导航栏、侧边栏、标题 |
-| 辅助色 | `#60a5fa` | 悬停、次级按钮 |
-| 成功 | `#22c55e` | 成功提示、通过状态 |
-| 警告 | `#f59e0b` | 警告提示、待处理状态 |
-| 错误 | `#ef4444` | 错误提示、删除操作 |
-| 信息 | `#06b6d4` | 信息提示 |
+| 主色 | `#2f80ed` | 填充、边框、图标底色 |
+| 主色（文字） | `--primary-text` | 链接、图标等前景用法 |
+| 主色（深） | `#2563eb` | 主色按钮悬停态 |
+| 主色（浅） | `#5ba0ff` | 次级高亮 |
+| 成功 | `#4caf50` | 成功提示、通过状态 |
+| 警告 | `#ffc107` | 警告提示、待处理状态 |
+| 错误 | `#f44336` | 错误提示、删除操作 |
+| 信息 | `#2196f3` | 信息提示 |
 
 ---
 
 ## 主题配置
 
 ### 浅色模式（Light）
+
+实际实现使用语义化前缀（`--bg-*` / `--text-*` / `--border`），完整定义见 `shared-styles/variables.css`：
+
 ```css
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
+  --bg: #f5f9ff;
+  --bg-card: #ffffff;
+  --bg-elevated: #eef4fb;
+  --bg-hover: #eaf2ff;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #5b6a7f;
+  --border: #d8e2f0;
+  --border-light: #e8eef6;
+  --primary: #2f80ed;
+  --primary-dark: #2563eb;
+  --primary-light: #5ba0ff;
+  --primary-text: color-mix(in srgb, var(--primary) 75%, black);
+  --primary-button: color-mix(in srgb, var(--primary) 82%, black);
+  --accent: #dcecff;
+  --success: #4caf50;
+  --warning: #ffc107;
+  --error: #f44336;
+  --info: #2196f3;
 }
 ```
 
 ### 深色模式（Dark）
+
 ```css
-[data-theme="dark"] {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --popover: #1e293b;
-  --popover-foreground: #f8fafc;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #334155;
-  --input: #334155;
-  --ring: #3b82f6;
+[data-theme="dark"],
+.dark {
+  --bg: #0b1220;
+  --bg-card: #101a2d;
+  --bg-elevated: #13233c;
+  --bg-hover: #173153;
+  --text: #e5eefc;
+  --text-secondary: #9fb0ca;
+  --text-muted: #7c8ca6;
+  --border: rgba(148, 163, 184, 0.18);
+  --border-light: rgba(148, 163, 184, 0.1);
+  --primary: #74a9ff;
+  --primary-dark: #5f9cff;
+  --primary-light: #9fc2ff;
+  /* 深色下主色本身已达 AA，前景与填充沿用同一值。 */
+  --primary-text: var(--primary);
+  --primary-button: var(--primary);
+  --accent: #173153;
 }
 ```
 
 ### 主题切换
-- 默认跟随系统（`prefers-color-scheme`）
-- 用户可手动覆盖为浅色/深色
-- 切换时添加过渡动画（200ms）
+- 默认浅色。服务端在 `layout.tsx` 直接写 `data-theme="light"`，首屏脚本与 `useTheme` 同样以 `light` 兜底，避免首屏闪色；当前实现**不**读取 `prefers-color-scheme`。
+- 用户可手动切换为深色，选择写入 `localStorage.theme` 并在下次访问时生效。
+- 切换时添加过渡动画（`--motion-normal`，180ms）。
 
 ---
 
@@ -296,9 +301,11 @@ const prefersReducedMotion = useReducedMotion();
 
 | 类别 | 变量 |
 |------|------|
-| 品牌色 | `--primary: #ff6b35`, `--accent: #ffc107` |
-| 浅色主题 | `--bg: #fafafa`, `--bg-card: #ffffff`, `--text: #333333` |
-| 深色主题 | `[data-theme="dark"]` 覆盖 |
+| 品牌色 | `--primary: #2f80ed`（可由站点设置 `brand_primary` 覆盖），`--accent: #dcecff` |
+| 文字用主色 | `--primary-text`（浅色下由 `--primary` 混 25% 黑得到，保证 ≥4.5:1） |
+| 按钮填充 | `--primary-button`（配白色文字的填充色，浅色下混 18% 黑，保证 ≥4.5:1） |
+| 浅色主题 | `--bg: #f5f9ff`, `--bg-card: #ffffff`, `--text: #0f172a` |
+| 深色主题 | `[data-theme="dark"]` 覆盖（主色 `#74a9ff`，`--primary-text`/`--primary-button` 等于 `--primary`） |
 | 状态色 | `--success`, `--warning`, `--error`, `--info` |
 | 布局 | `--header-height: 56px`, `--sidebar-width: 200px` |
 | 徽章 | `--badge-lv1` 到 `--badge-lv4` 渐变 |

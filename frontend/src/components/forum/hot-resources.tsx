@@ -24,11 +24,11 @@ export default function HotResources({ resources }: HotResourcesProps) {
               href={`/resources/${resource.id}`}
               className="group flex items-start gap-3 rounded-[var(--radius-sm)] p-2 transition-colors hover:bg-[var(--bg-elevated)]"
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--primary)]/10 text-xs font-semibold text-[var(--primary)]">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--primary)]/10 text-xs font-semibold text-[var(--primary-text)]">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-[var(--text)] group-hover:text-[var(--primary)]">
+                <p className="truncate text-sm font-medium text-[var(--text)] group-hover:text-[var(--primary-text)]">
                   {resource.title}
                 </p>
                 <div className="mt-1 flex items-center gap-3 text-xs text-[var(--text-muted)]">

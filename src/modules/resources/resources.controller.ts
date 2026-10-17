@@ -1,3 +1,5 @@
+import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
+import { CapabilitiesService } from '../capabilities/capabilities.service';
 import {
   Controller,
   Get,
@@ -15,7 +17,7 @@ import {
   UploadedFile,
   ParseIntPipe,
   StreamableFile,
-  BadRequestException,
+  BadRequestException, ServiceUnavailableException,
   Optional,
   NotFoundException,
   ValidationPipe,
@@ -53,6 +55,8 @@ import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { ResourcePreviewService } from './resource-preview.service';
+import { ResourceV2ExportMapDto, ResourceV2ExportSchematicDto } from './v2/resources-v2-write.dto';
+import { analyzeSchematicMetadata } from './analyzers/schematic-analyzer';
 import { RESOURCE_KINDS } from './resource-kind-registry';
 import { ResourceDuplicateService } from './resource-duplicate.service';
 import { SiteConfigService } from '@config/site-profile';
@@ -63,6 +67,7 @@ import { DownloadPolicyService } from '../downloads/download-policy.service';
 import { ResourceDirectUploadService } from './resource-direct-upload.service';
 import { ResourceFileProviderService } from './resource-file-provider.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
+import { ResourceOperationsService } from './resource-operations.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -159,9 +164,11 @@ export class ResourcesController {
     private readonly siteConfig: SiteConfigService,
     private readonly resourceViews: ResourceViewsService,
     private readonly downloadPolicy: DownloadPolicyService,
+    private readonly resourceOperations: ResourceOperationsService,
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly downloadGrants?: DownloadGrantService,
+    @Optional() private readonly editorCapabilities?: CapabilitiesService,
   ) {}
 
   @Get()
@@ -280,6 +287,13 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async getAdminList(@Query() query: QueryResourcesDto) {
     return this.resourcesService.getList(query, { scope: 'admin' });
+  }
+
+  @Get('admin/:id/mod-analysis')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async getAdminModAnalysis(@Param('id', ParseIntPipe) id: number) {
+    return this.resourcesService.getAdminModAnalysis(id);
   }
 
   @Get('admin/analytics')
@@ -414,6 +428,82 @@ export class ResourcesController {
     return this.resourcesService.getByUserId(req.user.id, query.limit, query.cursor);
   }
 
+  @Get('editor/catalog')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'public, max-age=3600')
+  async editorCatalog() { if (!this.editorCapabilities) throw new ServiceUnavailableException('编辑器暂不可用'); await this.editorCapabilities.assertEditorAvailable('schematic'); return this.resourcePreviewService.editorCatalog(); }
+
+  @SkipPhoneVerification()
+  @Post('editor/:kind/analyze')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(resourcePreviewDraftInterceptor)
+  @RateLimit({ max: 5, window: 60 })
+  async analyzeEditorFile(@Param('kind') kind: string, @UploadedFile() file: Express.Multer.File | undefined) {
+    return this.withEditorFile(kind, file, async (stored, editorKind) => {
+      const result = await this.resourcePreviewService.analyzeEditorFile(editorKind, stored);
+      return { ...result, blocks: editorKind === 'schematic' ? analyzeSchematicMetadata(result.metadata).blocks.map(block => ({
+        internal_name: block.internal_name, display_name: block.display_name, count: block.count, positions: block.positions_json || [],
+      })) : [] };
+    });
+  }
+
+  @SkipPhoneVerification()
+  @Post('editor/:kind/export')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  @RawHttpResponse()
+  @UseInterceptors(resourcePreviewDraftInterceptor)
+  @RateLimit({ max: 5, window: 60 })
+  async exportEditorFile(@Param('kind') kind: string, @Body('operations') raw: string,
+    @UploadedFile() file: Express.Multer.File | undefined, @Res() res: Response) {
+    return this.withEditorFile(kind, file, async (stored, editorKind) => {
+      let input: unknown;
+      try { input = JSON.parse(raw); } catch { throw new BadRequestException('编辑操作格式无效'); }
+      const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+      const operations = await pipe.transform(input, { type: 'body', metatype: editorKind === 'schematic' ? ResourceV2ExportSchematicDto : ResourceV2ExportMapDto });
+      const source = await this.resourceStorageService.readManagedFile(stored.file_path, 20 * 1024 * 1024);
+      const result = editorKind === 'schematic'
+        ? await this.resourcePreviewService.transformSchematic(stored.file_name, source, operations)
+        : await this.resourcePreviewService.transformMap(stored.file_name, source, operations);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', attachmentContentDisposition(`edited.${editorKind === 'schematic' ? 'msch' : 'msav'}`));
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(result.data);
+    });
+  }
+
+  @SkipPhoneVerification()
+  @Post('editor/map/region')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(resourcePreviewDraftInterceptor)
+  @RateLimit({ max: 20, window: 60 })
+  async editorMapRegion(@Query('x') x: string, @Query('y') y: string, @UploadedFile() file: Express.Multer.File | undefined) {
+    return this.withEditorFile('map', file, async stored => this.resourcePreviewService.mapRegion(
+      await this.resourceStorageService.readManagedFile(stored.file_path, 20 * 1024 * 1024), Number(x), Number(y)));
+  }
+
+  private async withEditorFile<T>(kind: string, file: Express.Multer.File | undefined,
+    action: (stored: NonNullable<Awaited<ReturnType<ResourceStorageService['storeIncoming']>>>, kind: 'map' | 'schematic') => Promise<T>): Promise<T> {
+    let stored: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
+    try {
+      if (!this.editorCapabilities) throw new ServiceUnavailableException('编辑器暂不可用');
+      await this.editorCapabilities.assertEditorAvailable(kind === 'map' ? 'map' : 'schematic');
+      if (kind !== 'map' && kind !== 'schematic') throw new BadRequestException('不支持的编辑器类型');
+      if (!file || !file.originalname.toLowerCase().endsWith(kind === 'map' ? '.msav' : '.msch')) throw new BadRequestException('请选择正确的地图或蓝图文件');
+      await assertSafeUploadedFile(file, 20 * 1024 * 1024);
+      stored = await this.resourceStorageService.storeIncoming(file);
+      if (!stored) throw new BadRequestException('请选择文件');
+      return await action(stored, kind);
+    } finally {
+      await cleanupUploadedFile(file);
+      if (stored?.file_path) await this.resourceStorageService.removeManaged(stored.file_path);
+    }
+  }
+
   @Post('drafts/preview')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(resourcePreviewDraftInterceptor)
@@ -498,7 +588,8 @@ export class ResourcesController {
   @Get(':id')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
-  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res?: Response) {
+  async getById(@Param('id') identifier: string | number, @Req() req: any, @Res() res?: Response) {
+    const id = typeof identifier === 'number' ? identifier : await this.resourcesService.resolveDetailId(identifier);
     const canonicalId = await this.resourcesService.findMergedResourceTarget(id);
     if (canonicalId) {
       if (!res) return { url: `/api/resources/${canonicalId}`, statusCode: 301 };
@@ -790,9 +881,13 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async setFeatured(@Param('id', ParseIntPipe) id: number, @Body('featured') featured: unknown, @Req() req: any) {
     if (typeof featured !== 'boolean') throw new BadRequestException('featured 必须是布尔值');
-    const resource = await this.resourcesService.setFeatured(id, featured);
-    await this.logOperation(req, 'resource.featured', id, { featured });
-    return resource;
+    const result = await this.resourceOperations.setFeaturedById(id, featured, {
+      userId: req.user?.id,
+      requestId: req.requestId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers?.['user-agent'],
+    });
+    return result.resource;
   }
 
   @Delete(':id/admin')

@@ -139,12 +139,17 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
     const name = blockName(item.block ?? item.name ?? item.internal_name);
     if (!name) continue;
     if (!declaredTypes.has(name)) counts.set(name, (counts.get(name) ?? 0) + 1);
+    const schematicConfig = normalizeSchematicConfig(item.config);
     const logicConfig = normalizeLogicConfig(item.config);
+    const configTypes = normalizeConfigTypes(item.config_types);
     const position = {
       x: boundedNumber(item.x, { min: -1_000_000, max: 1_000_000, integer: true }),
       y: boundedNumber(item.y, { min: -1_000_000, max: 1_000_000, integer: true }),
       rotation: boundedNumber(item.rotation, { min: 0, max: 3, integer: true }),
       size: boundedNumber(item.size, { min: 1, max: 64, integer: true }) ?? 1,
+      ...(schematicConfig ? { config: schematicConfig } : {}),
+      ...(configTypes.length ? { config_types: configTypes } : {}),
+      ...(item.config_editable === true && (schematicConfig !== null || item.config == null) ? { config_editable: true } : {}),
       ...(name.includes('processor') && logicConfig
         ? { config: logicConfig, logic_source_available: true }
         : name.includes('processor') ? { logic_source_available: item.logic_source_available === true } : {}),
@@ -182,9 +187,9 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
   return { blocks, logicProcessors: [...processorMap.values()].slice(0, 500) };
 }
 
-function normalizeLogicConfig(value: unknown): { source: string; links: Array<{ name: string; x: number; y: number }>; format_version: 1 } | null {
+function normalizeLogicConfig(value: unknown): { type: 'logic'; source: string; links: Array<{ name: string; x: number; y: number }>; format_version: 1 } | null {
   const config = record(value);
-  if (config.format_version !== 1) return null;
+  if (config.format_version !== 1 || (config.type !== undefined && config.type !== 'logic')) return null;
   const source = boundedString(config.source, 32_768);
   if (source === null || source.includes('\0')) return null;
   const rawLinks = list(config.links, 1_000);
@@ -198,7 +203,76 @@ function normalizeLogicConfig(value: unknown): { source: string; links: Array<{ 
     if (!name || x === null || y === null) return null;
     links.push({ name, x, y });
   }
-  return { source, links, format_version: 1 };
+  return { type: 'logic', source, links, format_version: 1 };
+}
+
+const SCHEMATIC_CONFIG_TYPES = new Set([
+  'none', 'integer', 'long', 'float', 'double', 'boolean', 'text', 'content', 'tech_node', 'point',
+  'point_array', 'int_seq', 'int_array', 'boolean_array', 'vec2', 'vec2_array', 'team', 'l_access',
+  'unit_command', 'color', 'logic',
+]);
+
+function normalizeSchematicConfig(value: unknown): Record<string, unknown> | null {
+  const config = record(value);
+  if (config.format_version === 1) return normalizeLogicConfig(config);
+  if (typeof config.type !== 'string' || !SCHEMATIC_CONFIG_TYPES.has(config.type)) return null;
+  const type = config.type;
+  const exact = (keys: string[]) => Object.keys(config).every(key => keys.includes(key)) && keys.every(key => key in config);
+  if (type === 'logic') return normalizeLogicConfig(config);
+  if (type === 'none' && exact(['type'])) return { type };
+  if (['integer', 'float', 'double'].includes(type) && exact(['type', 'value']) && boundedNumber(config.value, { min: -1_000_000_000, max: 1_000_000_000 }) !== null) {
+    return { type, value: config.value };
+  }
+  if (type === 'long' && exact(['type', 'value']) && typeof config.value === 'string' && /^-?(0|[1-9][0-9]{0,18})$/.test(config.value)) return { type, value: config.value };
+  if (type === 'color' && exact(['type', 'value']) && typeof config.value === 'string' && /^#[0-9a-fA-F]{8}$/.test(config.value)) return { type, value: config.value };
+  if (type === 'boolean' && exact(['type', 'value']) && typeof config.value === 'boolean') return { type, value: config.value };
+  if (type === 'text' && exact(['type', 'value']) && typeof config.value === 'string' && config.value.length <= 1200 && !config.value.includes('\0')) return { type, value: config.value };
+  if (['content', 'tech_node'].includes(type) && exact(['type', 'content_type', 'name'])
+    && typeof config.content_type === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(config.content_type)
+    && typeof config.name === 'string' && /^[a-zA-Z0-9_.:-]{1,191}$/.test(config.name)) {
+    return { type, content_type: config.content_type, name: config.name };
+  }
+  if (type === 'point' && exact(['type', 'x', 'y'])
+    && boundedNumber(config.x, { min: -127, max: 127, integer: true }) !== null
+    && boundedNumber(config.y, { min: -127, max: 127, integer: true }) !== null) return { type, x: config.x, y: config.y };
+  if (['point_array', 'vec2_array'].includes(type) && exact(['type', 'points']) && Array.isArray(config.points)
+    && config.points.length <= (type === 'point_array' ? 255 : 1000)) {
+    const points = config.points.flatMap(raw => {
+      const point = record(raw);
+      const min = type === 'point_array' ? -127 : 0;
+      const max = type === 'point_array' ? 127 : 127;
+      const x = boundedNumber(point.x, { min, max, integer: type === 'point_array' });
+      const y = boundedNumber(point.y, { min, max, integer: type === 'point_array' });
+      return x === null || y === null || Object.keys(point).some(key => !['x', 'y'].includes(key)) ? [] : [{ x, y }];
+    });
+    return points.length === config.points.length ? { type, points } : null;
+  }
+  if (['int_seq', 'int_array'].includes(type) && exact(['type', 'values']) && Array.isArray(config.values) && config.values.length <= 1000) {
+    const values = config.values.map(value => boundedNumber(value, { min: -16_384, max: 16_383, integer: true }));
+    return values.every(value => value !== null) ? { type, values } : null;
+  }
+  if (type === 'boolean_array' && exact(['type', 'values']) && Array.isArray(config.values)
+    && config.values.length <= 1000 && config.values.every(value => typeof value === 'boolean')) return { type, values: config.values };
+  if (type === 'vec2' && exact(['type', 'x', 'y'])) {
+    const x = boundedNumber(config.x, { min: 0, max: 127 });
+    const y = boundedNumber(config.y, { min: 0, max: 127 });
+    return x === null || y === null ? null : { type, x, y };
+  }
+  if (['team', 'l_access', 'unit_command'].includes(type) && exact(['type', 'name'])
+    && typeof config.name === 'string' && config.name.length <= 100) return { type, name: config.name };
+  return null;
+}
+
+function normalizeConfigTypes(value: unknown): Array<{ type: string; content_type?: string }> {
+  const source = list(value, 32);
+  if (source.truncated) return [];
+  return source.values.flatMap(raw => {
+    const descriptor = record(raw);
+    if (typeof descriptor.type !== 'string' || !SCHEMATIC_CONFIG_TYPES.has(descriptor.type)
+      || Object.keys(descriptor).some(key => !['type', 'content_type'].includes(key))) return [];
+    if (descriptor.content_type !== undefined && (typeof descriptor.content_type !== 'string' || descriptor.content_type.length > 40)) return [];
+    return [{ type: descriptor.type, ...(typeof descriptor.content_type === 'string' ? { content_type: descriptor.content_type } : {}) }];
+  });
 }
 
 function normalizeMaterials(value: unknown, warnings: AnalyzerWarning[]): SchematicMaterialRecord[] {

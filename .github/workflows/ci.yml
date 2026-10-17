@@ -52,11 +52,26 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Lint backend
+        run: npm run lint:backend
+
+      - name: Typecheck backend
+        run: npm run typecheck:backend
+
       - name: Build backend
         run: npm run build:backend
 
       - name: Run backend tests
         run: npm test -- --runInBand
+
+      - name: Run player editor frontend regressions
+        run: >-
+          npx jest --runInBand --roots frontend/src --runTestsByPath
+          frontend/src/components/forum/resources/workbench/schematic-light-editor.spec.ts
+          frontend/src/components/forum/resources/workbench/map-light-editor.spec.ts
+          frontend/src/components/forum/resources/workbench/resource-workbench-v2.spec.ts
+          frontend/src/lib/api/v1/resource-workbench-client.spec.ts
+          frontend/src/lib/api/editor-tools.spec.ts
 
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
@@ -64,37 +79,37 @@ jobs:
       - name: Test Public V1 changelog guard
         run: npm run test:api-changelog
 
-  production-image:
-    name: Production Docker API docs smoke
+  runtime-docs:
+    name: Runtime API guide presence
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    # The developer-doc routes read these Markdown guides from disk at runtime.
+    # The repo no longer builds a Docker image, so the check reads the files the
+    # deployment copies next to `dist/` instead of inspecting an image.
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Build production Docker image
-        run: docker build --tag mindfourm-docs-smoke .
-
-      - name: Verify runtime Markdown guides in the image
+      - name: Verify runtime Markdown guides are present
         run: |
-          docker run --rm --entrypoint /bin/sh mindfourm-docs-smoke -ec '
-            for guide in \
-              first-party-v1.md \
-              public-client-v1.md \
-              rich-content-schema-v2.md \
-              authentication.md \
-              game-content-v1.md \
-              resources-v1-contract.md \
-              multiplayer-v1.md \
-              cloud-saves-v1.md \
-              changelog-v1.md \
-              lifecycle-v1.md; do
-              test -s "/app/docs/api/$guide" || {
-                echo "Missing runtime API guide: /app/docs/api/$guide" >&2
-                exit 1
-              }
-            done
-          '
+          missing=0
+          for guide in \
+            first-party-v1.md \
+            public-client-v1.md \
+            rich-content-schema-v2.md \
+            authentication.md \
+            game-content-v1.md \
+            resources-v1-contract.md \
+            multiplayer-v1.md \
+            cloud-saves-v1.md \
+            changelog-v1.md \
+            lifecycle-v1.md; do
+            if [ ! -s "docs/api/$guide" ]; then
+              echo "Missing runtime API guide: docs/api/$guide" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
 
   frontend:
     name: Frontend lint, types, and build
@@ -129,6 +144,9 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Check first-load JavaScript budget
+        run: node scripts/check-frontend-budget.cjs
+
   renderer:
     name: Mindustry renderer compile and fixture tests
     runs-on: ubuntu-24.04
@@ -143,16 +161,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Download pinned Mindustry v160.2 artifacts
+      - name: Download pinned Mindustry v160.5 artifacts
         shell: bash
         run: |
           mkdir -p tools/mindustry-renderer/build/deps
           curl --fail --location --retry 3 \
-            https://github.com/Anuken/Mindustry/releases/download/v160.2/server-release.jar \
-            --output tools/mindustry-renderer/build/deps/server-release-v160.2.jar
+            https://github.com/Anuken/Mindustry/releases/download/v160.5/server-release.jar \
+            --output tools/mindustry-renderer/build/deps/server-release-v160.5.jar
           curl --fail --location --retry 3 \
-            https://github.com/Anuken/Mindustry/releases/download/v160.2/Mindustry.jar \
-            --output tools/mindustry-renderer/build/deps/Mindustry-v160.2.jar
+            https://github.com/Anuken/Mindustry/releases/download/v160.5/Mindustry.jar \
+            --output tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar
 
       - name: Compile renderer and run safe fixture tests
         run: bash tools/mindustry-renderer/test-renderer.sh

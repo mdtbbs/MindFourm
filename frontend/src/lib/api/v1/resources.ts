@@ -312,9 +312,33 @@ export type ResourceV2PagedResult<T> = {
   pagination: { next_cursor: string | null; has_more: boolean };
 };
 
+export type ResourceV2SchematicConfigValue =
+  | { type: 'none' }
+  | { type: 'integer'; value: number }
+  | { type: 'long'; value: string }
+  | { type: 'float' | 'double'; value: number }
+  | { type: 'boolean'; value: boolean }
+  | { type: 'text'; value: string }
+  | { type: 'content'; content_type: string; name: string }
+  | { type: 'tech_node'; content_type: string; name: string }
+  | { type: 'point'; x: number; y: number }
+  | { type: 'point_array'; points: Array<{ x: number; y: number }> }
+  | { type: 'int_seq' | 'int_array'; values: number[] }
+  | { type: 'boolean_array'; values: boolean[] }
+  | { type: 'vec2'; x: number; y: number }
+  | { type: 'vec2_array'; points: Array<{ x: number; y: number }> }
+  | { type: 'team' | 'l_access' | 'unit_command'; name: string }
+  | { type: 'color'; value: string };
+export type ResourceV2SchematicLogicConfig = {
+  type?: 'logic'; format_version: 1; source: string; links: Array<{ name: string; x: number; y: number }>;
+};
+export type ResourceV2SchematicConfigDescriptor = {
+  type: ResourceV2SchematicConfigValue['type'] | 'logic'; content_type?: string;
+};
 export type ResourceV2SchematicBlockPosition = {
   x: number | null; y: number | null; rotation: number | null; size?: number;
-  config?: unknown; logic_source_available?: boolean;
+  config?: ResourceV2SchematicConfigValue | ResourceV2SchematicLogicConfig | null;
+  config_editable?: boolean; config_types?: ResourceV2SchematicConfigDescriptor[]; logic_source_available?: boolean;
 };
 export type ResourceV2SchematicBlock = {
   internal_name: string;
@@ -328,14 +352,22 @@ export type ResourceV2SchematicTransformInput = {
   mirror_x: boolean;
   delete_positions: Array<{ x: number; y: number }>;
   move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
-  add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+  add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number; copy_from_x?: number; copy_from_y?: number; config?: Record<string, unknown>; logic_source?: string }>;
   logic_configs?: Array<{ x: number; y: number; source: string }>;
+  config_edits?: Array<{ x: number; y: number; config: ResourceV2SchematicConfigValue }>;
 };
 export type ResourceV2MapTransformInput = {
   terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
   rule_changes?: Record<string, unknown>;
   wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+  object_operations?: ResourceV2MapObjectOperation[];
 };
+export type ResourceV2MapObjectOperation =
+  | { action: 'add'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number; name: string; team?: string; rotation?: number }
+  | { action: 'delete'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number }
+  | { action: 'move'; object_type: 'core' | 'spawn' | 'building'; from_x: number; from_y: number; to_x: number; to_y: number }
+  | { action: 'team'; object_type: 'core' | 'building'; x: number; y: number; team: string }
+  | { action: 'rotate'; object_type: 'core' | 'building'; x: number; y: number; rotation: number };
 
 export type ResourceV2MapFeedbackAggregate = {
   feedback_count: number;
@@ -562,9 +594,10 @@ export async function getResourceV1(
 export async function getResourceWorkbenchV2(
   publicId: string,
   options?: FetchV1Options,
+  versionPublicId?: string,
 ): Promise<ResourceWorkbenchV2Response> {
   return fetchV1<ResourceWorkbenchV2Response>(
-    `/resources/${encodeURIComponent(publicId)}/workbench`,
+    `/resources/${encodeURIComponent(publicId)}/workbench${versionPublicId ? `?version_public_id=${encodeURIComponent(versionPublicId)}` : ''}`,
     options,
   );
 }
@@ -672,6 +705,7 @@ export async function getResourceWorkbenchV2KindTabData(
         width: typeof response.width === 'number' ? response.width : null,
         height: typeof response.height === 'number' ? response.height : null,
         tile_layers: asRecord(response.tile_layers),
+        cores: Array.isArray(response.cores) ? response.cores : [],
         tile_layers_truncated: response.tile_layers_truncated === true,
       },
       items: [],

@@ -2,6 +2,8 @@
 
 这里介绍 MindFourm 面向第三方客户端的公开 API，包括适用场景、认证方式、请求参数与响应格式。论坛用户页面不提供 API 导航；本入口面向开发者。
 
+论坛用户可从[功能概览](/api/v1/docs/product-overview)了解论坛主要能力，查看[产品更新日志](/api/v1/docs/product-changelog)和[公开计划](/api/v1/docs/product-roadmap)。产品介绍与 API 契约分开维护。
+
 网页、Android、桌面端、Mindustry 模组、启动器等客户端通过 MindAuth 授权码模式 + PKCE 获取访问令牌，再调用第三方客户端 V1 API。获准的服务端集成凭证另行管理，不属于第三方客户端 API。
 
 未在公开文档中列出的 `/api/*` 历史接口不属于第三方稳定契约；只有维护论坛本体时才应直接依赖它们。
@@ -38,9 +40,10 @@
 - [富文本格式 V2](./rich-content-schema-v2.md)
 - [认证与凭证](./authentication.md)
 - [游戏内容 API V1](./game-content-v1.md)
-- [资源中心 API V1](./resources-v1-contract.md)
+- [资源中心 API V1](./resources-v1-contract.md)：包含公开发现榜单、推荐算法版本、计分公式、候选窗口与隐私边界；在线地址为 `/api/v1/docs/resources`。
 - [多人联机 API V1](./multiplayer-v1.md)
 - [云存档 API V1](./cloud-saves-v1.md)
+- [通用 Blob 存储 V1](./blobs-v1.md)
 - [公开 V1 错误代码](./errors-v1.md)
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)

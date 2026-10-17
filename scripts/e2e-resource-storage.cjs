@@ -109,11 +109,24 @@ function ownerKey(input) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    // Browser direct uploads exercise the same preflight as the real RES service.
+    // This test-only server accepts local frontend origins; upload tokens remain required.
+    const origin = req.headers.origin;
+    if (origin) {
+      const parsedOrigin = new URL(origin);
+      if (['localhost', '127.0.0.1', '[::1]'].includes(parsedOrigin.hostname)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      }
+    }
+    if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     const url = new URL(req.url || '/', configuredBaseUrl);
     const path = url.pathname;
 
     if (req.method === 'GET' && path === '/health') {
-      return json(res, 200, { ok: true });
+      return json(res, 200, { ok: true, status: 'ok' });
     }
 
     const publicMatch = /^\/o\/([^/]+)\/([^/]+)$/.exec(path);

@@ -136,27 +136,81 @@ function normalizeResources(renderer: Record<string, unknown>, warnings: Analyze
   const raw = renderer.resources ?? renderer.resource_entries ?? renderer.map_resources ?? renderer.ore_deposits;
   const source = list(raw);
   if (source.truncated) warnings.push(warning('MAP_RESOURCES_TRUNCATED', 'The resource deposit list exceeded the analysis limit.'));
-  const sums = new Map<string, { resource_type: string; amount: number | null; distribution: Record<string, unknown>; samples: number }>();
+  const sums = new Map<string, { resource_type: string; amount: number | null; distribution: Record<string, unknown>; samples: number; tiles: number }>();
+  const accumulate = (resourceType: string, name: string, amount: number | null, tiles: number, distribution: Record<string, unknown>) => {
+    const key = `${resourceType}\u0000${name}`;
+    const existing = sums.get(key) ?? { resource_type: resourceType, amount: null, distribution: {}, samples: 0, tiles: 0 };
+    if (amount !== null) existing.amount = (existing.amount ?? 0) + amount;
+    existing.samples += 1;
+    existing.tiles += tiles;
+    if (Object.keys(distribution).length && Object.keys(existing.distribution).length === 0) existing.distribution = boundedJson(distribution) as Record<string, unknown>;
+    sums.set(key, existing);
+  };
   for (const itemValue of source.values) {
     const item = record(itemValue);
     const name = resourceName(item.internal_name ?? item.name ?? item.item ?? item.resource ?? item.block);
     if (!name) continue;
-    const resourceType = boundedString(item.resource_type ?? item.type, 32) ?? 'item';
-    const amount = boundedNumber(item.amount ?? item.count, { min: 0, max: 1_000_000_000 });
-    const key = `${resourceType}\u0000${name}`;
-    const existing = sums.get(key) ?? { resource_type: resourceType, amount: amount === null ? null : 0, distribution: {}, samples: 0 };
-    if (amount !== null) existing.amount = (existing.amount ?? 0) + amount;
-    existing.samples += 1;
-    const distribution = record(item.distribution ?? item.distribution_json);
-    if (Object.keys(distribution).length && Object.keys(existing.distribution).length === 0) existing.distribution = boundedJson(distribution) as Record<string, unknown>;
-    sums.set(key, existing);
+    accumulate(
+      boundedString(item.resource_type ?? item.type, 32) ?? 'item',
+      name,
+      boundedNumber(item.amount ?? item.count, { min: 0, max: 1_000_000_000 }),
+      0,
+      record(item.distribution ?? item.distribution_json),
+    );
+  }
+  // The renderer publishes deposits as per-tile layers rather than one
+  // aggregate list, so fold those layers into the same bounded summary.
+  for (const item of summarizeTileLayerResources(renderer.tile_layers, warnings)) {
+    const tileCount = boundedNumber(item.distribution_json?.tile_count, { min: 0, max: 1_000_000_000, integer: true }) ?? 0;
+    accumulate(item.resource_type, item.internal_name, null, tileCount, {});
   }
   return [...sums.entries()].slice(0, 500).map(([key, item]) => ({
     resource_type: item.resource_type,
-    internal_name: key.slice(key.indexOf('\0') + 1),
+    internal_name: key.slice(key.indexOf('\u0000') + 1),
     amount: item.amount === null ? null : round2(item.amount),
-    distribution_json: { ...item.distribution, sample_count: item.samples, estimated: true },
+    distribution_json: {
+      ...item.distribution,
+      sample_count: item.samples,
+      estimated: true,
+      ...(item.tiles > 0 ? { tile_count: item.tiles, source: 'tile_layer' } : {}),
+    },
   })).sort((left, right) => left.resource_type.localeCompare(right.resource_type) || left.internal_name.localeCompare(right.internal_name));
+}
+
+/** Layer key -> the resource_type recorded next to each deposit name. */
+const TILE_RESOURCE_LAYERS: ReadonlyArray<readonly [string, string]> = [
+  ['resources', 'item'],
+  ['ores', 'ore'],
+  ['liquid', 'liquid'],
+];
+
+/**
+ * Counts deposit tiles per resource name across the renderer's bounded tile
+ * layers. Unlike `renderer.resources`, which the renderer never emits, this is
+ * the shape a real map file actually carries.
+ */
+export function summarizeTileLayerResources(tileLayers: unknown, warnings: AnalyzerWarning[] = []): MapResourceRecord[] {
+  const layers = record(tileLayers);
+  const totals = new Map<string, { resource_type: string; name: string; tiles: number }>();
+  for (const [layerKey, resourceType] of TILE_RESOURCE_LAYERS) {
+    const layer = list(layers[layerKey]);
+    if (layer.truncated) warnings.push(warning('MAP_TILE_RESOURCES_TRUNCATED', `The map ${layerKey} tile layer exceeded the analysis limit; deposit counts are partial.`));
+    for (const itemValue of layer.values) {
+      const item = record(itemValue);
+      const name = resourceName(item.name ?? item.item ?? item.resource ?? item.block);
+      if (!name) continue;
+      const key = `${resourceType}\u0000${name}`;
+      const existing = totals.get(key);
+      if (existing) existing.tiles += 1;
+      else if (totals.size < 500) totals.set(key, { resource_type: resourceType, name, tiles: 1 });
+    }
+  }
+  return [...totals.values()].map((item) => ({
+    resource_type: item.resource_type,
+    internal_name: item.name,
+    amount: null,
+    distribution_json: { estimated: true, tile_count: item.tiles, source: 'tile_layer' },
+  }));
 }
 
 function normalizeSpawns(renderer: Record<string, unknown>, warnings: AnalyzerWarning[]): MapSpawnRecord[] {
@@ -166,6 +220,17 @@ function normalizeSpawns(renderer: Record<string, unknown>, warnings: AnalyzerWa
         : Array.isArray(renderer.spawns) ? renderer.spawns : [];
   const source = list(raw);
   if (source.truncated) warnings.push(warning('MAP_SPAWNS_TRUNCATED', 'The spawn coordinate list exceeded the analysis limit.'));
+  // The renderer exposes enemy spawn blocks inside tile_layers when the map
+  // header has no structured spawn list; those coordinates are as trustworthy
+  // as the header itself.
+  if (source.values.length === 0) {
+    const enemySpawns = list(record(renderer.tile_layers).enemy_spawns);
+    for (const itemValue of enemySpawns.values) {
+      const item = record(itemValue);
+      if (typeof item.x !== 'number' || typeof item.y !== 'number') continue;
+      source.values.push({ spawn_type: 'enemy', x: item.x, y: item.y, wave: null, team: null });
+    }
+  }
   const normalized = source.values.map((value) => {
     const item = record(value);
     return {
@@ -187,7 +252,7 @@ function normalizeCores(renderer: Record<string, unknown>, warnings: AnalyzerWar
   const normalized = source.values.map((value) => {
     const item = record(value);
     return {
-      core_type: boundedString(item.core_type ?? item.type, 32),
+      core_type: boundedString(item.core_type ?? item.type ?? item.name, 32),
       team: boundedString(item.team, 64),
       x: boundedNumber(item.x, { min: -1_000_000, max: 1_000_000, integer: true }),
       y: boundedNumber(item.y, { min: -1_000_000, max: 1_000_000, integer: true }),

@@ -3,6 +3,19 @@
  * New V1 operations stay internal until a product owner approves and documents them.
  */
 export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
+  // Generic Blob API: the contract is owner-scoped, and private blobs stay
+  // invisible to every other account. Public blobs are opted into by the uploader
+  // itself, which is the same decision a resource upload already requires.
+  'GET /v1/blobs/quota',
+  'GET /v1/blobs',
+  'POST /v1/blobs',
+  'PUT /v1/blobs/uploads/{uploadId}/content',
+  'POST /v1/blobs/uploads/{uploadId}/commit',
+  'DELETE /v1/blobs/uploads/{uploadId}',
+  'GET /v1/blobs/{blobId}',
+  'GET /v1/blobs/{blobId}/content',
+  'PATCH /v1/blobs/{blobId}',
+  'DELETE /v1/blobs/{blobId}',
   'GET /v1/game-saves/quota',
   'GET /v1/game-saves',
   'POST /v1/game-saves',
@@ -29,6 +42,10 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'POST /v1/resources',
   'GET /v1/resources/kinds',
   'GET /v1/resources/topics',
+  'GET /v1/resources/discovery/home',
+  'GET /v1/resources/discovery/hot',
+  'GET /v1/resources/discovery/for-you',
+  'GET /v1/resources/discovery/related/{id}',
   'GET /v1/resources/{id}/manifest',
   'GET /v1/resources/{id}/preview',
   'GET /v1/resources/{resourceId}/versions/{versionId}/files/{fileId}/download',
@@ -38,6 +55,8 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'GET /v1/resources/{id}/relations',
   'GET /v1/resources/{id}/stats',
   'GET /v1/resources/{id}/workbench',
+  'GET /v1/resources/{id}/versions/{versionId}/editor-data',
+  'GET /v1/resources/{id}/versions/{versionId}/map-editor/region',
   'POST /v1/resources/{id}/versions/analyze',
   'POST /v1/resources/{id}/versions',
   'POST /v1/resources/{id}/versions/{versionId}/review',

@@ -222,7 +222,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? t('resourceEdit.saving') : t('resourceEdit.save')}

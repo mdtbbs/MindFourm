@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OperationLog } from '@entities/operation-log.entity';
@@ -24,8 +25,9 @@ export class LogsService {
     details?: string;
     ip_address?: string;
     user_agent?: string;
-  }): Promise<OperationLog> {
-    const log = this.operationLogRepository.create({
+  }, manager?: EntityManager): Promise<OperationLog> {
+    const repository = manager?.getRepository(OperationLog) || this.operationLogRepository;
+    const log = repository.create({
       user_id: data.user_id,
       action: data.action,
       target_type: data.target_type,
@@ -35,7 +37,7 @@ export class LogsService {
       user_agent: data.user_agent,
     });
 
-    return this.operationLogRepository.save(log);
+    return repository.save(log);
   }
 
   async getLogById(id: number): Promise<OperationLog | null> {

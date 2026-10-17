@@ -19,3 +19,14 @@ test('canonical resource kinds are the single primary taxonomy and legacy topic 
   expect(query.get('category_id')).toBe('12');
   expect(query.get('resource_kind')).toBe('map');
 });
+
+test('removing one resource filter preserves all other shareable URL state', () => {
+  const result = new URLSearchParams(mergeResourceQuery(
+    'category_id=8&search=reactor&sort=download_count&tag=campaign&supported_version=V8&compatibility=Linux&resource_kind=map&planet=Serpulo',
+    { planet: null },
+  ));
+  expect(result.has('planet')).toBe(false);
+  for (const key of ['category_id', 'search', 'sort', 'tag', 'supported_version', 'compatibility', 'resource_kind']) {
+    expect(result.has(key)).toBe(true);
+  }
+});

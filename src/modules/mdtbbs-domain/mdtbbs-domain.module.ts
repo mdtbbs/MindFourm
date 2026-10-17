@@ -26,13 +26,14 @@ import { MdtbbsPortalSectionProvider } from './mdtbbs-portal.provider';
 import { GameContentModule } from '../game-content/game-content.module';
 import { GameSavesModule } from '../game-saves/game-saves.module';
 import { PacksModule } from '../packs/packs.module';
+import { BlobsModule } from '../blobs/blobs.module';
 
 /** Composition root for the Mindustry/MDTBBS-specific application capabilities. */
 @Module({
   imports: [
     SearchModule,
     TypeOrmModule.forFeature([Resource, GameServer, GameVersion, DeveloperFeedEntry, Post]),
-    ResourcesModule, GameContentModule, GameSavesModule, ServersModule, PostServersModule, AutoPostModule, LanLinkModule,
+    ResourcesModule, GameContentModule, GameSavesModule, BlobsModule, ServersModule, PostServersModule, AutoPostModule, LanLinkModule,
     GameVersionsModule, GameServersModule, DiscoverModule, PortalModule, DeveloperFeedModule, PacksModule,
   ],
   providers: [MdtbbsResourceSearchProvider, MdtbbsGameServerSearchProvider,

@@ -37,6 +37,7 @@ import { PostDetailDto, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '@common/utils/tiptap-content.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
+import { postDetailCacheKey } from '@common/utils/post-cache.util';
 import { selectPostCards, hydratePostCardExcerpts } from '@common/utils/post-card-query.util';
 import { applyPostVisibility } from '@common/utils/post-visibility.util';
 import { escapeLike } from '@common/utils/search.util';
@@ -56,10 +57,6 @@ import { OutboxEvent } from '@entities/outbox-event.entity';
 
 @Injectable()
 export class PostsService {
-  // v5: category presentation metadata joined the detail payload. Reusing v4
-  // would leave breadcrumbs without the board colour until cache expiry.
-  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v6:';
-
   constructor(
     @InjectRepository(Post)
     private postRepository: Repository<Post>,
@@ -315,7 +312,7 @@ export class PostsService {
    * Optional userId for group permission check
    */
   async findById(id: number, viewer?: { id: number; role: string }): Promise<PostDetailDto> {
-    const cacheKey = `${PostsService.POST_DETAIL_CACHE_PREFIX}${id}`;
+    const cacheKey = postDetailCacheKey(id);
 
     // Try cache first (without incrementing view count)
     const cached = await this.redisService.get(cacheKey);
@@ -517,8 +514,10 @@ export class PostsService {
     }
     qb.addOrderBy('post.id', sortDirection).skip(skip).take(limit);
 
-    const cards = await qb.getRawAndEntities();
-    const total = await qb.getCount();
+    // Page and count are independent round trips on the same query builder; running
+    // them in sequence added the whole count query to every list response's latency.
+    // TypeORM clones the builder before each execution, so one builder serves both.
+    const [cards, total] = await Promise.all([qb.getRawAndEntities(), qb.getCount()]);
     const posts = this.hydrateCardExcerpts(cards);
 
     const data = await this.postSummaryService.toSummaryList(posts);
@@ -1308,9 +1307,11 @@ export class PostsService {
    * Invalidate post cache
    */
   private async invalidatePostCache(postId: number): Promise<void> {
+    // The `post:view:` throttle is deliberately left alone: it bounds how often a
+    // viewer can bump `view_count`, and clearing it here let every reply or edit
+    // restart the 60-second window aimed at this very cache. See post-cache.util.ts.
     await this.redisService.del(`post:${postId}`);
-    await this.redisService.del(`${PostsService.POST_DETAIL_CACHE_PREFIX}${postId}`);
-    await this.redisService.del(`post_view:${postId}`);
+    await this.redisService.del(postDetailCacheKey(postId));
   }
 
   /**
@@ -1344,8 +1345,7 @@ export class PostsService {
 
     const qb = this.cardQuery().andWhere('post.user_id = :userId AND post.source = :source', { userId, source: 'USER' })
       .orderBy('post.created_at', 'DESC').addOrderBy('post.id', 'DESC').skip(skip).take(Math.min(50, Math.max(1, limit)));
-    const cards = await qb.getRawAndEntities();
-    const total = await qb.getCount();
+    const [cards, total] = await Promise.all([qb.getRawAndEntities(), qb.getCount()]);
     const posts = this.hydrateCardExcerpts(cards);
 
     const data = await this.postSummaryService.toSummaryList(posts);

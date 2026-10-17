@@ -4,10 +4,10 @@ set -euo pipefail
 renderer_dir="$(cd "$(dirname "$0")" && pwd)"
 server_jar="$(printenv MINDUSTRY_SERVER_JAR || true)"
 desktop_jar="$(printenv MINDUSTRY_DESKTOP_JAR || true)"
-if [[ -z "$server_jar" ]]; then server_jar="$renderer_dir/build/deps/server-release-v160.2.jar"; fi
-if [[ -z "$desktop_jar" ]]; then desktop_jar="$renderer_dir/build/deps/Mindustry-v160.2.jar"; fi
-server_sha256='fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57'
-desktop_sha256='7f210295dfffb4c17b582b27bab41f4dde83f557f00f0877572fdac943f40539'
+if [[ -z "$server_jar" ]]; then server_jar="$renderer_dir/build/deps/server-release-v160.5.jar"; fi
+if [[ -z "$desktop_jar" ]]; then desktop_jar="$renderer_dir/build/deps/Mindustry-v160.5.jar"; fi
+server_sha256='0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0'
+desktop_sha256='c2fd5a5dcb8d306525bb47ff28121237d4d25f53868562946491f2ef261dc272'
 build_dir="$renderer_dir/build/pr-verification"
 main_classes="$build_dir/classes/main"
 test_classes="$build_dir/classes/test"
@@ -38,18 +38,22 @@ if (( ${#main_sources[@]} == 0 || ${#test_sources[@]} == 0 )); then
 fi
 
 classpath="$server_jar:$desktop_jar"
-javac --release 17 -cp "$classpath" -d "$main_classes" "${main_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$classpath" -d "$main_classes" "${main_sources[@]}"
 if [[ -d "$renderer_dir/src/main/resources" ]]; then
   cp -R "$renderer_dir/src/main/resources/." "$main_classes/"
 fi
-javac --release 17 -cp "$classpath:$main_classes" -d "$test_classes" "${test_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$classpath:$main_classes" -d "$test_classes" "${test_sources[@]}"
 if [[ -d "$renderer_dir/src/test/resources" ]]; then
   cp -R "$renderer_dir/src/test/resources/." "$test_classes/"
 fi
 unzip -q "$desktop_jar" 'sprites/*' -d "$assets_dir"
 
-ASSETS_ROOT="$assets_dir" java -Djava.awt.headless=true \
-  -cp "$classpath:$main_classes:$test_classes" \
-  cn.mdtbbs.renderer.RendererVisualRegression
+for fixture in \
+  cn.mdtbbs.renderer.RendererVisualRegression \
+  cn.mdtbbs.renderer.EditorSafetyRegression; do
+  ASSETS_ROOT="$assets_dir" java -Djava.awt.headless=true \
+    -cp "$classpath:$main_classes:$test_classes" \
+    "$fixture"
+done
 
 printf 'Mindustry renderer compile and fixture verification passed.\n'

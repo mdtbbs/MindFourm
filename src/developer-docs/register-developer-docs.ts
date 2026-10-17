@@ -7,6 +7,10 @@ import { API_V1_BASE_PATH, API_V1_VERSION } from '../openapi/api-version';
 import { parseMarkdown } from '../common/utils/markdown.util';
 import { getAllV1ErrorCodes } from '../common/contracts/v1-error-codes';
 import { apiV1Error, v1ErrorCodeAnchor, v1ErrorDocumentationUrl } from '../common/contracts/api-v1.contract';
+import { createRateLimitMiddleware } from '../common/rate-limit/simple-rate-limiter';
+import { AdapterRouteGuard } from '../common/utils/adapter-route-guard.util';
+import { SharedBudget } from '../common/utils/shared-budget.util';
+import { getInternalApiKey } from '../config/app.config';
 
 type CodeLanguage = 'curl' | 'javascript' | 'typescript' | 'python' | 'java' | 'kotlin';
 
@@ -21,6 +25,14 @@ const PUBLIC_SITE = 'https://mdtbbs.cn';
 const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 
 const NAV_GROUPS = [
+  {
+    label: '论坛与版本',
+    items: [
+      { href: '/api/v1/docs/product-overview', label: '论坛功能概览' },
+      { href: '/api/v1/docs/product-changelog', label: '产品更新日志' },
+      { href: '/api/v1/docs/product-roadmap', label: '公开计划' },
+    ],
+  },
   {
     label: '入门',
     items: [
@@ -44,6 +56,7 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/resources', label: '资源中心 API' },
       { href: '/api/v1/docs/multiplayer', label: '多人联机 API' },
       { href: '/api/v1/docs/cloud-saves', label: '云存档 API' },
+      { href: '/api/v1/docs/blobs', label: 'Blob 存储 API' },
     ],
   },
   {
@@ -69,8 +82,14 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
   'cloud-saves': 'cloud-saves-v1.md',
+  blobs: 'blobs-v1.md',
   changelog: 'changelog-v1.md',
   lifecycle: 'lifecycle-v1.md',
+};
+const PRODUCT_GUIDES: Record<string, string> = {
+  'product-overview': 'overview.md',
+  'product-changelog': 'changelog.md',
+  'product-roadmap': 'roadmap.md',
 };
 
 const MARKDOWN_GUIDE_SLUGS: Record<string, string> = Object.fromEntries(
@@ -105,6 +124,7 @@ const API_TAG_LABELS: Record<string, string> = {
   'v1-game-versions': '游戏版本',
   'v1-packs': '资源包',
   'v1-resource-pack-items': '资源包成员',
+  'v1-blobs': 'Blob 存储',
 };
 
 function escapeHtml(value: unknown): string {
@@ -117,9 +137,10 @@ function escapeHtml(value: unknown): string {
 }
 
 function renderMarkdownGuide(slug: string): DocPage | undefined {
-  const fileName = MARKDOWN_GUIDES[slug];
+  const fileName = MARKDOWN_GUIDES[slug] || PRODUCT_GUIDES[slug];
   if (!fileName) return undefined;
-  const candidates = [join(process.cwd(), 'docs', 'api', fileName), join(__dirname, '..', '..', 'docs', 'api', fileName)];
+  const section = PRODUCT_GUIDES[slug] ? 'product' : 'api';
+  const candidates = [join(process.cwd(), 'docs', section, fileName), join(__dirname, '..', '..', 'docs', section, fileName)];
   let markdown: string | undefined;
   for (const candidate of candidates) {
     try {
@@ -168,7 +189,7 @@ function renderMarkdownGuide(slug: string): DocPage | undefined {
     .map((heading) => ({ href: `#${encodeURI(heading.id)}`, label: heading.label, level: heading.level }));
   return {
     title,
-    description: title + ' · MDTBBS API 文档',
+    description: title + (section === 'product' ? ' · MDTBBS 产品文档' : ' · MDTBBS API 文档'),
     body: '<div class="markdown-body">' + parsedBody + '</div>',
     toc,
   };
@@ -410,7 +431,7 @@ function commonShell(params: {
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/api/v1"><span class="brand-mark">MDT</span><span>MDTBBS 开发者文档</span></a>
+    <a class="brand" href="/api/v1"><span class="brand-mark">MDT</span><span>MDTBBS 文档中心</span></a>
     <nav class="top-links" aria-label="顶栏导航">
       <a class="hide-mobile" href="/">返回论坛</a>
       <a href="/api/openapi/v1.json">OpenAPI 规范</a>
@@ -418,14 +439,14 @@ function commonShell(params: {
     </nav>
   </header>
   <div class="layout${params.toc?.length ? ' has-toc' : ''}">
-    <nav class="sidebar" aria-label="开发者文档导航">
-      <div class="sidebar-title">开发者文档</div>
+    <nav class="sidebar" aria-label="文档中心导航">
+      <div class="sidebar-title">文档中心</div>
       <a href="/api/v1"${params.activePath === '/api/v1' ? ' aria-current="page"' : ''}>概览</a>
       ${nav}
     </nav>
     <main class="content">
       ${params.body}
-  <div class="footer">MDTBBS 论坛 ${escapeHtml(params.forumVersion)} · 公开 API v${escapeHtml(API_V1_VERSION)} · 文档以当前公开稳定接口为准。</div>
+  <div class="footer">MDTBBS 论坛 ${escapeHtml(params.forumVersion)} · Public API ${escapeHtml(API_V1_VERSION)} · 产品说明以公开更新记录为准。</div>
     </main>
     ${toc}
   </div>
@@ -475,12 +496,12 @@ function setHtmlHeaders(res: any, nonceAwareHtml: string, options: { noStore?: b
 
 function renderHome(forumVersion: string): string {
   const body = `
-    <div class="eyebrow">MDTBBS 开发者文档</div>
-    <h1>把 MDTBBS 接入你的工具</h1>
-    <p class="lead">这里整理论坛、资源中心、蓝图与地图的公开 API。先从能跑通的场景开始，再按需要接入认证、上传和同步。</p>
+    <div class="eyebrow">MDTBBS 文档中心</div>
+    <h1>了解论坛，开始接入</h1>
+    <p class="lead">这里面向论坛用户与第三方开发者，提供功能概览、版本更新、后续计划和公开 API 接入资料。</p>
     <div class="stat-grid">
       <div class="stat"><span>论坛版本</span><strong>${escapeHtml(forumVersion)}</strong></div>
-      <div class="stat"><span>API 版本</span><strong>v${escapeHtml(API_V1_VERSION)}</strong></div>
+      <div class="stat"><span>API 契约</span><strong>${escapeHtml(API_V1_VERSION)}</strong></div>
       <div class="stat"><span>API 地址</span><strong>mdtbbs.cn/api/v1</strong></div>
     </div>
     ${callout('info', '先检查服务能力', `客户端启动后先请求 ${inlineCode('GET /api/v1/capabilities')}。如果服务端关闭某项能力，客户端应隐藏对应入口，不要靠接口报错来猜。`)}
@@ -497,6 +518,7 @@ function renderHome(forumVersion: string): string {
       <p>公开读取接口通常可以匿名调用。需要用户身份或写权限的接口，会在指南和 API 参考中标明认证方式与 OAuth 权限范围。</p>
     `, 'first-request')}
     ${section('如何使用这些文档', '<p>指南介绍常见场景和完整流程；<a href="/api/v1/reference">API 参考</a>逐项列出参数、权限、请求体、响应和调用示例；机器可读接口定义见 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。</p>', 'how-to-use')}
+    ${section('论坛与版本', '<p><a href="/api/v1/docs/product-overview">查看论坛功能概览</a>，了解论坛从 1.0 到当前版本的主要能力；<a href="/api/v1/docs/product-changelog">查看产品更新日志</a>与<a href="/api/v1/docs/product-roadmap">公开计划</a>。</p>', 'product')}
     ${section('公开接口范围', '<p>第三方客户端的稳定接口使用 <code>/api/v1/*</code>。管理端、服务间和未列入本开发者文档的历史路由不属于公开稳定契约。</p>', 'boundary')}
   `;
   return commonShell({
@@ -509,6 +531,7 @@ function renderHome(forumVersion: string): string {
       { href: '#scenarios', label: '常见开发场景' },
       { href: '#first-request', label: '先运行一个请求' },
       { href: '#how-to-use', label: '如何使用这些文档' },
+      { href: '#product', label: '论坛与版本' },
     ],
   });
 }
@@ -620,6 +643,9 @@ Content-Type: application/json
       [inlineCode('game_content.saves.read'), '读取游戏云存档'],
       [inlineCode('game_content.saves.write'), '创建或更新游戏云存档'],
       [inlineCode('game_content.saves.delete'), '删除游戏云存档'],
+      [inlineCode('blob.read'), '读取当前账号的 blob 元数据与内容'],
+      [inlineCode('blob.write'), '上传、提交或更新当前账号的 blob'],
+      [inlineCode('blob.delete'), '删除当前账号的 blob'],
     ]), 'scopes')}
     ${callout('info', '权限按操作类别申请', '权限范围表示客户端可以请求哪类操作，不会为每条 API 路径单独创建一项。例如蓝图和地图共用 <code>resource.read</code> 或 <code>resource.upload</code>；部分公开读取接口无需登录。在线状态和多人联机还需要在应用表单申请相应能力并通过审核。服务端集成凭证不属于公开客户端 OAuth。')}
     ${section('论坛还会检查用户和站点权限', '<p>OAuth 权限范围说明客户端可以请求哪类操作。论坛执行请求时还会检查用户封禁、手机号验证、社区条款、版块权限、审核策略、站点开关和资源策略。</p><p>客户端启动后先请求 <code>GET /api/v1/capabilities</code>。登录后也可以读取 <code>GET /api/v1/me</code> 中的 <code>permissions</code>，决定是否展示操作入口。每个接口仍会独立校验权限；<code>permissions</code> 只是界面提示，不能代替授权。</p>', 'policy')}
@@ -2229,71 +2255,112 @@ export function registerDeveloperDocs(
   document: OpenAPIObject,
   forumVersion: string,
 ): void {
-  const adapter = app.getHttpAdapter();
+  // `getHttpAdapter()` narrows `get` to the single-handler overload Nest declares,
+  // but the underlying Express app accepts a middleware chain. Cast to the shape
+  // we actually use rather than loosening every route signature.
+  const adapter = app.getHttpAdapter() as unknown as {
+    get(path: string, ...handlers: Array<(req: any, res: any, next?: any) => void>): unknown;
+  };
+  const guard = new AdapterRouteGuard(new SharedBudget(), () => getInternalApiKey());
+
+  /**
+   * Everything below is mounted directly on the Express adapter, so the Nest guard
+   * chain never applies. Two independent shields cover that gap:
+   *
+   * - `docsLimiter` is a cheap in-process fixed window that stops a crawler before
+   *   it reaches the renderer at all.
+   * - `guard` is the shared cross-process budget (the same one adapter JSON routes
+   *   use) and stays authoritative; it also exempts internal SSR traffic.
+   *
+   * Caching is what makes the route affordable: each page depends only on the
+   * document, which is fixed for the process lifetime, so it is rendered once.
+   */
+  const docsLimiter = createRateLimitMiddleware({ max: 120, windowMs: 60_000 });
+  const renderedPages = new Map<string, string>();
+  const renderOnce = (key: string, render: () => string): string => {
+    const cached = renderedPages.get(key);
+    if (cached !== undefined) return cached;
+    const html = render();
+    renderedPages.set(key, html);
+    return html;
+  };
+
+  const sendGuarded = (
+    request: any,
+    res: any,
+    render: () => string,
+    options: { noStore?: boolean; status?: number } = {},
+  ): void => {
+    // `docsLimiter` writes its own 429 and never calls `next` when over budget, so
+    // a sent response is the signal to stop. `guard` is then the authoritative,
+    // cross-process check that also exempts internal SSR callers.
+    docsLimiter(request, res, () => {});
+    if (res.headersSent || res.writableEnded) return;
+    if (!guard.check(request, res)) return;
+    const html = render();
+    setHtmlHeaders(res, html, { noStore: options.noStore });
+    res.status(options.status ?? 200).send(html);
+  };
 
   // Swagger UI ships English-only labels. Keep its former public entry point
   // useful by redirecting browser users to the fully localized API reference.
   const redirectToChineseReference = (_req: any, res: any) =>
     res.redirect(302, '/api/v1/reference');
-  adapter.get('/api/docs/v1', redirectToChineseReference);
-  adapter.get('/api/docs/v1/', redirectToChineseReference);
+  adapter.get('/api/docs/v1', docsLimiter, redirectToChineseReference);
+  adapter.get('/api/docs/v1/', docsLimiter, redirectToChineseReference);
 
-  adapter.get('/developers', (_req: any, res: any) => {
-    const html = renderHome(forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  // The landing page is only localised copy, not document-dependent, so it is
+  // rendered once and served from memory to every visitor.
+  const homePage = () => renderOnce('home', () => renderHome(forumVersion));
+
+  adapter.get('/developers', docsLimiter, (req: any, res: any) => {
+    sendGuarded(req, res, homePage);
   });
 
-  adapter.get('/api/v1', (_req: any, res: any) => {
-    const html = renderHome(forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  adapter.get('/api/v1', docsLimiter, (req: any, res: any) => {
+    sendGuarded(req, res, homePage);
   });
 
-  adapter.get('/api/v1/docs/:slug', (req: any, res: any) => {
+  adapter.get('/api/v1/docs/:slug', docsLimiter, (req: any, res: any) => {
     const slug = String(req.params?.slug || '');
-    const page = slug === 'errors'
-      ? null
-      : renderMarkdownGuide(slug) || guidePages()[slug];
     if (slug === 'errors') {
-      const html = renderErrorReference(forumVersion);
-      setHtmlHeaders(res, html);
-      res.status(200).send(html);
+      sendGuarded(req, res, () => renderOnce('errors', () => renderErrorReference(forumVersion)));
       return;
     }
+    const page = renderMarkdownGuide(slug) || guidePages()[slug];
     if (!page) {
+      // A 404 is still a request against the budget; answering it before the guard
+      // would let an unknown-slug scan run unmetered.
+      if (!guard.check(req, res)) return;
       res.status(404).json(apiV1Error('DOC_NOT_FOUND', '文档页面不存在', false, [], req.requestId || ''));
       return;
     }
-    const html = commonShell({
+    sendGuarded(req, res, () => renderOnce(`guide:${slug}`, () => commonShell({
       title: page.title,
       description: page.description,
       body: page.body,
       forumVersion,
-      activePath: `/api/v1/docs/${req.params.slug}`,
+      activePath: `/api/v1/docs/${slug}`,
       toc: page.toc,
-    });
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+    })));
   });
 
-  adapter.get('/api/v1/reference', (_req: any, res: any) => {
-    const html = renderReference(document, forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  // The reference page is the expensive one: it walks the whole ~1MB document and
+  // emits thousands of lines of HTML. `renderOnce` turns every hit after the first
+  // into a string copy.
+  adapter.get('/api/v1/reference', docsLimiter, (req: any, res: any) => {
+    sendGuarded(req, res, () => renderOnce('reference', () => renderReference(document, forumVersion)));
   });
 
-  adapter.get('/api/v1/debugger', (_req: any, res: any) => {
-    const method = String(_req.query?.method || '').toLowerCase();
-    const path = String(_req.query?.path || '');
-    const html = renderDebugger(forumVersion, method, path);
-    setHtmlHeaders(res, html, { noStore: true });
-    res.status(200).send(html);
+  adapter.get('/api/v1/debugger', docsLimiter, (req: any, res: any) => {
+    const method = String(req.query?.method || '').toLowerCase();
+    const path = String(req.query?.path || '');
+    // Query-dependent and intentionally uncached: the debugger renders a request
+    // preview, so `no-store` has to mean no-store.
+    sendGuarded(req, res, () => renderDebugger(forumVersion, method, path), { noStore: true });
   });
 
-  adapter.get('/api/v1/debug/callback', (_req: any, res: any) => {
-    const html = renderOAuthCallback(forumVersion);
-    setHtmlHeaders(res, html, { noStore: true });
-    res.status(200).send(html);
+  adapter.get('/api/v1/debug/callback', docsLimiter, (req: any, res: any) => {
+    sendGuarded(req, res, () => renderOAuthCallback(forumVersion), { noStore: true });
   });
 }

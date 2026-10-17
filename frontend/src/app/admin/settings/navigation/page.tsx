@@ -96,7 +96,7 @@ export default function NavigationSettingsPage() {
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">顶部导航</h2>
         <p className="text-xs text-surface-400 mt-1">
-          配置桌面端顶部导航和移动端折叠导航，支持单个链接和分组下拉。
+          历史顶部导航配置已保留供兼容读取；MDTBBS 固定 App Shell 不再使用它构建全局操作栏。
         </p>
       </div>
 
@@ -105,6 +105,8 @@ export default function NavigationSettingsPage() {
         {navigationSyntaxError && <Alert type="error" message={navigationSyntaxError} />}
 
         <div className="border border-surface-200 bg-surface-50 p-4 text-xs text-surface-600 space-y-2">
+          <div className="font-semibold text-surface-700">旧配置说明</div>
+          <div>保存这些项目不会改变前台顶部搜索、创建、通知和用户菜单。</div>
           <div className="font-semibold text-surface-700">格式说明</div>
           <div>每个项目都需要 <code>type</code> 和 <code>label</code>。</div>
           <div><code>type: "link"</code> 时填写 <code>href</code>，可选 <code>newTab</code>。</div>

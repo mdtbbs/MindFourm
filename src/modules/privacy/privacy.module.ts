@@ -6,9 +6,10 @@ import { PrivacyService } from './privacy.service';
 import { PrivacyController } from './privacy.controller';
 import { AdminPrivacyController } from './admin-privacy.controller';
 import { GameSavesModule } from '../game-saves/game-saves.module';
+import { BlobsModule } from '../blobs/blobs.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserDataDeletionRequest]), LogsModule, GameSavesModule],
+  imports: [TypeOrmModule.forFeature([UserDataDeletionRequest]), LogsModule, GameSavesModule, BlobsModule],
   providers: [PrivacyService],
   controllers: [PrivacyController, AdminPrivacyController],
   exports: [PrivacyService],

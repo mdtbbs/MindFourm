@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Crosshair, Grid2X2, Minus, Plus, RotateCcw } from 'lucide-react';
 import { getPreviewMarkers } from './resource-preview-geometry';
+import { normalizeMapWaves, type MapWaveSummary } from '@/lib/resources/map-analysis';
 
 export type ResourcePreviewViewerLabels = {
   zoomIn: string;
@@ -38,55 +39,15 @@ export type ResourcePreviewViewerLabels = {
   };
 };
 
-export type ResourcePreviewWave = {
-  wave_start: number;
-  wave_end: number | null;
-  enemy_count: number | null;
-  estimated_health: number | null;
-  air_ratio: number | null;
-  boss_count: number;
-  strength: number | null;
-  is_spike: boolean;
-};
+export type ResourcePreviewWave = MapWaveSummary;
+
+/** Wave summaries are normalised once in `@/lib/resources/map-analysis`. */
+export const normalizeResourcePreviewWaves = normalizeMapWaves;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
-}
-
-function finite(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-export function normalizeResourcePreviewWaves(value: unknown): ResourcePreviewWave[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 500).flatMap((item): ResourcePreviewWave[] => {
-    const row = record(item);
-    if (!row) return [];
-    const start = finite(row.wave_start ?? row.begin);
-    const end = finite(row.wave_end ?? row.end ?? row.begin);
-    if (start === null || end === null || end < start) return [];
-    const amount = finite(row.amount ?? row.enemy_count);
-    const spacing = Math.max(1, Math.floor(finite(row.spacing) ?? 1));
-    const waveCount = end > 1_000_000 ? 1 : Math.floor((end - start) / spacing) + 1;
-    const enemyCount = finite(row.enemy_count) ?? (amount === null ? null : amount * waveCount);
-    const unitHealth = finite(row.unit_health ?? row.health);
-    const shields = Math.max(0, finite(row.shields) ?? 0);
-    const health = finite(row.estimated_health) ?? (enemyCount === null || unitHealth === null ? null : enemyCount * (unitHealth + shields));
-    const air = finite(row.air_ratio) ?? (typeof row.flying === 'boolean' ? (row.flying ? 1 : 0) : null);
-    const bosses = finite(row.boss_count);
-    return [{
-      wave_start: start,
-      wave_end: end > 1_000_000 ? null : end,
-      enemy_count: enemyCount,
-      estimated_health: health,
-      air_ratio: air === null ? null : Math.min(1, Math.max(0, air)),
-      boss_count: bosses === null ? (row.boss === true || row.is_boss === true ? enemyCount ?? 1 : 0) : Math.max(0, Math.floor(bosses)),
-      strength: finite(row.strength) ?? enemyCount,
-      is_spike: row.is_spike === true || row.spike === true,
-    }];
-  });
 }
 
 const SCHEMATIC_LAYERS = ['logistics', 'liquid', 'power', 'input_output'] as const;
@@ -238,8 +199,8 @@ export default function ResourcePreviewViewer({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] p-3 text-xs text-[var(--text-muted)]">
             <p className="inline-flex items-center gap-1"><Crosshair className="h-3.5 w-3.5" />{labels.coordinates}: {width && height ? `${width} × ${height} · ${labels.approximate}` : labels.noMarkers}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" aria-pressed={gridVisible} onClick={() => setGridVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary)]"><Grid2X2 className="h-3.5 w-3.5" />{labels.grid}</button>
-              <button type="button" aria-pressed={markersVisible} disabled={markers.length === 0} onClick={() => setMarkersVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary)] disabled:opacity-40"><Crosshair className="h-3.5 w-3.5" />{labels.markers}{markers.length === 0 ? ` · ${labels.noMarkers}` : ` · ${markers.length}`}</button>
+              <button type="button" aria-pressed={gridVisible} onClick={() => setGridVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary-text)]"><Grid2X2 className="h-3.5 w-3.5" />{labels.grid}</button>
+              <button type="button" aria-pressed={markersVisible} disabled={markers.length === 0} onClick={() => setMarkersVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary-text)] disabled:opacity-40"><Crosshair className="h-3.5 w-3.5" />{labels.markers}{markers.length === 0 ? ` · ${labels.noMarkers}` : ` · ${markers.length}`}</button>
             </div>
           </div>
           {(kind === 'schematic' || kind === 'map') && <fieldset className="border-t border-[var(--border)] p-3">

@@ -3,24 +3,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { lanlinkClient, type LanLinkFriend } from '@/lib/api/lanlinkClient';
 import Badge from '@/components/ui/badge';
+import { useI18n } from '@/i18n/provider';
 
 const POLL_INTERVAL = 15000;
 
-const STATUS_CONFIG: Record<string, { icon: string; label: string; variant: 'success' | 'primary' | 'warning' | 'default' }> = {
-  hosting: { icon: '🎮', label: '开房中', variant: 'primary' },
-  playing: { icon: '👥', label: '游戏中', variant: 'warning' },
-  online: { icon: '🟢', label: '在线', variant: 'success' },
-  offline: { icon: '⚫', label: '离线', variant: 'default' },
+const STATUS_CONFIG: Record<string, { icon: string; labelKey: string; variant: 'success' | 'primary' | 'warning' | 'default' }> = {
+  hosting: { icon: '🎮', labelKey: 'friends.hosting', variant: 'primary' },
+  playing: { icon: '👥', labelKey: 'friends.playing', variant: 'warning' },
+  online: { icon: '🟢', labelKey: 'friends.online', variant: 'success' },
+  offline: { icon: '⚫', labelKey: 'friends.offline', variant: 'default' },
 };
 
 interface FriendsPanelProps {
-  /** 当前用户是否正在开房（用于显示邀请按钮） */
+  /** Whether the current user is hosting a room (shows the invite action). */
   isHosting?: boolean;
-  /** 当前用户的房间码（用于邀请） */
+  /** The current user's room code, used when inviting friends. */
   myRoomCode?: string;
 }
 
 export default function FriendsPanel({ isHosting, myRoomCode }: FriendsPanelProps) {
+  const { t } = useI18n();
   const [friends, setFriends] = useState<LanLinkFriend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,14 +82,14 @@ export default function FriendsPanel({ isHosting, myRoomCode }: FriendsPanelProp
   });
 
   if (loading) {
-    return <div className="text-center text-muted-foreground py-8">加载好友列表…</div>;
+    return <div className="text-center text-muted-foreground py-8">{t('lanlink.loadingFriends')}</div>;
   }
 
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold">
-          好友动态
+          {t('lanlink.friendsActivity')}
           {friends.length > 0 && (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({friends.length})
@@ -100,7 +102,7 @@ export default function FriendsPanel({ isHosting, myRoomCode }: FriendsPanelProp
 
       {sorted.length === 0 ? (
         <p className="text-center text-muted-foreground py-6">
-          暂无好友，在下方搜索添加
+          {t('lanlink.noFriendsSearch')}
         </p>
       ) : (
         <div className="space-y-1">
@@ -124,7 +126,7 @@ export default function FriendsPanel({ isHosting, myRoomCode }: FriendsPanelProp
                     </div>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <span>{cfg.icon}</span>
-                      <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                      <Badge variant={cfg.variant}>{t(cfg.labelKey)}</Badge>
                       {friend.presence.status === 'hosting' && friend.presence.room_name && (
                         <span className="truncate ml-1">{friend.presence.room_name}</span>
                       )}
@@ -132,23 +134,23 @@ export default function FriendsPanel({ isHosting, myRoomCode }: FriendsPanelProp
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  {/* 好友正在开房 → 显示加入 */}
+                  {/* Friend is hosting → offer join */}
                   {friend.presence.status === 'hosting' && friend.presence.room_code && (
                     <button
                       onClick={() => copyRoomCode(friend.presence.room_code!)}
                       className="rounded bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20 transition-colors"
                     >
-                      {copiedCode === friend.presence.room_code ? '已复制 ✓' : '加入房间'}
+                      {copiedCode === friend.presence.room_code ? t('lanlink.copied') : t('lanlink.joinRoom')}
                     </button>
                   )}
-                  {/* 当前用户在开房 + 好友在线 → 邀请 */}
+                  {/* Current user is hosting + friend is online → invite */}
                   {canInvite && (
                     <button
                       onClick={() => inviteFriend(friend.id)}
                       disabled={inviting.has(friend.id)}
                       className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
                     >
-                      {inviting.has(friend.id) ? '邀请中…' : '邀请联机'}
+                      {inviting.has(friend.id) ? t('lanlink.inviting') : t('lanlink.inviteMultiplayer')}
                     </button>
                   )}
                 </div>

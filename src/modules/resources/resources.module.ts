@@ -19,6 +19,8 @@ import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draf
 import { ResourceFavorite } from '@entities/resource-favorite.entity';
 import { ResourceLike } from '@entities/resource-like.entity';
 import { ResourceSubscription } from '@entities/resource-subscription.entity';
+import { ResourceViewEvent } from '@entities/resource-view-event.entity';
+import { DownloadEvent } from '@entities/download-event.entity';
 import { ModReportAttachment } from '@entities/mod-report-attachment.entity';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -61,6 +63,10 @@ import { DownloadsModule } from '../downloads/downloads.module';
 import { ResourceCommentsModule } from '../resource-comments/resource-comments.module';
 import { ResourceStorageReconciliationService } from './resource-storage-reconciliation.service';
 import { ResourceStorageReconciliationController } from './resource-storage-reconciliation.controller';
+import { ResourceDiscoveryService } from './resource-discovery.service';
+import { ResourceDiscoveryController } from './resource-discovery.controller';
+import { ResourceOperationsService } from './resource-operations.service';
+import { ResourceOperationsController } from './resource-operations.controller';
 
 @Module({
   imports: [
@@ -73,10 +79,10 @@ import { ResourceStorageReconciliationController } from './resource-storage-reco
     CustomEmojisModule,
     DownloadsModule,
     ResourceCommentsModule,
-    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
+    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ResourceViewEvent, DownloadEvent, ModReportAttachment]),
   ],
-  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourcePreviewService, ResourceLifecycleService, ResourceStorageReconciliationService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService],
-  controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController, ResourceStorageReconciliationController],
-  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourcePreviewService, ResourceLifecycleService, ResourceStorageReconciliationService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService, ResourceDiscoveryService, ResourceOperationsService],
+  controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController, ResourceStorageReconciliationController, ResourceDiscoveryController, ResourceOperationsController],
+  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDiscoveryService, ResourceOperationsService],
 })
 export class ResourcesModule {}

@@ -2,7 +2,7 @@ import { Controller, Get, Query, Req } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { SearchService } from './search.service';
-import { SearchQueryDto } from './dto/search-query.dto';
+import { SEARCH_TYPE_VALUES, SearchQueryDto } from './dto/search-query.dto';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { OAuthProtected } from '../../common/decorators/oauth-protected.decorator';
 import { SearchSuggestionsQueryDto } from './dto/search-suggestions-query.dto';
@@ -25,7 +25,7 @@ export class SearchV1Controller {
   @OAuthProtected('forum.read')
   @RateLimit({ max: 30, window: 60 })
   @ApiQuery({ name: 'q', required: true, type: String, schema: { maxLength: 255 }, example: '资源更新', description: '搜索关键词。' })
-  @ApiQuery({ name: 'type', required: false, enum: ['all', 'posts', 'resources', 'mod', 'map', 'schematic', 'users', 'servers', 'wiki', 'game_versions', 'developer_feed'], example: 'all', description: '结果分组筛选。' })
+  @ApiQuery({ name: 'type', required: false, enum: SEARCH_TYPE_VALUES, example: 'all', description: '结果分组筛选；保留 post、user、global 历史值作为兼容别名。' })
   @ApiQuery({ name: 'category', required: false, type: String, example: 'discussion', description: '分类筛选标识。' })
   @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'newest', 'oldest', 'downloads', 'rating'], example: 'relevance', description: '结果排序方式。' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '结果页码，从 1 开始。' })
@@ -46,7 +46,7 @@ export class SearchV1Controller {
   @OAuthProtected('forum.read')
   @RateLimit({ max: 30, window: 60 })
   @ApiQuery({ name: 'q', required: true, type: String, schema: { maxLength: 255 }, example: '资源更新', description: '搜索关键词。' })
-  @ApiQuery({ name: 'type', required: false, enum: ['post'], example: 'post', description: '搜索类型；此端点固定返回帖子结果。' })
+  @ApiQuery({ name: 'type', required: false, enum: ['post', 'user', 'global'], example: 'post', description: '保留历史查询值以兼容旧客户端；此端点始终返回帖子结果。' })
   @ApiQuery({ name: 'category', required: false, type: String, example: 'discussion', description: '分类筛选标识。' })
   @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'newest', 'oldest'], example: 'relevance', description: '结果排序方式。' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '结果页码，从 1 开始。' })

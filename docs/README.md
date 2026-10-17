@@ -2,16 +2,34 @@
 
 按任务选择当前文档入口。实现状态以代码和 OpenAPI 为准；设计草案与历史计划仅用于了解背景。
 
+## 面向用户与第三方开发者
+
+- [`product/overview.md`](product/overview.md)：论坛功能概览与从 1.0 开始的主要演进里程碑。
+- [`product/changelog.md`](product/changelog.md)：面向用户的产品更新记录，按论坛版本从新到旧排列。
+- [`product/roadmap.md`](product/roadmap.md)：已公开的研发方向、计划边界和功能下线公告。
+- [`VERSION_RULE.md`](VERSION_RULE.md)：论坛版本号规则、递增时机与发布操作。
+
 ## API 与客户端
 
 - [`api/README.md`](api/README.md)：Public V1 边界、文档入口与维护规则。
 - [`api/public-client-v1.md`](api/public-client-v1.md)、[`api/authentication.md`](api/authentication.md)：客户端接入、OAuth/PKCE。
-- [`api/first-party-v1.md`](api/first-party-v1.md)、[`api/game-content-v1.md`](api/game-content-v1.md)、[`api/resources-v1-contract.md`](api/resources-v1-contract.md)：讨论、游戏内容与资源 API。
+- [`api/first-party-v1.md`](api/first-party-v1.md)、[`api/game-content-v1.md`](api/game-content-v1.md)、[`api/resources-v1-contract.md`](api/resources-v1-contract.md)：讨论、游戏内容与资源 API；资源契约也记录公开推荐算法及其分页、信号与隐私边界。
 - [`api/multiplayer-v1.md`](api/multiplayer-v1.md)、[`api/cloud-saves-v1.md`](api/cloud-saves-v1.md)：联机与云存档。
+- [`api/blobs-v1.md`](api/blobs-v1.md)：通用 blob 存储（`/api/v1/blobs`）——内容寻址、所有者绑定、去重与延迟回收。
 - [`api/rich-content-schema-v2.md`](api/rich-content-schema-v2.md)：Tiptap 正文 Schema。
 - [`api/errors-v1.md`](api/errors-v1.md)、[`api/changelog-v1.md`](api/changelog-v1.md)、[`api/lifecycle-v1.md`](api/lifecycle-v1.md)：错误码、已发布 API 更新与生命周期。
 
+## 移动客户端（Android）
+
+- [`android/ANDROID-CLIENT-STATUS.md`](android/ANDROID-CLIENT-STATUS.md)：客户端逐功能审计——与当前 V1 契约的差距、四个阻塞项、按阶段排序的改造建议，并记录上一版审计的更正。
+- [`android/ANDROID-DEVELOPMENT-PLAN.md`](android/ANDROID-DEVELOPMENT-PLAN.md)：阶段化开发计划（发布闭环 → 数据与授权风险 → 能力缺口 → 工程完备性）与各阶段出口条件。
+- [`android/M0-android-api-gap.md`](android/M0-android-api-gap.md)、[`android/M0-android-engineering-architecture.md`](android/M0-android-engineering-architecture.md)、[`android/M0-mobile-auth-rfc.md`](android/M0-mobile-auth-rfc.md)：一期 API 缺口、工程约定与移动认证 RFC；已接受但部分内容早于当前实现，读前先看审计文件。
+
+移动端相关服务端开关（`GET /api/v1/client/config` 的强制更新、维护模式、功能开关）与 Android 构建参数（`mdtbbs*` Gradle property）目前没有独立文档页，取值来源见审计文件与计划文件的阶段 0。
+
 ## 当前系统与运维
+
+- [`frontend/FRONTEND_IA_2.md`](frontend/FRONTEND_IA_2.md)、[`frontend/FRONTEND_IA_2_ROUTES.md`](frontend/FRONTEND_IA_2_ROUTES.md)、[`frontend/FRONTEND_IA_2_AUDIT.md`](frontend/FRONTEND_IA_2_AUDIT.md)：前台信息架构、route map 与现状审计。
 
 - [`resource-center-v2.md`](resource-center-v2.md)：Resource Center V2 业务与 API。
 - [`platform-2.7.0.md`](platform-2.7.0.md)：2.7.0 平台能力收口、证据层和已知限制。

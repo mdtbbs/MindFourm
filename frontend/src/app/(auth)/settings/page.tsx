@@ -58,7 +58,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [cloudSavesEnabled, setCloudSavesEnabled] = useState(false);
   const [preferredContentLanguage, setPreferredContentLanguage] = useState(user?.preferred_content_language || '');
   const [contentLanguageSaving, setContentLanguageSaving] = useState(false);
   const [contentLanguageSaved, setContentLanguageSaved] = useState(false);
@@ -114,13 +113,6 @@ export default function SettingsPage() {
       setContentLanguageSaving(false);
     }
   };
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetchV1<{ cloud_saves_v1: boolean }>('/capabilities')
-      .then((capabilities) => setCloudSavesEnabled(Boolean(capabilities.cloud_saves_v1)))
-      .catch(() => setCloudSavesEnabled(false));
-  }, [isAuthenticated]);
 
   const loadPreferences = async () => {
     try {
@@ -221,7 +213,7 @@ export default function SettingsPage() {
               ) : (
                 <Link
                   href="/verify-phone?redirect=%2Fsettings"
-                  className="border border-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary)] hover:bg-[var(--primary)]/5"
+                  className="border border-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary)]/5"
                 >
                   去验证
                 </Link>
@@ -257,7 +249,7 @@ export default function SettingsPage() {
         {/* The block list had no entry point at all and was reachable only by typing the
             URL, which for a privacy control is the same as not shipping it. */}
         <nav className="mb-6 flex flex-wrap gap-2">
-          <span className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white">
+          <span className="rounded-lg bg-[var(--primary-button)] px-3 py-1.5 text-sm text-white">
             {t('emailSettings.notifications')}
           </span>
           <Link
@@ -269,12 +261,6 @@ export default function SettingsPage() {
           <Link href="#message-privacy" className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]">
             {t('messagePrivacy.title')}
           </Link>
-          {cloudSavesEnabled && <Link
-            href="/settings/cloud-saves"
-            className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-          >
-            {t('cloudSaves.title')}
-          </Link>}
         </nav>
 
         <section id="message-privacy" className="card mb-6 p-6" aria-labelledby="message-privacy-title">

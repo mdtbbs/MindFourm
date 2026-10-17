@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { categoryApi, postApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import type { Category, Post } from '@/types';
+import { PostComposerPresentation } from '@/components/rich-content/post-composer-presentation';
 import ContentLanguageSelect from '@/components/forum/content-language-select';
 import { useI18n } from '@/i18n/provider';
 
@@ -113,7 +114,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link
         href={`/posts/${post.id}`}
-        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] mb-6"
+        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary-text)] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         {t('postEdit.backToPost')}
@@ -122,72 +123,76 @@ export default function PostEditForm({ post }: PostEditFormProps) {
       <h1 className="text-2xl font-semibold text-[var(--text)] mb-6">{t('postEdit.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
-        <div>
-          <label htmlFor="post-title" className="block text-sm font-medium text-[var(--text)] mb-2">
-            {t('postEdit.titleLabel')}
-          </label>
-          <input
-            id="post-title"
-            data-testid="post-edit-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={200}
-            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          />
-        </div>
+        <PostComposerPresentation title={title} json={contentJson} markdown={content}>
+          <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
+          <div>
+            <label htmlFor="post-title" className="block text-sm font-medium text-[var(--text)] mb-2">
+              {t('postEdit.titleLabel')}
+            </label>
+            <input
+              id="post-title"
+              data-testid="post-edit-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="post-category" className="block text-sm font-medium text-[var(--text)] mb-2">
-            {t('postEdit.category')}
-          </label>
-          <select
-            id="post-category"
-            value={categoryId ?? ''}
-            onChange={(event) =>
-              setCategoryId(event.target.value ? Number(event.target.value) : undefined)
-            }
-            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          >
-            <option value="">{t('postEdit.noCategory')}</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <label htmlFor="post-category" className="block text-sm font-medium text-[var(--text)] mb-2">
+              {t('postEdit.category')}
+            </label>
+            <select
+              id="post-category"
+              value={categoryId ?? ''}
+              onChange={(event) =>
+                setCategoryId(event.target.value ? Number(event.target.value) : undefined)
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            >
+              <option value="">{t('postEdit.noCategory')}</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="post-content" className="block text-sm font-medium text-[var(--text)] mb-2">
-            {t('postEdit.content')}
-          </label>
-          <TiptapEditor
-            value={content}
-            onChange={setContent}
-            jsonValue={contentJson}
-            onJsonChange={setContentJson}
-            testId="post-content-editor"
-            id="post-content"
-            ariaLabel={t('postEdit.content')}
-            placeholder={t('postEdit.contentPlaceholder')}
-            minHeight="18rem"
-            imageUpload
-          />
-        </div>
+          <div>
+            <label htmlFor="post-content" className="block text-sm font-medium text-[var(--text)] mb-2">
+              {t('postEdit.content')}
+            </label>
+            <TiptapEditor
+              value={content}
+              onChange={setContent}
+              jsonValue={contentJson}
+              onJsonChange={setContentJson}
+              testId="post-content-editor"
+              id="post-content"
+              ariaLabel={t('postEdit.content')}
+              placeholder={t('postEdit.contentPlaceholder')}
+              minHeight="18rem"
+              imageUpload
+            />
+          </div>
 
-        <div>
-          <label htmlFor="post-tags" className="block text-sm font-medium text-[var(--text)] mb-2">
-            {t('postEdit.tags')}
-          </label>
-          <input
-            id="post-tags"
-            value={tagsInput}
-            onChange={(event) => setTagsInput(event.target.value)}
-            placeholder={t('postEdit.tagsPlaceholder')}
-            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          />
-        </div>
+          <div>
+            <label htmlFor="post-tags" className="block text-sm font-medium text-[var(--text)] mb-2">
+              {t('postEdit.tags')}
+            </label>
+            <input
+              id="post-tags"
+              value={tagsInput}
+              onChange={(event) => setTagsInput(event.target.value)}
+              placeholder={t('postEdit.tagsPlaceholder')}
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            />
+          </div>
+
+
+        </PostComposerPresentation>
 
         {error && (
           <p role="alert" className="text-sm text-[var(--error)]">

@@ -19,16 +19,6 @@ import {
   RateLimitOptions,
 } from '../decorators/rate-limit.decorator';
 
-// Fixed-window counter. INCR then EXPIRE-on-first-hit is atomic inside the script,
-// so concurrent requests cannot lose the TTL and create an immortal counter.
-const RATE_LIMIT_SCRIPT = `
-local current = redis.call('INCR', KEYS[1])
-if current == 1 then
-  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
-end
-return current
-`;
-
 /** Applied when a route declares no explicit @RateLimit. */
 const DEFAULT_READ_LIMIT: RateLimitOptions = { max: 1200, window: 60 };
 const DEFAULT_WRITE_LIMIT: RateLimitOptions = { max: 180, window: 60 };
@@ -72,13 +62,12 @@ export class RateLimitGuard implements CanActivate {
     const limit =
       explicit || (WRITE_METHODS.has(method) ? DEFAULT_WRITE_LIMIT : DEFAULT_READ_LIMIT);
 
-    const key = `rate_limit:${this.identify(req)}:${method}:${this.routeKey(context, req)}`;
+    const bucket = this.bucketKey(context, req);
+    const key = `rate_limit:${this.identify(req)}:${method}:${bucket}`;
 
     let current: number;
     try {
-      current = Number(
-        await this.redis.eval(RATE_LIMIT_SCRIPT, [key], [limit.window.toString()]),
-      );
+      current = await this.redis.incrementFixedWindow(key, limit.window);
     } catch (error) {
       // Fail open: a Redis outage should degrade rate limiting, not take the site
       // down. Ban enforcement and authentication are unaffected.
@@ -92,15 +81,18 @@ export class RateLimitGuard implements CanActivate {
       response?.setHeader?.('X-RateLimit-Limit', String(limit.max));
       response?.setHeader?.('X-RateLimit-Remaining', '0');
       void this.telemetry.recordBlocked({
-        route: this.routeKey(context, req),
+        route: bucket,
         identity: this.identityType(req),
         limit: limit.max,
         remaining: 0,
         ipSource: req.clientIpSource || 'connection',
       });
-      const isVersionedApi = String(req.originalUrl || req.url || '').startsWith('/api/v1/');
+      // Always carry the stable code, on legacy and V1 paths alike. The frontend
+      // localizes by `code`; a bare Chinese string here meant every non-V1 429
+      // reached the user untranslated. The legacy filter already forwards `code`,
+      // so this stays backward compatible with existing clients.
       throw new HttpException(
-        isVersionedApi ? { code: 'RATE_LIMITED', message: 'RATE_LIMITED' } : '请求过于频繁，请稍后再试',
+        { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试' },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -168,18 +160,36 @@ export class RateLimitGuard implements CanActivate {
       return true;
     }
 
+    // Container deployments reach the backend through a bridge network, so the
+    // connection address is never loopback and every SSR read would otherwise be
+    // counted as a visitor. The shared key above is the deployment-independent
+    // signal; a loopback connection stays trusted for bare-metal setups that have
+    // not configured the key yet.
     return !header('x-forwarded-for') && isLoopbackIp(req.socket?.remoteAddress || req.ip || '');
   }
 
   /**
-   * Bucket per route rather than per handler name, so limits survive renames and
-   * two endpoints never consume each other's budget.
+   * Bucket per mounted route, not per handler name and not per bare router path.
+   *
+   * `req.route.path` alone is only the tail of the path, so every controller with a
+   * `@Get(':id')` — resources, threads, posts, notices, users, messages — shared one
+   * bucket. Reading resource details silently spent the budget for reading a thread,
+   * and the resulting 429s looked like they came from unrelated endpoints. The
+   * mount path (`req.baseUrl`, which includes the global `api` prefix and the
+   * controller prefix) has to be part of the key, and the handler name is the
+   * fallback so two routes can never collide by accident.
    */
-  private routeKey(context: ExecutionContext, req: any): string {
+  private bucketKey(context: ExecutionContext, req: any): string {
+    const handler = `${context.getClass().name}.${context.getHandler().name}`;
     const routePath = req.route?.path;
-    if (routePath) {
-      return routePath;
+    if (!routePath) {
+      return handler;
     }
-    return `${context.getClass().name}.${context.getHandler().name}`;
+    // Only the leading slash is normalised: stripping the tail would make `/:id`
+    // and a literal static segment share a key.
+    const baseUrl = String(req.baseUrl || '');
+    const route = String(routePath);
+    const fullPath = `${baseUrl}${route.startsWith('/') ? route : `/${route}`}`.toLowerCase();
+    return `${fullPath}|${handler}`;
   }
 }

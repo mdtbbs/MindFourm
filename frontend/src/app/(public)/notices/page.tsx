@@ -36,9 +36,9 @@ export default async function NoticesPage() {
         {notices.length ? notices.map((notice) => (
           <article key={notice.public_id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              {notice.is_pinned && <span className="rounded bg-[var(--primary)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--primary)]">{t('notices.pinned')}</span>}
+              {notice.is_pinned && <span className="rounded bg-[var(--primary)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--primary-text)]">{t('notices.pinned')}</span>}
               <span className="rounded bg-[var(--bg-muted)] px-2 py-0.5 text-xs text-[var(--text-muted)]">{t(`notices.type.${notice.notice_type}`)}</span>
-              <h2 className="text-xl font-semibold text-[var(--text)]"><Link href={`/notices/${notice.public_id}`} className="hover:text-[var(--primary)]">{notice.title}</Link></h2>
+              <h2 className="text-xl font-semibold text-[var(--text)]"><Link href={`/notices/${notice.public_id}`} className="hover:text-[var(--primary-text)]">{notice.title}</Link></h2>
               {notice.published_at && (
                 <time className="ml-auto text-xs text-[var(--text-muted)]">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(notice.published_at))}</time>
               )}
@@ -50,7 +50,7 @@ export default async function NoticesPage() {
           <div className="rounded-xl border border-dashed border-[var(--border)] px-6 py-12 text-center text-sm text-[var(--text-muted)]">{t('notices.empty')}</div>
         )}
       </div>
-      <Link href="/" className="mt-8 inline-flex text-sm font-medium text-[var(--primary)] hover:underline">{t('notices.backHome')}</Link>
+      <Link href="/" className="mt-8 inline-flex text-sm font-medium text-[var(--primary-text)] hover:underline">{t('notices.backHome')}</Link>
     </main>
   );
 }

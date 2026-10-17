@@ -45,75 +45,77 @@ function buildIconsMetadata(faviconUrl: string) {
 // ────────────────────────────────────────────────────────────────────────────
 // Test: should use site_favicon_url when provided
 // ────────────────────────────────────────────────────────────────────────────
-(function testCustomFaviconUrl() {
-  const settings = {
-    site_name: 'Test Forum',
-    site_favicon_url: 'https://example.com/custom-favicon.ico',
-  };
+describe('app layout metadata', () => {
+  it('testCustomFaviconUrl', () => {
+    const settings = {
+      site_name: 'Test Forum',
+      site_favicon_url: 'https://example.com/custom-favicon.ico',
+    };
 
-  const faviconUrl = resolveFaviconUrl(settings);
-  const icons = buildIconsMetadata(faviconUrl);
+    const faviconUrl = resolveFaviconUrl(settings);
+    const icons = buildIconsMetadata(faviconUrl);
 
-  assertEqual(icons.icon, 'https://example.com/custom-favicon.ico', 'icon should use site_favicon_url');
-  assertEqual(icons.shortcut, 'https://example.com/custom-favicon.ico', 'shortcut should use site_favicon_url');
-  assertEqual(icons.apple, 'https://example.com/custom-favicon.ico', 'apple should use site_favicon_url');
-})();
+    assertEqual(icons.icon, 'https://example.com/custom-favicon.ico', 'icon should use site_favicon_url');
+    assertEqual(icons.shortcut, 'https://example.com/custom-favicon.ico', 'shortcut should use site_favicon_url');
+    assertEqual(icons.apple, 'https://example.com/custom-favicon.ico', 'apple should use site_favicon_url');
+  });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback to /favicon.ico when site_favicon_url is empty
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconFallbackWhenEmpty() {
-  const settings = {
-    site_name: 'Test Forum',
-    site_favicon_url: '',
-  };
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback to /favicon.ico when site_favicon_url is empty
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconFallbackWhenEmpty', () => {
+    const settings = {
+      site_name: 'Test Forum',
+      site_favicon_url: '',
+    };
 
-  const faviconUrl = resolveFaviconUrl(settings);
-  const icons = buildIconsMetadata(faviconUrl);
+    const faviconUrl = resolveFaviconUrl(settings);
+    const icons = buildIconsMetadata(faviconUrl);
 
-  assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico');
-  assertEqual(icons.shortcut, '/favicon.ico', 'shortcut should fallback to /favicon.ico');
-  assertEqual(icons.apple, '/favicon.ico', 'apple should fallback to /favicon.ico');
-})();
+    assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico');
+    assertEqual(icons.shortcut, '/favicon.ico', 'shortcut should fallback to /favicon.ico');
+    assertEqual(icons.apple, '/favicon.ico', 'apple should fallback to /favicon.ico');
+  });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback to /favicon.ico when site_favicon_url is missing
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconFallbackWhenMissing() {
-  const settings = {
-    site_name: 'Test Forum',
-  };
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback to /favicon.ico when site_favicon_url is missing
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconFallbackWhenMissing', () => {
+    const settings = {
+      site_name: 'Test Forum',
+    };
 
-  const faviconUrl = resolveFaviconUrl(settings);
-  const icons = buildIconsMetadata(faviconUrl);
+    const faviconUrl = resolveFaviconUrl(settings);
+    const icons = buildIconsMetadata(faviconUrl);
 
-  assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico when key missing');
-})();
+    assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico when key missing');
+  });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should trim whitespace from site_favicon_url
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconTrimWhitespace() {
-  const settings = {
-    site_favicon_url: '  https://example.com/favicon.ico  ',
-  };
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should trim whitespace from site_favicon_url
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconTrimWhitespace', () => {
+    const settings = {
+      site_favicon_url: '  https://example.com/favicon.ico  ',
+    };
 
-  const faviconUrl = resolveFaviconUrl(settings);
+    const faviconUrl = resolveFaviconUrl(settings);
 
-  assertEqual(faviconUrl, 'https://example.com/favicon.ico', 'should trim whitespace from favicon URL');
-})();
+    assertEqual(faviconUrl, 'https://example.com/favicon.ico', 'should trim whitespace from favicon URL');
+  });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback when site_favicon_url is whitespace only
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconFallbackWhenWhitespaceOnly() {
-  const settings = {
-    site_favicon_url: '   ',
-  };
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback when site_favicon_url is whitespace only
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconFallbackWhenWhitespaceOnly', () => {
+    const settings = {
+      site_favicon_url: '   ',
+    };
 
-  const faviconUrl = resolveFaviconUrl(settings);
+    const faviconUrl = resolveFaviconUrl(settings);
 
-  assertEqual(faviconUrl, '/favicon.ico', 'should fallback to /favicon.ico when URL is whitespace only');
-})();
+    assertEqual(faviconUrl, '/favicon.ico', 'should fallback to /favicon.ico when URL is whitespace only');
+  });
 
-assert(true, 'layout spec executed');
+
+});

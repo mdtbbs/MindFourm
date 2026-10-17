@@ -320,3 +320,70 @@ describe('AuthService request and session performance', () => {
     expect(mobile.findOne).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('AuthService MindAuth refresh cooldown under a Redis outage', () => {
+  const create = () => {
+    // Session reads still succeed locally, but the cooldown store is degraded —
+    // this is the Redis-outage shape that used to cause the write amplification.
+    const cooldowns = new Map<string, number>();
+    const redis = {
+      acquireCooldown: jest.fn(async (scope: string, ttl: number, id?: string) => {
+        const key = `${scope}:${id}`;
+        const expiry = cooldowns.get(key);
+        if (expiry !== undefined && expiry > Date.now()) return false;
+        cooldowns.set(key, Date.now() + ttl * 1000);
+        return true;
+      }),
+    };
+    const users = { findOne: jest.fn(), save: jest.fn(async (value: any) => value) };
+    const service = new AuthService(
+      users as any, {} as any, {} as any, redis as any,
+      { get: jest.fn() } as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any,
+    );
+    return { service, redis, users };
+  };
+
+  it('calls MindAuth once per cooldown window instead of once per request', async () => {
+    const { service } = create();
+    const user = { id: 7 } as any;
+    const getUserInfo = jest.spyOn(service, 'getUserInfo').mockResolvedValue({
+      id: 123, username: 'test-user', email: 'test@example.com', avatar_url: '/a.png',
+    });
+    const sync = jest.spyOn(service, 'syncMindAuthUserData').mockResolvedValue(user);
+
+    await service.refreshUserFromMindAuthWithToken(user, 'access-token');
+    await service.refreshUserFromMindAuthWithToken(user, 'access-token');
+    await service.refreshUserFromMindAuthWithToken(user, 'access-token');
+
+    expect(getUserInfo).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('always refreshes when the caller passes force', async () => {
+    const { service } = create();
+    const user = { id: 7 } as any;
+    const getUserInfo = jest.spyOn(service, 'getUserInfo').mockResolvedValue({
+      id: 123, username: 'test-user', email: 'test@example.com', avatar_url: '/a.png',
+    });
+    jest.spyOn(service, 'syncMindAuthUserData').mockResolvedValue(user);
+
+    await service.refreshUserFromMindAuthWithToken(user, 'access-token');
+    await service.refreshUserFromMindAuthWithToken(user, 'access-token', undefined, true);
+
+    expect(getUserInfo).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps distinct users on independent cooldowns', async () => {
+    const { service } = create();
+    const getUserInfo = jest.spyOn(service, 'getUserInfo').mockResolvedValue({
+      id: 123, username: 'test-user', email: 'test@example.com', avatar_url: '/a.png',
+    });
+    jest.spyOn(service, 'syncMindAuthUserData').mockImplementation(async (data: any) => ({ id: data?.id ?? 0 }) as any);
+
+    await service.refreshUserFromMindAuthWithToken({ id: 7 } as any, 'access-token');
+    await service.refreshUserFromMindAuthWithToken({ id: 8 } as any, 'access-token');
+
+    expect(getUserInfo).toHaveBeenCalledTimes(2);
+  });
+});

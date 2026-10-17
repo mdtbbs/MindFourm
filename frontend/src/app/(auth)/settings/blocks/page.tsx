@@ -71,11 +71,11 @@ export default function BlockedUsersPage() {
     <div className="bg-[var(--bg)]">
       <main className="max-w-3xl mx-auto px-4 py-8">
         <nav className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-6">
-          <Link href="/" className="hover:text-[var(--primary)]">
+          <Link href="/" className="hover:text-[var(--primary-text)]">
             {t('blockedUsers.home')}
           </Link>
           <span>/</span>
-          <Link href="/settings" className="hover:text-[var(--primary)]">
+          <Link href="/settings" className="hover:text-[var(--primary-text)]">
             {t('blockedUsers.settings')}
           </Link>
           <span>/</span>
@@ -135,7 +135,7 @@ export default function BlockedUsersPage() {
                 <div className="flex-1 min-w-0">
                   <Link
                     href={`/users/${item.user.id}`}
-                    className="font-medium text-[var(--text)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+                    className="font-medium text-[var(--text)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
                   >
                     {item.user.username || t('blockedUsers.anonymousUser', { id: item.user.id })}
                   </Link>

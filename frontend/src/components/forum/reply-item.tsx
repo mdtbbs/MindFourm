@@ -77,7 +77,7 @@ export default function ReplyItem({
             showMeta={!isNested}
             className="min-w-0"
           />
-          {isOriginalPoster && <span className="rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary)]">{t('replyItem.originalPoster')}</span>}
+          {isOriginalPoster && <span className="rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary-text)]">{t('replyItem.originalPoster')}</span>}
           <span className="text-[var(--text-muted)]">|</span>
           <time
             dateTime={reply.created_at}

@@ -5,6 +5,7 @@ import { lanlinkApi } from '@/lib/api/client';
 import { confirmDialog } from '@/store/interaction-dialog-store';
 import type { QuickCodeGenerateResponse, QuickCodeResetResponse } from '@/types/lanlink';
 import Alert from '@/components/ui/alert';
+import { useI18n } from '@/i18n/provider';
 
 interface Props {
   hasExistingCode: boolean;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +24,7 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
       const response = await lanlinkApi.generateQuickCode();
       onCodeGenerated(response.code);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成快速码失败');
+      setError(err instanceof Error ? err.message : t('lanlink.generateFailed'));
     } finally {
       setLoading(false);
     }
@@ -30,9 +32,9 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
 
   const handleReset = async () => {
     const confirmed = await confirmDialog({
-      title: '重置快速码',
-      message: '确定要重置快速码吗？旧快速码将立即失效，新代码生成后旧代码无法再使用。',
-      confirmLabel: '重置快速码',
+      title: t('lanlink.resetConfirmTitle'),
+      message: t('lanlink.resetConfirmMessage'),
+      confirmLabel: t('lanlink.resetCode'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -43,7 +45,7 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
       const response = await lanlinkApi.resetQuickCode();
       onCodeGenerated(response.code);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '重置快速码失败');
+      setError(err instanceof Error ? err.message : t('lanlink.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -52,7 +54,7 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
   return (
     <div className="card p-6">
       <h2 className="text-xl font-bold mb-4">
-        {hasExistingCode ? '重置快速码' : '生成快速码'}
+        {hasExistingCode ? t('lanlink.resetCode') : t('lanlink.generateCode')}
       </h2>
 
       {error && (
@@ -62,27 +64,27 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
       {!hasExistingCode ? (
         <div>
           <p className="text-sm text-muted-foreground mb-4">
-            生成快速码后，你可以在 Mindustry 游戏中使用它连接服务器。
+            {t('lanlink.generateHint')}
           </p>
           <button
             onClick={handleGenerate}
             disabled={loading}
             className="btn btn-primary"
           >
-            {loading ? '生成中...' : '生成快速码'}
+            {loading ? t('lanlink.generating') : t('lanlink.generateCode')}
           </button>
         </div>
       ) : (
         <div>
           <p className="text-sm text-muted-foreground mb-4">
-            重置后旧快速码将立即失效，你需要使用新的快速码。
+            {t('lanlink.resetHint')}
           </p>
           <button
             onClick={handleReset}
             disabled={loading}
             className="btn btn-danger"
           >
-            {loading ? '重置中...' : '重置快速码'}
+            {loading ? t('lanlink.resetting') : t('lanlink.resetCode')}
           </button>
         </div>
       )}

@@ -1,3 +1,6 @@
+import { mergeAttributes } from '@tiptap/core';
+import { richTableLayout } from './table-presentation';
+import { PresentedTableView } from './table-view';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import ImageExt from '@tiptap/extension-image';
@@ -11,10 +14,13 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import BulletListExt from '@tiptap/extension-bullet-list';
 import OrderedListExt from '@tiptap/extension-ordered-list';
+import ListItemExt from '@tiptap/extension-list-item';
+import BlockquoteExt from '@tiptap/extension-blockquote';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { common, createLowlight } from 'lowlight';
+import { richContentLowlight } from './syntax-highlight';
 import { RICH_CONTENT_EXTENSIONS } from './rich-content-extensions';
 import { normalizeEditorLink } from './editor-link';
+import { BLOCKQUOTE_BLOCKS, CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 
 const TightBulletList = BulletListExt.extend({
   addAttributes() {
@@ -24,18 +30,77 @@ const TightBulletList = BulletListExt.extend({
 
 const TightOrderedList = OrderedListExt.extend({
   addAttributes() {
-    return { ...this.parent?.(), tight: { default: true, rendered: false } };
+    const types = ['1', 'a', 'A', 'i', 'I'];
+    return {
+      ...this.parent?.(), tight: { default: true, rendered: false },
+      type: { default: null,
+        parseHTML: (element) => types.includes(element.getAttribute('type') || '') ? element.getAttribute('type') : null,
+        renderHTML: ({ type }) => types.includes(type) ? { type } : {},
+      },
+    };
+  },
+});
+
+/**
+ * Keep the editor no wider than the schema the API validates.
+ *
+ * Tiptap's stock `listItem` / `blockquote` / table cells accept a whole `block+`,
+ * so the toolbar can produce documents `normalizeTiptapDocument` rejects — see
+ * `schema-content.ts`. Narrowing the content expressions here is what stops the
+ * editor from *creating* them, rather than failing the publish afterwards.
+ */
+const TightListItem = ListItemExt.extend({ content: 'paragraph ' + blockContent(CONTAINER_BLOCKS) + '*' });
+const TightBlockquote = BlockquoteExt.extend({ content: positiveBlockContent(BLOCKQUOTE_BLOCKS) });
+
+const PresentedTable = TableExtension.extend({
+  addNodeView() {
+    return ({ node, HTMLAttributes }) => new PresentedTableView(node, HTMLAttributes) as never;
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const layout = richTableLayout(node.toJSON());
+    return ['div', { class: 'tableWrapper' }, ['table', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, layout.width ? { style: `width: ${layout.width}` } : {}),
+      ['colgroup', {}, ...layout.columns.map((width) => ['col', width ? { style: `width: ${width}px` } : {}])], ['tbody', 0]]];
+  },
+});
+
+const AlignedTableCell = TableCell.extend({
+  content: positiveBlockContent(CONTAINER_BLOCKS),
+  addAttributes() {
+    return { ...this.parent?.(), align: { default: null,
+      parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
+      renderHTML: ({ align }) => ['left', 'center', 'right'].includes(align) ? { style: `text-align: ${align}` } : {},
+    } };
+  },
+});
+const AlignedTableHeader = TableHeader.extend({
+  content: positiveBlockContent(CONTAINER_BLOCKS),
+  addAttributes() {
+    return { ...this.parent?.(), align: { default: null,
+      parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
+      renderHTML: ({ align }) => ['left', 'center', 'right'].includes(align) ? { style: `text-align: ${align}` } : {},
+    } };
+  },
+});
+const SizedImage = ImageExt.extend({
+  addAttributes() {
+    const dimension = {
+      default: null,
+      renderHTML: (attributes: Record<string, any>) => Object.fromEntries(['width', 'height'].filter((key) => Number.isSafeInteger(attributes[key]) && attributes[key] > 0 && attributes[key] <= 4096).map((key) => [key, attributes[key]])),
+    };
+    return { ...this.parent?.(), width: { ...dimension, parseHTML: (element) => Number(element.getAttribute('width')) || null }, height: { ...dimension, parseHTML: (element) => Number(element.getAttribute('height')) || null } };
   },
 });
 
 /** The single extension set used by the production editor and the schema contract test. */
 export function createTiptapEditorExtensions(placeholder = '') {
   return [
-    StarterKit.configure({ codeBlock: false, link: false, bulletList: false, orderedList: false, underline: false }),
+    StarterKit.configure({ codeBlock: false, link: false, bulletList: false, orderedList: false, underline: false, listItem: false, blockquote: false }),
     TightBulletList,
     TightOrderedList,
+    TightListItem,
+    TightBlockquote,
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: true }),
-    ImageExt.configure({ inline: true, allowBase64: false }),
+    SizedImage.configure({ inline: true, allowBase64: false }),
     Placeholder.configure({ placeholder }),
     LinkExt.configure({
       openOnClick: false,
@@ -44,11 +109,11 @@ export function createTiptapEditorExtensions(placeholder = '') {
     }),
     UnderlineExt,
     CharacterCount,
-    TableExtension.configure({ resizable: false }),
+    PresentedTable.configure({ resizable: false, renderWrapper: true }),
     TableRow,
-    TableCell,
-    TableHeader,
-    CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
+    AlignedTableCell,
+    AlignedTableHeader,
+    CodeBlockLowlight.configure({ lowlight: richContentLowlight }),
     ...RICH_CONTENT_EXTENSIONS,
   ];
 }

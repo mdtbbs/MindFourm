@@ -85,7 +85,7 @@ export default function CommunityChallengeDialog({
         )}
         <div className="flex justify-end gap-2">
           <button type="button" disabled={busy} onClick={onCancel} className="min-h-10 rounded border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)] disabled:opacity-60">{t('challenge.cancel')}</button>
-          <button type="submit" disabled={busy || !response.trim()} className="min-h-10 rounded bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60">{busy ? t('challenge.verifying') : t('challenge.verify')}</button>
+          <button type="submit" disabled={busy || !response.trim()} className="min-h-10 rounded bg-[var(--primary-button)] px-4 text-sm font-medium text-white disabled:opacity-60">{busy ? t('challenge.verifying') : t('challenge.verify')}</button>
         </div>
       </form>
     </div>

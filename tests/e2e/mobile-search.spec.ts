@@ -3,12 +3,12 @@ import { test as authTest, expect } from '../fixtures/auth.fixture';
 authTest.describe('Mobile search controls', () => {
   authTest('keeps the query editable, labelled, and at least 44px tall', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize({ width: 390, height: 844 });
-    await authenticatedPage.goto('/search', { waitUntil: 'domcontentloaded' });
     await authenticatedPage.route('**/api/v1/search/suggestions?**', (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ data: ['resource query', 'resources'], meta: { request_id: 'mobile-search-test' } }),
     }));
+    await authenticatedPage.goto('/search', { waitUntil: 'domcontentloaded' });
 
     const query = authenticatedPage.locator('#search-query');
     await expect(query).toBeVisible();

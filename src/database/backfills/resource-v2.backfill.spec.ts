@@ -242,6 +242,34 @@ describe('runResourceV2Backfill', () => {
     expect(calls.some(([sql]) => sql.includes('INSERT INTO `resources`'))).toBe(false);
   });
 
+  it('folds legacy tile layers into version-scoped resource entries during backfill', async () => {
+    const { mockDataSource } = createMockDataSource({
+      resources: [{
+        id: 32, user_id: 42, resource_type: 'upload', resource_kind: 'map', file_path: '/tiles.msav',
+        version: '9.0', renderer_metadata_json: {
+          width: 64, height: 48,
+          // A real renderer payload has no aggregate `resources` list; only the
+          // per-tile layers the map file carries.
+          tile_layers: {
+            resources: [{ x: 1, y: 1, name: 'copper' }, { x: 2, y: 1, name: 'copper' }],
+            ores: [{ x: 3, y: 3, name: 'thorium' }],
+            liquid: [{ x: 4, y: 4, name: 'water' }],
+            terrain: [{ x: 0, y: 0, name: 'sand' }],
+          },
+        },
+        metadata_json: {},
+      }],
+    });
+
+    const result = await runResourceV2Backfill(mockDataSource as any, 'write');
+    const calls = mockDataSource.query.mock.calls.map(([sql, params]) => [String(sql), params] as const);
+    const resourceInserts = calls.filter(([sql]) => sql.includes('INSERT IGNORE INTO map_resource_entries'));
+
+    expect(result.structure).toMatchObject({ map_resources_created: 3 });
+    expect(resourceInserts.map(([, params]) => (params as unknown[])[2]).sort()).toEqual(['copper', 'thorium', 'water']);
+    expect(resourceInserts.map(([, params]) => (params as unknown[])[1]).sort()).toEqual(['item', 'liquid', 'ore']);
+  });
+
   it('copies schematic blocks, materials, compatibility and analysis to the existing release', async () => {
     const { mockDataSource } = createMockDataSource({
       resources: [{
