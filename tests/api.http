@@ -1,0 +1,84 @@
+### MindFourm API 测试集合
+### 使用 REST Client 扩展测试 API
+
+@baseUrl = http://localhost:5100/api/v1
+@frontendUrl = http://localhost:4502
+
+### ==================== 健康检查 ====================
+
+# 健康检查
+GET {{baseUrl}}/health
+
+### 版本信息
+GET {{baseUrl}}/version
+
+### ==================== OpenAPI 文档 ====================
+
+# OpenAPI 文档
+GET {{baseUrl}}
+
+### OpenAPI JSON
+GET {{baseUrl}}/../openapi/v1.json
+
+### ==================== 公开 API ====================
+
+# 获取可用节点
+GET {{baseUrl}}/nodes/available
+
+# 获取房间信息
+GET {{baseUrl}}/rooms/ABC123
+
+### ==================== 用户相关 ====================
+
+# 获取当前用户信息 (需要认证)
+# GET {{baseUrl}}/user
+# Authorization: Bearer YOUR_TOKEN_HERE
+
+### ==================== 资源相关 ====================
+
+# 获取资源列表
+GET {{baseUrl}}/resources?page=1&limit=20
+
+# 获取单个资源
+GET {{baseUrl}}/resources/1
+
+### ==================== 前端页面 ====================
+
+# 首页
+GET {{frontendUrl}}/
+
+# 资源页面
+GET {{frontendUrl}}/resources
+
+### ==================== 测试环境变量 ====================
+
+# 在 .env 文件中定义变量
+# @name environment
+# GET {{baseUrl}}/env-test
+# X-API-KEY: {{$dotenv API_KEY}}
+
+### ==================== WebSocket 测试 ====================
+
+# WebSocket 连接 (需要 WebSocket 客户端)
+# WS {{baseUrl}}/../ws/mod
+# WS {{baseUrl}}/../ws/node
+
+### ==================== 示例：带认证的请求 ====================
+
+# 登录获取 token
+# POST {{baseUrl}}/auth/login
+# Content-Type: application/json
+#
+# {
+#   "username": "test",
+#   "password": "test123"
+# }
+
+# 使用 token 访问受保护的路由
+# GET {{baseUrl}}/protected
+# Authorization: Bearer {{$response.token}}
+
+### ==================== 性能测试 ====================
+
+# 测试并发请求 (使用 REST Client 的变量)
+# GET {{baseUrl}}/test/{{$randomInt}}

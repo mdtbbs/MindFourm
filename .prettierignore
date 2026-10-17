@@ -1,0 +1,11 @@
+# 忽略格式化的文件
+dist
+build
+.next
+coverage
+node_modules
+*.min.js
+*.min.css
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
