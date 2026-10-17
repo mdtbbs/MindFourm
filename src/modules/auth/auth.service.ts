@@ -143,6 +143,13 @@ const LEGACY_FIRST_PARTY_SCOPES = [
   'notification.read', 'message.read', 'message.write',
 ];
 
+const FORUM_OAUTH_SCOPES = [
+  'forum.read', 'forum.write', 'resource.read', 'resource.download', 'resource.upload',
+  'notification.read', 'message.read', 'message.write', 'friends.read',
+  'presence.read', 'presence.write', 'multiplayer.read', 'multiplayer.write',
+  'game_content.saves.read', 'game_content.saves.write', 'game_content.saves.delete',
+];
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -398,6 +405,16 @@ export class AuthService {
         throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或已过期' });
       }
       const scopes = String(token.scope || '').split(/\s+/).filter(Boolean);
+      // A forum grant covers all public forum features. Legacy narrow grants
+      // keep their existing scope; application metadata never grants access.
+      if (scopes.includes('forum')) {
+        for (const scope of FORUM_OAUTH_SCOPES) if (!scopes.includes(scope)) scopes.push(scope);
+      }
+      const nativeCompatibility = token.party_type === 'first_party' && scopes.includes('game_content');
+      if (!nativeCompatibility && !scopes.some(scope => FORUM_OAUTH_SCOPES.includes(scope))) {
+        throw new ForbiddenException({ code: 'INSUFFICIENT_SCOPE', message: '此应用仅可登录和读取基本账户资料，未获论坛访问授权' });
+      }
+
       // Existing server-owned Native Auth tokens carry this legacy marker. Keep
       // their Game Content path working while new OAuth clients request explicit
       // resource scopes; never infer grants from client_id or User-Agent alone.

@@ -63,9 +63,8 @@ export class PresenceConnectionsService {
     @InjectRepository(UserPresencePreference) private readonly preferences: Repository<UserPresencePreference>,
   ) {}
 
-  async create(userId: number, clientId: string, platform: string, status?: UserPresenceStatus, thirdParty = false) {
+  async create(userId: number, clientId: string, platform: string, status?: UserPresenceStatus, _thirdParty = false) {
     await this.requireEnabled('social_presence_v1');
-    if (thirdParty) await this.multiplayer.assertThirdPartyClientCapability(clientId, 'supports_presence');
     await this.preferences.createQueryBuilder().insert().orIgnore().values({ user_id: userId }).execute();
     const connectionId = id();
     const now = Date.now();
@@ -115,10 +114,9 @@ export class PresenceConnectionsService {
     return { removed: true };
   }
 
-  async putActivity(userId: number, connectionId: string, dto: PutRichActivityDto, thirdParty = false) {
+  async putActivity(userId: number, connectionId: string, dto: PutRichActivityDto, _thirdParty = false) {
     await this.requireEnabled('rich_activity_v1');
     const connection = await this.requireConnection(userId, connectionId);
-    if (thirdParty) await this.multiplayer.assertThirdPartyClientCapability(connection.client_id, 'supports_presence');
     const name = dto.name.trim();
     if (!name) fail('ACTIVITY_INVALID');
     if (dto.join?.session_id) await this.multiplayer.validateActivitySession(userId, dto.join.session_id);

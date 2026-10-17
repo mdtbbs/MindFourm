@@ -266,11 +266,6 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return (await this.publicClients()).filter((client) => client.supports_join_intent && !!client.launch_uri_template);
   }
 
-  async assertThirdPartyClientCapability(clientId: string, capability: 'supports_presence' | 'supports_multiplayer'): Promise<void> {
-    const client = (await this.publicClients()).find((item) => item.client_id === clientId);
-    if (!client || !client[capability]) fail(403, 'CLIENT_CAPABILITY_NOT_APPROVED');
-  }
-
   private async publicClients(): Promise<PublicClientMetadata[]> {
     if (this.publicClientCache && this.publicClientCache.expires_at > Date.now()) return this.publicClientCache.clients;
     const baseUrl = this.config.get<string>('mindauth.baseUrl');

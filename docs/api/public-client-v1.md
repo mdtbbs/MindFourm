@@ -1,5 +1,8 @@
 # 第三方客户端接入指南
 
+新申请仅选择「接入论坛功能」：关闭时只允许 MindAuth 登录/基本资料；开启并通过应用审核后使用 `openid profile forum`，统一接入发帖、回复、资源、私信、云存档与联机。旧细分 scope 保留兼容，旧窄范围 token 不会刷新扩权；Presence/Multiplayer 不再重复检查 Auth 应用目录的能力审批。用户权限、隐私、封禁、站点开关与限流继续生效。
+
+
 本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth 授权码模式 + PKCE S256，并调用 `/api/v1/*`；应用名称或客户端类型不会自动增加权限。完整的联机接入流程（会话、邀请、中继、实时事件）见[第三方联机接入指南](./multiplayer-guide.md)。
 
 第三方接入可分为三类：Mod/启动器/桌面客户端走本页的公开 OAuth + Multiplayer V1；第三方游戏服务的 server-to-server 公共身份接口**未开放**；Relay Agent operator 未作为第三方产品开放，属于 MDTBBS 基础设施边界。LanLink 是官方实现、Broker、SDK 与兼容层，其内部 Broker API、机器接口与管理界面不属于公开客户端契约（边界见[第三方联机接入指南](./multiplayer-guide.md#公开-api-与仅基础设施边界)）。
@@ -8,7 +11,7 @@
 
 ## 接入顺序
 
-1. 登录并完成手机号验证，在 MindAuth 开发者中心自助创建公开客户端。创建后立即取得 `client_id`，无需管理员审核；公开客户端没有 `client_secret`，创建接口按 IP 限流。
+1. 登录并完成手机号验证，在 MindAuth 开发者中心自助创建公开客户端。创建后取得 `client_id`，等待管理员整体审核；公开客户端没有 `client_secret`，创建接口按 IP 限流。
 2. 注册精确重定向地址和所需权限范围，并在应用资料中申请对应能力：`supports_presence`（在线状态与富活动）、`supports_multiplayer`（联机会话）、`supports_join_intent`（加入意图处理，配合带 `{intent_id}` 的启动 URI 模板）。桌面本机回环支持 `127.0.0.1`、`[::1]` 和 `localhost`；以端口 `0` 注册可匹配运行时随机端口，其他内网地址不允许。
 3. 客户端生成随机 PKCE 校验值，计算 S256 挑战值，使用系统浏览器打开 MindAuth `/api/authorize`，并验证返回的 `state`。
 4. 使用授权码、相同的 `redirect_uri`、校验值和 `client_id` 调用 MindAuth `/api/token`。
@@ -22,12 +25,12 @@
 - **公开客户端 vs 应用能力**：创建公开客户端与登记重定向地址是自助的；`supports_presence`、`supports_multiplayer`、`supports_join_intent` 由 MindAuth 审核后生效，未通过或撤销时论坛拒绝受保护操作（403 `CLIENT_CAPABILITY_NOT_APPROVED`）。
 - **审核状态查询**：论坛从 MindAuth 读取应用公开资料（含能力标志）并缓存 60 秒。审核通过后通常一个缓存周期内生效；客户端无需也无法在请求里声明自己的能力。
 - **能力撤销后的行为**：新请求被拒绝；已建立的联机会话、Presence 连接与 WebSocket 不会被立即断开，它们在各自 TTL 或宽限期内自然结束。详见[多人联机 API V1 的撤销与生效边界](./multiplayer-v1.md#撤销与生效边界)。
-- **三道独立门槛**：OAuth 权限范围（用户授权）、application capability（应用许可）、全局 feature flags（平台开放）分别由 MindAuth 授权、应用审核与站点运营控制，缺一即失败，错误码各不相同。详见[第三方联机接入指南](./multiplayer-guide.md#三道独立门槛)。
+- **三道独立门槛**：应用整体接入审核、用户对论坛范围的授权、站点功能开关。无需额外逐项审批客户端能力。详见[第三方联机接入指南](./multiplayer-guide.md#三道独立门槛)。
 - **绝不放客户端**：`client_secret`、论坛 External API Key、Relay Agent 机器凭据、服务端资源服务器凭据。公开客户端只持有自己的 `client_id`；如曾把上述值放入客户端或示例，视为已泄露并立即轮换。
 
 ## OAuth 权限范围
 
-权限范围是按操作类型划分的权限类别，不会为每条 API 路径单独设置。一个权限范围可以覆盖多条接口；申请时只选择产品实际需要的权限。开发者修改应用所需的权限范围后会立即生效。MindAuth 授权页面会显示中文说明；首次授权显示全部权限，之后只突出新增项。`message.read` 和 `message.write` 属于敏感权限，但目前不需要人工审核。
+申请只需一个论坛选项；新应用使用 `scope=openid profile forum`。授权页以一段说明整体确认，不展示细分权限清单。以下细分名称用于旧客户端和接口契约兼容，无需逐项申请。修改接入范围会撤销已有授权与令牌；旧的窄范围 refresh token 不自动扩权。
 
 | 权限范围 | 用途 | MindFourm API |
 | --- | --- | --- |
@@ -44,9 +47,9 @@
 | `message.write` | 发送私信 | `POST /api/v1/messages` |
 | `friends.read` | 读取好友与可见社交状态 | 好友列表、好友请求、按隐私策略可见的社交数据 |
 | `presence.read` | 读取在线状态 | 在线状态查询；仍受用户隐私设置约束 |
-| `presence.write` | 更新在线状态 | 在线状态 / 富活动状态写入；客户端能力另需审核 |
+| `presence.write` | 更新在线状态 | 在线状态 / 富活动状态写入 |
 | `multiplayer.read` | 查看联机会话 | 可访问的会话、对端与连接信息 |
-| `multiplayer.write` | 使用联机功能 | 创建或加入会话、邀请好友、申请中继；多人联机客户端能力另需审核 |
+| `multiplayer.write` | 使用联机功能 | 创建或加入会话、邀请好友、申请中继 |
 | `game_content.saves.read` | 读取游戏云存档 | 云存档 V1 读取接口 |
 | `game_content.saves.write` | 写入游戏云存档 | 创建或更新存档、上传快照 |
 | `game_content.saves.delete` | 删除游戏云存档 | 删除存档槽或快照 |
@@ -95,7 +98,7 @@
 ```
 
 响应中的旧扁平 capability 字段仍保留兼容性。第三方私信默认关闭；此时 `messages.third_party_access` 为 `false`，访问会返回 `403 THIRD_PARTY_ACCESS_DISABLED`。
-`multiplayer` 中的开关分别表示在线状态、活动状态、会话、邀请、中继和第三方联机能力是否启用；`cloud_saves_v1` 表示云存档服务是否启用。它们只是站点能力提示，不会代替相应 OAuth 权限范围或应用能力审核。
+`multiplayer` 中的开关分别表示在线状态、活动状态、会话、邀请、中继和第三方联机能力是否启用；`cloud_saves_v1` 表示云存档服务是否启用。它们只是站点能力提示，不会代替相应 OAuth 接入范围与用户业务权限检查。
 
 ## 当前用户与可执行操作
 

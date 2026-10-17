@@ -18,31 +18,22 @@
 
 ## 三道独立门槛
 
-联机 API 同时受三道门槛约束，缺一即失败，且三者由不同系统控制：
+联机 API 受应用整体接入、用户授权和站点开关约束；无需单独审批 Presence/Multiplayer 能力。
 
 | 门槛 | 控制方 | 失败表现 |
 | --- | --- | --- |
-| OAuth 权限范围（用户授权） | 用户在 MindAuth 授权页逐项同意；令牌按实际授予的 scope 校验 | 403 `INSUFFICIENT_SCOPE` |
-| 应用能力（应用许可） | MindAuth 应用审核：`supports_multiplayer`、`supports_presence`、`supports_join_intent` | 403 `CLIENT_CAPABILITY_NOT_APPROVED` |
-| 站点功能开关（平台开放） | 站点运营配置：Multiplayer 会话/邀请/中继与第三方联机开关 | 403 `FEATURE_DISABLED` |
+| 用户授权 | 用户一次同意论坛功能；新应用使用 `openid profile forum`，旧细分 scope 继续兼容 | 403 `INSUFFICIENT_SCOPE` |
+| 应用整体接入 | MindAuth 审核应用资料和论坛选项；未批准或停用的应用不能签发有效令牌 | OAuth `invalid_client` / 论坛 `INVALID_TOKEN` |
+| 站点功能开关 | 站点控制会话、邀请、中继及第三方联机入口 | 403 `FEATURE_DISABLED` |
 
-说明：
-
-- 权限范围只说明应用可以请求哪类操作，不代表应用已获准使用联机功能，也不代表站点已开放该功能。
-- 应用能力只看 MindAuth 审核后的应用资料；论坛**不维护第二套应用白名单**。公开客户端与需要额外审核的能力是两个概念：创建公开客户端是自助的，联机能力需要审核。
-- 站点开关与能力都受运行时状态影响：客户端应先读 `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities`，再展示入口，不要靠报错来探测。
-- 第三方令牌在 Multiplayer 会话、邀请、加入与中继路径上同时受第三方联机开关与 `supports_multiplayer` 约束；Presence 创建连接与活动发布要求 `supports_presence`，并以在线状态与富活动的站点开关为准，不额外要求第三方联机开关。
-- 能力检查按 MindAuth 标记的第一方分类放行：只有明确标记为第一方的 OAuth 客户端跳过第三方能力检查，其余令牌（包括缺少分类信息的）一律按第三方处理（fail-closed）。`/api/v1/multiplayer/*` 的受保护操作（含 capabilities、preferences 读取）检查 `supports_multiplayer`；Presence 的创建连接与活动发布在令牌明确标记为第三方时校验 `supports_presence`。
+论坛不再读取应用目录的 capability 标志作为访问许可。目录仅提供名称、图标和启动模板等资料；隐私、资源归属、封禁与限流仍由业务服务检查。只有明确标记为第一方的客户端跳过第三方站点开关，缺少分类信息的令牌按第三方处理。
 
 ## 第一步：申请公开客户端
 
-1. 在 MindAuth 开发者中心创建应用。公开客户端由你自助创建，创建后立即取得 `client_id`，没有 `client_secret`。
-2. 登记精确的重定向地址：Web 用 HTTPS 完整地址；原生应用用自己的 scheme；桌面本机回环只接受 `127.0.0.1`、`[::1]`、`localhost`，端口 `0` 表示运行时随机端口。不要在回调里放通配符、fragment 或 userinfo。
-3. 申请产品实际需要的权限范围，并在应用资料中申请联机能力：
-   - `presence.read` / `presence.write`：在线状态与富活动；需要 `supports_presence` 能力。
-   - `multiplayer.read` / `multiplayer.write`：会话、邀请、加入与中继；需要 `supports_multiplayer` 能力。
-   - 需要被启动器处理加入意图的场景，再申请 `supports_join_intent` 并提供带 `{intent_id}` 的启动 URI 模板；该能力还用于“默认联机客户端”偏好列表。
-4. 审核与变更：应用资料与能力以 MindAuth 审核结果为准；审核通过或撤销后，论坛在下一次读取应用资料时生效（见[生命周期与时效](#生命周期与时效)）。
+1. 在 MindAuth 开发者中心创建应用，取得 client_id；公开客户端没有 client_secret。
+2. 登记精确回调地址：网页用 HTTPS，原生应用用专属 scheme，桌面回环可注册端口 0。不要使用通配符、fragment 或 userinfo。
+3. 勾选「接入论坛功能」并提交整体审核，无需逐项申请发帖、在线状态和联机权限。若需要启动器接收加入意图，可填写恰好包含一个 `{intent_id}` 的启动 URI 模板，随应用资料一并审核。
+4. 审核通过后可请求论坛范围。更改接入范围或撤销授权会使令牌失效；论坛沿用最长 30 秒的内省缓存窗口。
 
 **绝对不要放进客户端的内容：**`client_secret`、论坛 External API Key、Relay Agent 的机器凭据、任何服务端密钥或刷新令牌。公开客户端只持有自己的 `client_id`；访问令牌与刷新令牌按用户会话安全存储，不随发行包分发。
 
@@ -193,7 +184,7 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 - 生产部署当前的站点开关取值（会话、邀请、中继、第三方联机、在线状态、富活动）——属于部署配置，不在仓库。
 - 是否提供面向第三方的独立 sandbox 或 Staging 环境——当前没有；若运营方后续提供，需同步更新本页与[接入指南](./public-client-v1.md)。
-- MindAuth 应用能力（`supports_multiplayer` 等）的审核时长与拒绝理由回执——MindAuth 侧流程，本仓库无对应契约。
+- MindAuth 应用整体审核的时长与拒绝原因回执属于 MindAuth 侧流程。
 - Relay Agent 的实际部署区域、容量水位与网络路径——基础设施侧信息，不属于公开客户端契约。
 - Agent 侧 TCP/WSS 物理断开时刻、撤销后连接被强制关闭的具体时延——当前实现只保证不主动断开，未承诺断开时点。
 - 生产环境对上述 TTL 与限流值的任何运营调整——客户端应按响应头与错误码自适应，不要硬编码为唯一事实。

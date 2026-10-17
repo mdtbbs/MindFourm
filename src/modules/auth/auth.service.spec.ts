@@ -228,6 +228,34 @@ describe('AuthService unified client principal resolver', () => {
     expect(result.context).toMatchObject({ source: 'mindauth_oauth', clientId: 'third-party', scopes: ['openid', 'forum.read'], clientType: 'public', partyType: 'third_party' });
   });
 
+  it('rejects sign-in-only tokens before reading a forum account, including cached tokens', async () => {
+    for (const cached of [false, true]) {
+      const { service } = createService();
+      const token = { active: true, sub: '22', client_id: 'login-app', scope: 'openid profile', party_type: 'third_party' };
+      jest.spyOn(service as any, 'readMindAuthBearerCache').mockResolvedValue(cached ? { token, identity: { id: 22 } } : null);
+      jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue(token);
+      const userinfo = jest.spyOn(service, 'getUserInfo');
+      await expect(service.resolveMindAuthBearer('login-only')).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'INSUFFICIENT_SCOPE' }),
+      });
+      expect(userinfo).not.toHaveBeenCalled();
+      expect((service as any).usersRepository.findOne).not.toHaveBeenCalled();
+    }
+  });
+
+  it('expands a verified forum group into the existing controller scope contract', async () => {
+    const { service } = createService();
+    jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({
+      active: true, sub: '22', client_id: 'forum-app', scope: 'openid profile forum', client_type: 'public', party_type: 'third_party',
+    });
+    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: null, avatar_url: '' });
+    const user = { id: 8, mindauth_id: 22 } as any;
+    (service as any).usersRepository.findOne.mockResolvedValue(user);
+    jest.spyOn(service, 'getOrCreateUser').mockResolvedValue(user);
+    const { context } = await service.resolveMindAuthBearer('forum-token');
+    expect(context.scopes).toEqual(expect.arrayContaining(['forum.write', 'resource.upload', 'multiplayer.write', 'game_content.saves.delete']));
+  });
+
   it('caches introspection and userinfo for 30 seconds under a hashed bearer key', async () => {
     const { service, redisService } = createService();
     const user = { id: 8, mindauth_id: 22, phone_verified: true } as any;

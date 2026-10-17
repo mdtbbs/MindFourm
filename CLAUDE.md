@@ -1,5 +1,8 @@
 # MindFourm — AI 开发上下文
 
+OAuth applications have two access levels: basic MindAuth sign-in or the forum grant. The unified Bearer resolver rejects identity-only tokens before account lookup and expands verified forum grants into existing operation scopes. Legacy narrow tokens retain their scopes; Presence/Multiplayer no longer use app-directory capability approval as an authorization gate. User permissions and site switches still apply.
+
+
 本文件是 MindFourm 仓库的当前工程上下文。涉及接口、数据库、部署和功能状态时，先以代码与下方标注的现行文档为准；历史计划和旧版参考不能作为当前实现证据。
 
 ## Documentation Map

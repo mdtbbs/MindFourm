@@ -1,5 +1,8 @@
 # 第三方客户端身份认证
 
+公开 OAuth 应用使用两档接入：`openid profile` 仅供 MindAuth 登录/基本资料；`openid profile forum` 可调用公开论坛功能。统一 Bearer 入口拒绝仅登录令牌（403 `INSUFFICIENT_SCOPE`），包括缓存路径，且不创建论坛用户。原有细分 scope 继续兼容；forum 组不授予管理权限。
+
+
 第三方 Web、Android、桌面、Mod 和启动器客户端必须使用 MindAuth 公开客户端的授权码模式 + PKCE S256。每个应用需要独立的 `client_id`，并且只能申请已获批且产品实际需要的权限范围。
 
 ## 获取访问令牌

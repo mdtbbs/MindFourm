@@ -1,5 +1,8 @@
 # 多人联机 API V1
 
+OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再另查 MindAuth 应用目录的能力审批。应用目录仅用于展示身份、图标和加入意图的启动目标；既有细分 scope、业务权限与站点开关继续生效。
+
+
 ## 接入流程
 
 论坛负责账号、好友和联机控制信令，包括在线状态、会话、网络候选地址交换与官方中继凭证分配。客户端负责 STUN/NAT 探测、P2P 建连和 Mindustry 协议接入。游戏数据在客户端之间传输；P2P 不通时经过官方中继代理服务。论坛 API 服务不转发或保存游戏数据包。
@@ -11,13 +14,13 @@
 5. 调用 `POST /api/v1/multiplayer/sessions` 创建会话，再按服务端返回的策略加入、邀请或请求加入。连接建立后，双方分别提交网络候选地址。
 6. 如需实时事件，申请一次性 WebSocket 票据后连接 `/realtime/v1`。断线重连时发送各事件流的 `last_event_id`；若收到 `resume_failed`，重新获取快照。
 
-公共 JSON 接口位于 `/api/v1/*`，成功响应使用 `{data, meta}`，错误通过稳定的 `error.code` 标识。论坛 Cookie 和移动端会话继续按第一方规则处理；MindAuth Bearer 按请求所需的权限范围校验。第三方联机功能还受站点开关和应用能力审核控制。
+公共 JSON 接口位于 `/api/v1/*`，成功响应使用 `{data, meta}`，错误通过稳定的 `error.code` 标识。论坛 Cookie 和移动端会话继续按第一方规则处理；MindAuth Bearer 按请求所需的权限范围校验。第三方联机还受应用整体审核和站点开关控制，无需逐项审批能力。
 
 ## 接入角色与允许路径
 
 | 角色 | 允许的路径 | 当前状态 |
 | --- | --- | --- |
-| 第三方 Mod / 启动器 / 桌面客户端 | MindAuth 公开客户端 OAuth + `/api/v1/presence/*`、`/api/v1/multiplayer/*`、`/api/v1/realtime/*` | 公开；以站点开关与应用能力审核结果为准 |
+| 第三方 Mod / 启动器 / 桌面客户端 | MindAuth 公开客户端 OAuth + `/api/v1/presence/*`、`/api/v1/multiplayer/*`、`/api/v1/realtime/*` | 公开；以论坛授权与站点开关为准 |
 | 第三方游戏服务（server-to-server） | 无公共身份接口 | **未开放**；服务端凭证不属于公开客户端契约 |
 | Relay Agent operator | 无公开机器接口说明 | 未作为第三方产品开放，属于 MDTBBS 基础设施边界 |
 
@@ -30,10 +33,10 @@
 | 门槛 | 控制方 | 失败表现 |
 | --- | --- | --- |
 | OAuth 权限范围（用户授权） | 用户在 MindAuth 授权页逐项同意；论坛按令牌实际授予的 scope 校验 | 403 `INSUFFICIENT_SCOPE` |
-| 应用能力（应用许可） | MindAuth 应用审核：`supports_multiplayer`、`supports_presence`、`supports_join_intent` | 403 `CLIENT_CAPABILITY_NOT_APPROVED` |
+| 应用整体接入 | MindAuth 整体审核应用及论坛接入选项 | 无效或已撤销的令牌被拒绝 |
 | 站点功能开关（平台开放） | 站点运营配置：会话、邀请、中继与第三方联机开关 | 403 `FEATURE_DISABLED` |
 
-创建公开客户端是自助的，联机与在线状态能力需要审核；论坛不维护第二套应用 allowlist。能力检查按 MindAuth 标记的第一方分类放行：只有明确标记为第一方的 OAuth 客户端跳过第三方能力检查，其余令牌（包括缺少分类信息的）一律按第三方处理（fail-closed），`/api/v1/multiplayer/*` 的受保护操作检查 `supports_multiplayer`。Presence 的创建连接与发布活动对标记为第三方的令牌检查 `supports_presence`；其余 Presence 操作不重复校验该能力。
+创建公开客户端后等待应用整体审核；论坛范围一并包含联机和在线状态，不再查询目录 capability 进行二次审批。用户授权、站点开关与业务权限仍需满足。接口表中的细分 scope 是旧客户端兼容名称，新应用直接请求 forum。
 
 ## 接口一览
 
@@ -458,7 +461,7 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 
 ## 错误码
 
-稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
+稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
 
 客户端依据 `error.code` 和 HTTP 状态处理错误，不依赖提示文字。主要码的语义：
 
