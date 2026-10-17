@@ -23,8 +23,8 @@
     "typescript",
     "typescriptreact"
   ],
+  // ESLint 只在 frontend 目录生效，后端代码没有 ESLint 配置
   "eslint.workingDirectories": [
-    "./",
     "./frontend"
   ],
 
