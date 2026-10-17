@@ -1,0 +1,230 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // ==================== 构建任务 ====================
+    {
+      "type": "npm",
+      "script": "build:backend",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$tsc"],
+      "label": "build:backend",
+      "detail": "编译 NestJS 后端 TypeScript 代码"
+    },
+    {
+      "type": "npm",
+      "script": "build:frontend",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "label": "build:frontend",
+      "detail": "构建 Next.js 前端应用"
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "dependsOn": ["build:backend", "build:frontend"],
+      "label": "build",
+      "detail": "构建后端和前端"
+    },
+
+    // ==================== 开发服务器 ====================
+    {
+      "type": "npm",
+      "script": "dev",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "label": "dev:backend",
+      "detail": "启动 NestJS 开发服务器 (watch mode)",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend/",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "label": "dev:frontend",
+      "detail": "启动 Next.js 开发服务器",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+
+    // ==================== 测试任务 ====================
+    {
+      "type": "npm",
+      "script": "test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "test:unit",
+      "detail": "运行 Jest 单元测试"
+    },
+    {
+      "type": "npm",
+      "script": "test:e2e",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "label": "test:e2e",
+      "detail": "运行 Playwright E2E 测试"
+    },
+    {
+      "type": "npm",
+      "script": "test:watch",
+      "group": "test",
+      "problemMatcher": [],
+      "label": "test:watch",
+      "detail": "Jest 监听模式运行测试",
+      "isBackground": true
+    },
+
+    // ==================== 代码质量 ====================
+    {
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": [],
+      "label": "lint",
+      "detail": "运行 ESLint 检查前端代码"
+    },
+    {
+      "type": "npm",
+      "script": "typecheck:frontend",
+      "problemMatcher": ["$tsc"],
+      "label": "typecheck:frontend",
+      "detail": "TypeScript 类型检查 - 前端"
+    },
+    {
+      "type": "shell",
+      "command": "npx",
+      "args": ["tsc", "--noEmit"],
+      "problemMatcher": ["$tsc"],
+      "label": "typecheck:backend",
+      "detail": "TypeScript 类型检查 - 后端"
+    },
+
+    // ==================== OpenAPI ====================
+    {
+      "type": "npm",
+      "script": "openapi:export",
+      "problemMatcher": [],
+      "label": "openapi:export",
+      "detail": "导出 OpenAPI 文档"
+    },
+    {
+      "type": "npm",
+      "script": "openapi:check",
+      "problemMatcher": [],
+      "label": "openapi:check",
+      "detail": "检查 OpenAPI 文档是否有变化"
+    },
+    {
+      "type": "npm",
+      "script": "test:api-changelog",
+      "problemMatcher": [],
+      "label": "test:api-changelog",
+      "detail": "检查 API changelog 是否同步"
+    },
+
+    // ==================== 数据库迁移 ====================
+    {
+      "type": "npm",
+      "script": "migration:show",
+      "problemMatcher": [],
+      "label": "migration:show",
+      "detail": "显示迁移状态"
+    },
+    {
+      "type": "npm",
+      "script": "migration:run",
+      "problemMatcher": [],
+      "label": "migration:run",
+      "detail": "运行数据库迁移"
+    },
+    {
+      "type": "npm",
+      "script": "migration:revert",
+      "problemMatcher": [],
+      "label": "migration:revert",
+      "detail": "回滚最后一次迁移"
+    },
+
+    // ==================== 清理任务 ====================
+    {
+      "type": "shell",
+      "command": "rm",
+      "args": ["-rf", "dist", "node_modules"],
+      "problemMatcher": [],
+      "label": "clean",
+      "detail": "清理构建产物和依赖",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "type": "shell",
+      "command": "rm",
+      "args": ["-rf", ".next", "node_modules"],
+      "problemMatcher": [],
+      "label": "clean:frontend",
+      "detail": "清理前端构建产物和依赖",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      }
+    },
+
+    // ==================== 安装依赖 ====================
+    {
+      "type": "shell",
+      "command": "npm",
+      "args": ["ci"],
+      "problemMatcher": [],
+      "label": "install:backend",
+      "detail": "安装后端依赖"
+    },
+    {
+      "type": "shell",
+      "command": "npm",
+      "args": ["ci"],
+      "problemMatcher": [],
+      "label": "install:frontend",
+      "detail": "安装前端依赖",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      }
+    },
+    {
+      "type": "shell",
+      "dependsOn": ["install:backend", "install:frontend"],
+      "problemMatcher": [],
+      "label": "install:all",
+      "detail": "安装所有依赖"
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // ==================== 后端调试 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Backend: Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "console": "integratedTerminal",
+      "restart": true,
+      "protocol": "inspector",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Backend: Debug Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:debug"],
+      "console": "integratedTerminal",
+      "restart": true,
+      "protocol": "inspector",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Backend: Production",
+      "program": "${workspaceFolder}/dist/main.js",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build:backend",
+      "skipFiles": ["<node_internals>/**"]
+    },
+
+    // ==================== 后端 Jest 测试 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Jest: Current File",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": [
+        "${fileBasenameNoExtension}",
+        "--config",
+        "jest.config.js"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Jest: All Tests",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": ["--runInBand"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Jest: Watch Current File",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": [
+        "${fileBasenameNoExtension}",
+        "--watch",
+        "--config",
+        "jest.config.js"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+
+    // ==================== 前端调试 ====================
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Frontend: Chrome Dev",
+      "url": "http://localhost:4502",
+      "webRoot": "${workspaceFolder}/frontend",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${webRoot}/*"
+      },
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Frontend: Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal",
+      "restart": true,
+      "protocol": "inspector"
+    },
+
+    // ==================== E2E 测试 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Playwright: Current File",
+      "program": "${workspaceFolder}/node_modules/.bin/playwright",
+      "args": ["test", "${file}"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/playwright/cli.js"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Playwright: Debug Current File",
+      "program": "${workspaceFolder}/node_modules/.bin/playwright",
+      "args": ["test", "--debug", "${file}"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/playwright/cli.js"
+      }
+    },
+
+    // ==================== 脚本调试 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Script: Current File",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build:backend",
+      "skipFiles": ["<node_internals>/**"]
+    },
+
+    // ==================== 迁移调试 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Migration: Run",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "migration:run"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Migration: Revert",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "migration:revert"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+
+    // ==================== 数据库脚本 ====================
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Script: Resource V2 Backfill",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "backfill:resources-v2"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Script: Content JSON Backfill",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "backfill:content-json"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack: Dev",
+      "configurations": ["Backend: Dev Server", "Frontend: Dev Server"],
+      "stopAll": true
+    },
+    {
+      "name": "Full Stack: Debug",
+      "configurations": ["Backend: Debug Server", "Frontend: Dev Server"],
+      "stopAll": true
+    }
+  ]
+}

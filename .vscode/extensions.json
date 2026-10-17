@@ -1,0 +1,55 @@
+{
+  "recommendations": [
+    // TypeScript 和 JavaScript
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "usernamehw.errorlens",
+
+    // NestJS
+    "firsttris.vscode-jest-runner",
+    "abiosoft.vscode-jest",
+
+    // Next.js / React
+    "bradlc.vscode-tailwindcss",
+
+    // TypeScript 增强
+    "streetsidesoftware.code-spell-checker",
+    "aaron-bond.better-comments",
+
+    // Git 工具
+    "eamodio.gitlens",
+    "github.vscode-pull-request-github",
+
+    // 数据库
+    "ckolkman.vscode-postgres",
+
+    // Docker
+    "ms-azuretools.vscode-docker",
+
+    // REST 客户端
+    "humao.rest-client",
+
+    // 其他工具
+    "christian-kohler.path-intellisense",
+    "visualstudioexptteam.vscodeintellicode",
+    "ms-vscode.vscode-typescript-next",
+
+    // 环境变量
+    "mikestead.dotenv",
+
+    // YAML
+    "redhat.vscode-yaml",
+
+    // 图标主题
+    "vscode-icons-team.vscode-icons",
+
+    // i18n
+    "lokalise.i18n-ally",
+
+    // 测试
+    "ms-playwright.playwright",
+
+    // TODO 高亮
+    "wayou.vscode-todo-highlight"
+  ]
+}

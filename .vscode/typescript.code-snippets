@@ -1,0 +1,169 @@
+{
+  // NestJS 常用片段
+  "NestJS Controller": {
+    "prefix": "nest-controller",
+    "scope": "typescript",
+    "body": [
+      "import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';",
+      "import { ${1:Name}Service } from './${2:name}.service';",
+      "",
+      "@Controller('${3:path}')",
+      "export class ${1:Name}Controller {",
+      "  constructor(private readonly ${4:serviceName}: ${1:Name}Service) {}",
+      "",
+      "  @Get()",
+      "  findAll() {",
+      "    return this.${4:serviceName}.findAll();",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "创建 NestJS 控制器"
+  },
+  "NestJS Service": {
+    "prefix": "nest-service",
+    "scope": "typescript",
+    "body": [
+      "import { Injectable } from '@nestjs/common';",
+      "",
+      "@Injectable()",
+      "export class ${1:Name}Service {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "创建 NestJS 服务"
+  },
+  "NestJS Module": {
+    "prefix": "nest-module",
+    "scope": "typescript",
+    "body": [
+      "import { Module } from '@nestjs/common';",
+      "import { ${1:Name}Controller } from './${2:name}.controller';",
+      "import { ${1:Name}Service } from './${2:name}.service';",
+      "",
+      "@Module({",
+      "  controllers: [${1:Name}Controller],",
+      "  providers: [${1:Name}Service],",
+      "})",
+      "export class ${1:Name}Module {}",
+      ""
+    ],
+    "description": "创建 NestJS 模块"
+  },
+  "NestJS DTO": {
+    "prefix": "nest-dto",
+    "scope": "typescript",
+    "body": [
+      "import { IsString, IsInt, IsOptional, IsNotEmpty } from 'class-validator';",
+      "",
+      "export class ${1:Name}Dto {",
+      "  @IsString()",
+      "  @IsNotEmpty()",
+      "  ${2:field}: string;",
+      "",
+      "  @IsOptional()",
+      "  @IsInt()",
+      "  ${3:optionalField}?: number;",
+      "}",
+      ""
+    ],
+    "description": "创建 NestJS DTO"
+  },
+  "TypeORM Entity": {
+    "prefix": "typeorm-entity",
+    "scope": "typescript",
+    "body": [
+      "import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';",
+      "",
+      "@Entity('${1:table_name}')",
+      "export class ${2:Name} {",
+      "  @PrimaryGeneratedColumn('increment')",
+      "  id: number;",
+      "",
+      "  @Column({ type: 'varchar', length: 255 })",
+      "  ${3:field}: string;",
+      "",
+      "  @CreateDateColumn({ name: 'created_at' })",
+      "  createdAt: Date;",
+      "",
+      "  @UpdateDateColumn({ name: 'updated_at' })",
+      "  updatedAt: Date;",
+      "}",
+      ""
+    ],
+    "description": "创建 TypeORM 实体"
+  },
+
+  // 测试相关
+  "Jest Describe": {
+    "prefix": "jest-describe",
+    "scope": "typescript",
+    "body": [
+      "describe('${1:Name}', () => {",
+      "  ${0}",
+      "});",
+      ""
+    ],
+    "description": "Jest describe 块"
+  },
+  "Jest Test": {
+    "prefix": "jest-test",
+    "scope": "typescript",
+    "body": [
+      "it('${1:should ...}', () => {",
+      "  ${0}",
+      "});",
+      ""
+    ],
+    "description": "Jest 测试用例"
+  },
+  "Jest Before Each": {
+    "prefix": "jest-beforeEach",
+    "scope": "typescript",
+    "body": ["beforeEach(() => {", "  ${0}", "});", ""],
+    "description": "Jest beforeEach 钩子"
+  },
+
+  // React/Next.js 片段
+  "Next.js Page": {
+    "prefix": "next-page",
+    "scope": "typescript",
+    "body": [
+      "import { Metadata } from 'next';",
+      "",
+      "export const metadata: Metadata = {",
+      "  title: '${1:Title}',",
+      "};",
+      "",
+      "export default function ${2:PageName}() {",
+      "  return (",
+      "    <div>",
+      "      ${0}",
+      "    </div>",
+      "  );",
+      "}",
+      ""
+    ],
+    "description": "创建 Next.js 页面组件"
+  },
+  "React Component": {
+    "prefix": "react-component",
+    "scope": "typescript",
+    "body": [
+      "interface ${1:Name}Props {",
+      "  ${2:prop}: string;",
+      "}",
+      "",
+      "export function ${1:Name}({ ${2:prop} }: ${1:Name}Props) {",
+      "  return (",
+      "    <div>",
+      "      ${0}",
+      "    </div>",
+      "  );",
+      "}",
+      ""
+    ],
+    "description": "创建 React 函数组件"
+  }
+}
