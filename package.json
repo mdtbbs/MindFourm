@@ -1,6 +1,6 @@
 {
   "name": "mindforum",
-  "version": "2.8.3",
+  "version": "2.8.4",
   "description": "Forum with MindAuth integration - NestJS + TypeScript + TypeORM",
   "main": "dist/main.js",
   "scripts": {
@@ -25,7 +25,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "test": "jest",
+    "test": "node --expose-gc --max-old-space-size=1024 node_modules/jest/bin/jest.js --logHeapUsage",
     "test:watch": "jest --watch",
     "review:claude": "node scripts/claude-review.mjs",
     "resanitize": "node scripts/resanitize-content-html.cjs",

@@ -199,7 +199,9 @@ describe('developer docs routes', () => {
 
     expect(html).toContain('<h1>第三方联机接入指南</h1>');
     expect(html).toContain('三道独立门槛');
-    expect(html).toContain('CLIENT_CAPABILITY_NOT_APPROVED');
+    expect(html).not.toContain('CLIENT_CAPABILITY_NOT_APPROVED');
+    expect(html).toContain('openid profile forum');
+    expect(html).toContain('无需单独审批 Presence/Multiplayer 能力');
     expect(html).toContain('FEATURE_DISABLED');
     expect(html).toContain('INSUFFICIENT_SCOPE');
     expect(html).toContain('公开 API 与仅基础设施边界');
