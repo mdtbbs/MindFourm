@@ -206,7 +206,7 @@
     "chooseMapFile": ".msav マップファイルを選択",
     "chooseSchematicFile": ".msch 設計図ファイルを選択",
     "chooseUploadFile": "アップロードするファイルを選択",
-    "maxFileSize": "ファイル上限: 50 MB",
+    "maxFileSize": "ファイル上限: 120 MiB",
     "visibility": "公開範囲",
     "public": "公開",
     "private": "非公開",

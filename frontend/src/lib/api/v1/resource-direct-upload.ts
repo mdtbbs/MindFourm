@@ -1,4 +1,5 @@
 import { requestV1 } from './transport';
+import { MAX_RESOURCE_SIZE } from '../../resource-upload-limits';
 
 export type ResourceDirectUploadDraftResponse = {
   resource_public_id: string;
@@ -70,6 +71,7 @@ export async function uploadResourceDirectDraft(
   file: File,
   knownSha256?: string,
 ): Promise<ResourceDirectUploadCompleteResponse> {
+  if (file.size > MAX_RESOURCE_SIZE) throw new Error('资源文件不能超过 120 MiB');
   let sha256 = knownSha256;
   if (!sha256) {
     const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());

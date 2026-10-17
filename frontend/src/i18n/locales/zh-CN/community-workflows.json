@@ -206,7 +206,7 @@
     "chooseMapFile": "选择 .msav 地图文件",
     "chooseSchematicFile": "选择 .msch 蓝图文件",
     "chooseUploadFile": "选择要上传的文件",
-    "maxFileSize": "最大 50MB",
+    "maxFileSize": "最大 120 MiB",
     "visibility": "可见性",
     "public": "公开",
     "private": "私有",

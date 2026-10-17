@@ -4,6 +4,8 @@
 
 ## Configuration
 
+Resource files are limited to 120 MiB (125829120 bytes), including direct-upload initialization, Mod archive parsing, version review and GitHub Release imports. The bundled forum Nginx config allows 121 MiB request bodies for multipart overhead. Configure any external forum ingress and the RES upload ingress to accept at least 120 MiB; RES service limits must also allow this size. Cloud-save and post-attachment quotas are separate.
+
 Set `RES_ENABLED=true`, `RES_BASE_URL=https://res.mdtbbs.cn`, and `RES_API_KEY` on the forum backend. Optional request and upload timeouts are `RES_REQUEST_TIMEOUT_MS` (10 seconds by default) and `RES_UPLOAD_TIMEOUT_MS` (120 seconds by default). The service key stays server-side and must never enter browser responses or logs. In production, enabled RES requires a HTTPS base URL and API key. Missing or disabled RES makes new uploads fail clearly; historical backends still read normally.
 
 ## Direct upload and completion

@@ -26326,7 +26326,7 @@
           "size_bytes": {
             "type": "number",
             "minimum": 1,
-            "maximum": 52428800,
+            "maximum": 125829120,
             "example": 123456
           },
           "mime_type": {

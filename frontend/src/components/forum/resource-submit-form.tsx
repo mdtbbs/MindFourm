@@ -14,6 +14,7 @@ import DraftRecovery from '@/components/ui/draft-recovery';
 import { useI18n } from '@/i18n/provider';
 import ContentLanguageSelect from '@/components/forum/content-language-select';
 import { createResourceDirectUploadDraft, uploadResourceDirectDraft } from '@/lib/api/v1/resources';
+import { MAX_RESOURCE_SIZE } from '@/lib/resource-upload-limits';
 
 type ResourceType = 'upload' | 'external';
 type SchematicSource = 'file' | 'paste';
@@ -615,6 +616,13 @@ export default function ResourceSubmitForm({
               accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : isMod ? '.jar' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
               onChange={(e) => {
                 const selectedFile = e.target.files?.[0] || null;
+                if (selectedFile && selectedFile.size > MAX_RESOURCE_SIZE) {
+                  e.currentTarget.value = '';
+                  setFile(null);
+                  void checkSelectedFile(null);
+                  setError(t('resourceSubmit.maxFileSize'));
+                  return;
+                }
                 if (isMod && selectedFile && !selectedFile.name.toLowerCase().endsWith('.jar')) {
                   e.currentTarget.value = '';
                   setFile(null);

@@ -109,7 +109,7 @@ export class ResourceVersionService {
   async analyzeMod(file: ResourceFileMeta, authorOverrides?: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (file.storage_backend !== 'res' && !this.storage) throw new BadRequestException('资源文件存储不可用');
     if (!/\.(?:jar|zip)$/i.test(file.file_name) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) {
-      throw new BadRequestException('Mod 仅支持不超过 50 MiB 的 .jar 或 .zip 文件');
+      throw new BadRequestException('Mod 仅支持不超过 120 MiB 的 .jar 或 .zip 文件');
     }
     try {
       const parsed = analyzeModArchive(await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
@@ -189,7 +189,7 @@ export class ResourceVersionService {
     let nextModId: string | null = null;
     if (resource.resource_kind === 'mod') {
       if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
-      if ((file.storage_backend !== 'res' && !this.storage) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
+      if ((file.storage_backend !== 'res' && !this.storage) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 120 MiB 安全限制');
       try {
         modAnalysis = analyzeModArchive(directCompletion?.verifiedBytes
           || await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));

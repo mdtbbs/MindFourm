@@ -206,7 +206,7 @@
     "chooseMapFile": "Выберите файл карты .msav",
     "chooseSchematicFile": "Выберите файл схемы .msch",
     "chooseUploadFile": "Выберите файл для загрузки",
-    "maxFileSize": "Максимальный размер файла: 50 МБ",
+    "maxFileSize": "Максимальный размер файла: 120 МиБ",
     "visibility": "Доступ",
     "public": "Открытый",
     "private": "Приватный",

@@ -308,7 +308,7 @@ GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{
 
 ## ResourceStorage 直传
 
-`POST /api/v1/resources/uploads/init` 接受 `version_public_id`、`filename`、`size_bytes`、`mime_type`、必填 `sha256` 和可选 `role`（primary/supplementary/documentation）。需要 `resource.upload`、登录、站点验证和资源 Owner/active Maintainer/Publisher（Admin 可管理），限流 10/60s。已发布版本不可变。已有主文件不可替换。
+`POST /api/v1/resources/uploads/init` 接受 `version_public_id`、`filename`、`size_bytes`、`mime_type`、必填 `sha256` 和可选 `role`（primary/supplementary/documentation）。单文件 `size_bytes` 为 1..125829120（最大 120 MiB）。需要 `resource.upload`、登录、站点验证和资源 Owner/active Maintainer/Publisher（Admin 可管理），限流 10/60s。已发布版本不可变。已有主文件不可替换。
 
 客户端使用返回的短期 token 向 RES PUT 原始字节（或接收去重对象），随后 `POST /api/v1/resources/uploads/complete` 携带论坛 `session_id` 和 `object_public_id`。论坛重新验证权限、版本状态和 RES verified 元数据，创建 pending ResourceFile 与私有 binding；重放 complete 返回同一 file_public_id。论坛不会向客户端暴露服务 API key。
 

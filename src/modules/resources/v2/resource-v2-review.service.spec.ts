@@ -142,7 +142,7 @@ describe('ResourceV2ReviewService', () => {
     const result = await service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
 
     expect(result).toMatchObject({ status: 'published', recommended: true, version_public_id: ids.version });
-    expect(storage.readQuarantinedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar', 50 * 1024 * 1024);
+    expect(storage.readQuarantinedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar', 120 * 1024 * 1024);
     expect(storage.preparePromotion).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
     expect(storage.removeQuarantinedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
     expect(storage.removeQuarantinedFile.mock.invocationCallOrder[0]).toBeGreaterThan(

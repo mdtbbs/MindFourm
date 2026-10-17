@@ -282,7 +282,7 @@ describe('ResourceSourceSyncService', () => {
         tag_name: 'v1.2.0', prerelease: false, draft: false,
         assets: [{ name: 'mod.jar', size: 22, state: 'uploaded', browser_download_url: 'https://github.com/owner/mod/releases/download/v1.2.0/mod.jar' }],
       });
-      return new Response(null, { status: 200, headers: { 'content-length': String(50 * 1024 * 1024 + 1) } });
+      return new Response(null, { status: 200, headers: { 'content-length': String(120 * 1024 * 1024 + 1) } });
     });
     await expect(service.importGithubRelease(RESOURCE_PUBLIC_ID, 5, { tag_name: 'v1.2.0', asset_name: 'mod.jar' }))
       .rejects.toThrow('Unable to retrieve the selected GitHub release asset');

@@ -13,13 +13,14 @@ import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
 import { ResourceVersionService } from '../resource-versions.service';
+import { MAX_RESOURCE_SIZE } from '../resource-upload.constants';
 import { NotificationsService } from '../../notifications/notifications.service';
 import {
   ResourceSourceSyncConfigDto, ResourceSourceSyncImportDto,
 } from './resource-source-sync.dto';
 
 const MAX_RELEASES = 30;
-const MAX_ASSET_BYTES = 50 * 1024 * 1024;
+const MAX_ASSET_BYTES = MAX_RESOURCE_SIZE;
 const MAX_GITHUB_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_PREVIEW_TEXT = 50_000;
 const MAX_RELEASE_NOTES = 20_000;
@@ -235,7 +236,7 @@ export class ResourceSourceSyncService {
       if (!asset || asset.state !== 'uploaded') throw new NotFoundException('Selected release asset was not found');
       if (!/\.(?:jar|zip)$/i.test(asset.name)) throw new BadRequestException('Mod imports only accept .jar or .zip assets');
       if (!Number.isSafeInteger(asset.size) || asset.size < 1 || asset.size > MAX_ASSET_BYTES) {
-        throw new BadRequestException('GitHub asset exceeds the 50 MiB import limit');
+        throw new BadRequestException('GitHub asset exceeds the 120 MiB import limit');
       }
       const initialUrl = this.validateInitialAssetUrl(asset.browser_download_url, repository);
       const bytes = await this.downloadAsset(initialUrl, asset.size, signal);

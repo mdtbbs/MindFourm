@@ -229,7 +229,7 @@ export class ResourcesService {
     let analysis: ModArchiveAnalysis | null = null;
     if (resourceType === 'upload') {
       if (!file || (file.storage_backend !== 'res' && !this.resourceStorageService)) throw new BadRequestException('Mod 上传文件不可用');
-      if (file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
+      if (file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 120 MiB 安全限制');
       if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
       try {
         analysis = analyzeModArchive(file.storage_backend === 'res'

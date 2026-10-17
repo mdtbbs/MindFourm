@@ -206,7 +206,7 @@
     "chooseMapFile": "Choose an .msav map file",
     "chooseSchematicFile": "Choose an .msch schematic file",
     "chooseUploadFile": "Choose a file to upload",
-    "maxFileSize": "Maximum file size: 50 MB",
+    "maxFileSize": "Maximum file size: 120 MiB",
     "visibility": "Visibility",
     "public": "Public",
     "private": "Private",

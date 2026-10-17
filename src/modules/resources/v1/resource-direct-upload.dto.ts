@@ -15,7 +15,7 @@ export class InitResourceDirectUploadDto {
   @ApiProperty({ minimum: 1, maximum: MAX_RESOURCE_SIZE, example: 123456 })
   @IsInt()
   @Min(1)
-  @Max(MAX_RESOURCE_SIZE)
+  @Max(MAX_RESOURCE_SIZE, { message: '资源文件不能超过 120 MiB' })
   size_bytes: number;
 
   @ApiProperty({ maxLength: 100, example: 'application/octet-stream' })

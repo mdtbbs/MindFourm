@@ -51,6 +51,20 @@ describe('ResourceDirectUploadService', () => {
     expect(sessions.save).toHaveBeenCalledWith(expect.objectContaining({ object_public_id: 'public' }));
   });
 
+  it.each([50 * 1024 * 1024 + 1, 120 * 1024 * 1024])('accepts a %i-byte resource before contacting RES', async (size) => {
+    const { service, res } = make();
+    res.createUploadSession.mockResolvedValue({ deduplicated: true, object: { public_id: 'public', sha256: input.sha256 } });
+    await expect(service.init({ ...input, size_bytes: size }, actor)).resolves.toMatchObject({ complete_required: true });
+    expect(res.createUploadSession).toHaveBeenCalledWith(expect.objectContaining({ size_bytes: size }));
+  });
+
+  it('rejects resources above 120 MiB before creating a RES session', async () => {
+    const { service, res, sessions } = make();
+    await expect(service.init({ ...input, size_bytes: 120 * 1024 * 1024 + 1 }, actor)).rejects.toBeInstanceOf(BadRequestException);
+    expect(res.createUploadSession).not.toHaveBeenCalled();
+    expect(sessions.save).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid size, extension and revoked write permission before contacting RES', async () => {
     const { service, resources, res } = make();
     await expect(service.init({ ...input, size_bytes: 0 }, actor)).rejects.toBeInstanceOf(BadRequestException);

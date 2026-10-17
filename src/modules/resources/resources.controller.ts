@@ -72,9 +72,10 @@ import { DownloadGrantService } from '../downloads/download-grant.service';
 import { DownloadEventsService } from '../downloads/download-events.service';
 import { observeStreamCompletion } from '@common/utils/stream-completion.util';
 import { ResourceOperationsService } from './resource-operations.service';
+import { MAX_RESOURCE_SIZE } from './resource-upload.constants';
+export { MAX_RESOURCE_SIZE } from './resource-upload.constants';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
-export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_RESOURCE_EXTENSIONS = new Set([
   '.zip',
   '.rar',

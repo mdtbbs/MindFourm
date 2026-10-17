@@ -10,6 +10,7 @@ import { ResourceStorageClientService } from '../resource-storage-client.service
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ResourceSubscriptionsService } from '../resource-subscriptions.service';
 import { PUBLIC_RESOURCE_STATUSES, type ResourceStatus } from '@common/utils/constants';
+import { MAX_RESOURCE_SIZE } from '../resource-upload.constants';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
 type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; title?: string; status?: string; is_public?: number; visibility?: string };
@@ -73,7 +74,7 @@ export class ResourceV2ReviewService {
       }
       if (preflightVersion.file_path) {
         if (!this.storage) throw new BadRequestException('资源文件存储服务不可用，无法发布此版本');
-        const bytes = await this.storage.readQuarantinedFile(preflightVersion.file_path, 50 * 1024 * 1024);
+        const bytes = await this.storage.readQuarantinedFile(preflightVersion.file_path, MAX_RESOURCE_SIZE);
         const fileSize = Number(preflightVersion.file_size);
         const contentHash = String(preflightVersion.content_hash || '').toLowerCase();
         if (!Number.isSafeInteger(fileSize) || fileSize < 1 || bytes.length !== fileSize) {

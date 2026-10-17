@@ -1,10 +1,11 @@
 import { inflateRawSync } from 'zlib';
 import { createHash } from 'crypto';
 import { parseProperties, summarizeLocalizations } from './mod-localization';
+import { MAX_RESOURCE_SIZE } from '../resource-upload.constants';
 
 export const MOD_PARSER_VERSION = 'mdtbbs-mod-static-1';
 export const MOD_ARCHIVE_LIMITS = {
-  maxArchiveBytes: 50 * 1024 * 1024,
+  maxArchiveBytes: MAX_RESOURCE_SIZE,
   maxEntries: 20_000,
   maxTotalUncompressedBytes: 200 * 1024 * 1024,
   maxEntryUncompressedBytes: 8 * 1024 * 1024,

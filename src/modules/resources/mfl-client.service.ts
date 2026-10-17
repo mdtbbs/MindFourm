@@ -80,7 +80,7 @@ export class MflClientService {
           'Authorization': `Bearer ${this.apiKey}`,
         },
         body: form as any,
-        // Uploads can legitimately be slow (files up to 50 MB), but must not hang
+        // Uploads can legitimately be slow (files up to 120 MiB), but must not hang
         // forever — this call previously had no timeout of any kind.
         signal: AbortSignal.timeout(MFL_UPLOAD_TIMEOUT_MS),
       });

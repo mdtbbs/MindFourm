@@ -1,5 +1,10 @@
 # 公开 API 更新记录
 
+## 2026-10-18 — 资源上传大小上限
+
+- `POST /api/v1/resources/uploads/init` 的 `size_bytes` 上限从 50 MiB 提高到 120 MiB（125829120 字节），原有请求字段、OAuth scope 和响应结构保持兼容。
+- 资源文件上传、Mod JAR/ZIP 解析、版本审核和 GitHub Release 资源导入同步使用 120 MiB 上限；Mod 解压大小、条目数及单条目安全限制保持不变。
+
 ## 2026-10-17 — OAuth 两档接入
 
 - 仅登录/基本资料令牌访问论坛统一返回 403 `INSUFFICIENT_SCOPE`，包括缓存路径；不创建论坛账号。

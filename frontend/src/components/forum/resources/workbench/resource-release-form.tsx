@@ -14,6 +14,7 @@ import {
 } from '@/lib/api/v1/resources';
 import { useI18n } from '@/i18n/provider';
 import { getRendererReleaseFacts } from './resource-release-analysis';
+import { MAX_RESOURCE_SIZE } from '@/lib/resource-upload-limits';
 
 type ReleaseChannel = 'release' | 'beta' | 'alpha' | 'snapshot';
 type VersionMode = 'semver' | 'compatibility';
@@ -53,6 +54,10 @@ export default function ResourceReleaseForm({
 
   const chooseFile = (candidate: File | undefined) => {
     if (!candidate) return;
+    if (candidate.size > MAX_RESOURCE_SIZE) {
+      setError(t('resourceSubmit.maxFileSize'));
+      return;
+    }
     const kind = workbench.resource.resource_kind;
     const lowerName = candidate.name.toLowerCase();
     const allowed = kind === 'mod' ? /\.(jar|zip)$/.test(lowerName)
