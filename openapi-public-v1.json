@@ -2397,11 +2397,85 @@
         },
         "responses": {
           "201": {
-            "description": "Checks the verified RES object server-side, creates a pending ResourceFile, and binds it privately.",
+            "description": "Checks the verified RES object server-side. With background=true, returns processing promptly; poll the owner-bound status endpoint for the final result.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ResourceDirectUploadCompleteResponseDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ResourceDirectUploadCompleteResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResourceDirectUploadProcessingResponseDto"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/uploads/{sessionId}/status": {
+      "get": {
+        "operationId": "ResourcesV1WriteController_directUploadStatus",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only queued upload verification status. Processing is not a completed upload; validation errors retain their HTTP status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ResourceDirectUploadCompleteResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResourceDirectUploadProcessingResponseDto"
+                    }
+                  ]
                 }
               }
             }
@@ -26310,6 +26384,56 @@
           "content"
         ]
       },
+      "ResourceDirectUploadCompleteResponseDto": {
+        "type": "object",
+        "properties": {
+          "file_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "completed": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "file_public_id",
+          "completed"
+        ]
+      },
+      "ResourceDirectUploadProcessingResponseDto": {
+        "type": "object",
+        "properties": {
+          "completed": {
+            "type": "number",
+            "enum": [
+              false
+            ]
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing"
+            ]
+          },
+          "poll_after_ms": {
+            "type": "number",
+            "example": 3000
+          }
+        },
+        "required": [
+          "completed",
+          "session_id",
+          "status",
+          "poll_after_ms"
+        ]
+      },
       "InitResourceDirectUploadDto": {
         "type": "object",
         "properties": {
@@ -26427,30 +26551,15 @@
             "type": "string",
             "maxLength": 128,
             "description": "RES public object ID returned by deduplication or binary PUT."
+          },
+          "background": {
+            "type": "boolean",
+            "description": "Queue verification and poll uploads/{sessionId}/status instead of waiting for binary reads. Recommended behind a CDN."
           }
         },
         "required": [
           "session_id",
           "object_public_id"
-        ]
-      },
-      "ResourceDirectUploadCompleteResponseDto": {
-        "type": "object",
-        "properties": {
-          "file_public_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "completed": {
-            "type": "number",
-            "enum": [
-              true
-            ]
-          }
-        },
-        "required": [
-          "file_public_id",
-          "completed"
         ]
       },
       "ResourceV2CompatibilityDto": {

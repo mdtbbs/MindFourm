@@ -1,8 +1,8 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Req, Res, UploadedFile,
-  UseGuards, UseInterceptors, ValidationPipe,
+  BadRequestException, Body, Controller, Delete, Get, Header, HttpStatus, Param, Patch, Post, Req, Res, UploadedFile,
+  ParseUUIDPipe, UseGuards, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiExtraModels, ApiHeader, ApiOkResponse, ApiParam, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { Response } from 'express';
 import { createHash } from 'crypto';
 import { unlink } from 'fs/promises';
@@ -25,7 +25,13 @@ import { UpdateResourceUploadDraftDto } from '../dto/update-resource-upload-draf
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor, resourceUploadInterceptor } from '../resources.controller';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
-import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto, ResourceDirectUploadDraftResponseDto } from './resource-direct-upload.dto';
+import { ResourceUploadCompletionService } from '../resource-upload-completion.service';
+import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto, ResourceDirectUploadDraftResponseDto, ResourceDirectUploadProcessingResponseDto } from './resource-direct-upload.dto';
+
+const completionResponseSchema = { oneOf: [
+  { $ref: getSchemaPath(ResourceDirectUploadCompleteResponseDto) },
+  { $ref: getSchemaPath(ResourceDirectUploadProcessingResponseDto) },
+] };
 
 const duplicateResponseSchema = {
   type: 'object', required: ['exact', 'structure', 'normalized', 'existing_resources'],
@@ -43,6 +49,7 @@ const duplicateResponseSchema = {
 
 @ApiV1()
 @ApiTags('v1-resource-uploads')
+@ApiExtraModels(ResourceDirectUploadCompleteResponseDto, ResourceDirectUploadProcessingResponseDto)
 @Controller('v1/resources')
 export class ResourcesV1WriteController {
   constructor(
@@ -53,6 +60,7 @@ export class ResourcesV1WriteController {
     private readonly auth: AuthService,
     private readonly directUploads: ResourceDirectUploadService,
     private readonly dataSource: DataSource,
+    private readonly completionJobs: ResourceUploadCompletionService,
   ) {}
 
   @Post('uploads/init')
@@ -117,11 +125,24 @@ export class ResourcesV1WriteController {
   @OAuthProtected('resource.upload')
   @RateLimit({ max: 10, window: 60 })
   @ApiBody({ type: CompleteResourceDirectUploadDto })
-  @ApiCreatedResponse({ type: ResourceDirectUploadCompleteResponseDto, description: 'Checks the verified RES object server-side, creates a pending ResourceFile, and binds it privately.' })
+  @ApiCreatedResponse({ schema: completionResponseSchema, description: 'Checks the verified RES object server-side. With background=true, returns processing promptly; poll the owner-bound status endpoint for the final result.' })
   async completeDirectUpload(@Body() rawBody: Record<string, any>, @Req() req: any) {
     await this.assertEnabled(req.user);
     const body = await this.validate(rawBody, CompleteResourceDirectUploadDto);
-    return this.directUploads.complete(body.session_id, body.object_public_id, req.user);
+    return body.background
+      ? this.completionJobs.enqueue(body.session_id, body.object_public_id, req.user.id)
+      : this.directUploads.complete(body.session_id, body.object_public_id, req.user);
+  }
+
+  @Get('uploads/:sessionId/status')
+  @Header('Cache-Control', 'private, no-store')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 60, window: 60 })
+  @ApiParam({ name: 'sessionId', type: String, format: 'uuid' })
+  @ApiOkResponse({ schema: completionResponseSchema, description: 'Owner-only queued upload verification status. Processing is not a completed upload; validation errors retain their HTTP status.' })
+  async directUploadStatus(@Param('sessionId', ParseUUIDPipe) sessionId: string, @Req() req: any) {
+    await this.assertEnabled(req.user);
+    return this.completionJobs.status(sessionId, req.user.id);
   }
 
   @Post('drafts/preview')

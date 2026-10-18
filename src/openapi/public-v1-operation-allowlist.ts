@@ -134,6 +134,7 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'POST /v1/resources/drafts',
   'POST /v1/resources/uploads/init',
   'POST /v1/resources/uploads/complete',
+  'GET /v1/resources/uploads/{sessionId}/status',
   'GET /v1/resources/drafts/{draftId}',
   'PATCH /v1/resources/drafts/{draftId}',
   'DELETE /v1/resources/drafts/{draftId}',

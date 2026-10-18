@@ -38,6 +38,7 @@ export class SSEClient {
   private retryDelay: number;
   private isConnecting = false;
   private shouldReconnect = true;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private onOpen?: () => void;
   private onError?: (error: Error) => void;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
@@ -64,23 +65,26 @@ export class SSEClient {
 
     try {
       // Use EventSourcePolyfill for better browser support
-      this.eventSource = new EventSourcePolyfill(this.url, {
+      const source = new EventSourcePolyfill(this.url, {
         // Include credentials for cookie-based auth
         withCredentials: true,
       });
+      this.eventSource = source;
 
-      this.eventSource.onopen = () => {
+      source.onopen = () => {
+        if (this.eventSource !== source) return;
         this.retryCount = 0;
         this.isConnecting = false;
         this.onOpen?.();
       };
 
-      this.eventSource.onerror = (event) => {
+      source.onerror = () => {
+        if (this.eventSource !== source) return;
         this.isConnecting = false;
-
-        if (this.eventSource?.readyState === EventSource.CLOSED) {
-          this.handleDisconnect();
-        }
+        // The polyfill also retries CONNECTING streams. Close it before our own
+        // bounded retry so two reconnection loops cannot survive each other.
+        this.closeTransport();
+        this.handleDisconnect();
 
         const error = new Error('SSE connection error');
         this.onError?.(error);
@@ -146,7 +150,7 @@ export class SSEClient {
    * Handle disconnection with retry logic
    */
   private handleDisconnect(): void {
-    if (!this.shouldReconnect) {
+    if (!this.shouldReconnect || this.retryTimer) {
       return;
     }
 
@@ -164,9 +168,9 @@ export class SSEClient {
     this.retryCount++;
     const delay = this.retryDelay * Math.pow(2, this.retryCount - 1);
 
-    setTimeout(() => {
-      this.eventSource = null;
-      this.connect();
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.shouldReconnect) this.connect();
     }, delay);
   }
 
@@ -175,10 +179,14 @@ export class SSEClient {
    * reconnected later.
    */
   private closeTransport(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
     if (this.eventSource) {
-      this.eventSource.close();
+      const source = this.eventSource;
       this.eventSource = null;
+      source.close();
     }
+    this.isConnecting = false;
     this.registeredEventTypes.clear();
   }
 

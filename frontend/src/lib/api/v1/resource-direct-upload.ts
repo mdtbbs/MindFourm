@@ -1,4 +1,4 @@
-import { requestV1 } from './transport';
+import { fetchV1, requestV1 } from './transport';
 import { MAX_RESOURCE_SIZE } from '../../resource-upload-limits';
 
 export type ResourceDirectUploadDraftResponse = {
@@ -32,6 +32,27 @@ type ResourceDirectUploadInitResponse = {
 };
 
 type ResourceDirectUploadCompleteResponse = { file_public_id: string; completed: true; version_public_id?: string };
+type ResourceDirectUploadStatus = ResourceDirectUploadCompleteResponse | {
+  completed: false; session_id: string; status: 'processing'; poll_after_ms: number;
+};
+
+/** Each status request is short even when server-side verification takes minutes. */
+export async function waitForResourceUploadCompletion(
+  sessionId: string,
+  initial: ResourceDirectUploadStatus,
+): Promise<ResourceDirectUploadCompleteResponse> {
+  let result = initial;
+  const deadline = Date.now() + 15 * 60_000;
+  while (!result.completed) {
+    if (Date.now() >= deadline) throw new Error('资源文件仍在后台校验，请稍后在我的资源中查看结果');
+    const delay = Math.max(1000, Math.min(10000, result.poll_after_ms || 3000));
+    await new Promise(resolve => setTimeout(resolve, delay));
+    result = await fetchV1<ResourceDirectUploadStatus>(`/resources/uploads/${encodeURIComponent(sessionId)}/status`, {
+      init: { cache: 'no-store' },
+    });
+  }
+  return result;
+}
 
 function normalizedUploadMime(file: File): string {
   const lowerName = file.name.toLowerCase();
@@ -110,8 +131,9 @@ export async function uploadResourceDirectDraft(
   }
 
   if (!objectPublicId) throw new Error('资源存储没有确认上传对象');
-  return requestV1<ResourceDirectUploadCompleteResponse>('/resources/uploads/complete', {
+  const completion = await requestV1<ResourceDirectUploadStatus>('/resources/uploads/complete', {
     method: 'POST',
-    body: JSON.stringify({ session_id: init.id, object_public_id: objectPublicId }),
+    body: JSON.stringify({ session_id: init.id, object_public_id: objectPublicId, background: true }),
   });
+  return waitForResourceUploadCompletion(init.id, completion);
 }

@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { MAX_RESOURCE_SIZE } from '../resources.controller';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -42,6 +42,11 @@ export class CompleteResourceDirectUploadDto {
   @IsString()
   @MaxLength(128)
   object_public_id: string;
+
+  @ApiPropertyOptional({ description: 'Queue verification and poll uploads/{sessionId}/status instead of waiting for binary reads. Recommended behind a CDN.' })
+  @IsOptional()
+  @IsBoolean()
+  background?: boolean;
 }
 
 export class ResourceDirectUploadTokenDto {
@@ -63,6 +68,13 @@ export class ResourceDirectUploadInitResponseDto {
 export class ResourceDirectUploadCompleteResponseDto {
   @ApiProperty({ format: 'uuid' }) file_public_id: string;
   @ApiProperty({ enum: [true] }) completed: boolean;
+}
+
+export class ResourceDirectUploadProcessingResponseDto {
+  @ApiProperty({ enum: [false] }) completed: boolean;
+  @ApiProperty({ format: 'uuid' }) session_id: string;
+  @ApiProperty({ enum: ['processing'] }) status: string;
+  @ApiProperty({ example: 3000 }) poll_after_ms: number;
 }
 
 export class ResourceDirectUploadDraftResponseDto {

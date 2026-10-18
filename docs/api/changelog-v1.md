@@ -1,5 +1,11 @@
 # 公开 API 更新记录
 
+## 2026-10-18 — 资源上传后台完成与进度查询
+
+- `POST /api/v1/resources/uploads/complete` 新增可选布尔字段 `background`。为 `true` 时将校验加入 Redis 队列并快速返回 `completed: false`、`session_id`、`status: processing` 和 `poll_after_ms`；省略或为 `false` 保持原同步契约。
+- 新增 `GET /api/v1/resources/uploads/{sessionId}/status`，使用相同 `resource.upload` scope，仅上传会话所属账号可读取，响应禁止缓存。处理结束返回原有 `completed: true` 和 `file_public_id`；校验失败通过原有 HTTP 错误响应返回，不将排队成功视为上传完成。
+- 队列按上传会话去重、串行处理并在后端重启后恢复。服务端继续校验权限、RES 元数据、字节大小与 SHA-256，完成原有资源事务后才进入待审核。网页改用后台完成和短请求轮询，避免 CDN 等待源站的时限导致 524。
+
 ## 2026-10-18 — 资源完成上传的超时处理
 
 - `POST /api/v1/resources/uploads/complete` 的服务端文件回读使用二进制传输超时预算；响应体读取中断或超时返回可重试的 503 `RESOURCE_STORAGE_UNAVAILABLE`，不再泄漏为通用 500。文件大小、SHA-256 校验与审核隔离要求保持不变。

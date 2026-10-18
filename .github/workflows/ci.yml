@@ -73,6 +73,12 @@ jobs:
           frontend/src/lib/api/v1/resource-workbench-client.spec.ts
           frontend/src/lib/api/editor-tools.spec.ts
 
+      - name: Run upload completion and SSE regressions
+        run: >-
+          npm run test:frontend-unit -- --runInBand --runTestsByPath
+          tests/frontend/resource-upload-completion.spec.ts
+          tests/frontend/sse-client-retry.spec.ts
+
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
 
