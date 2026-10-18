@@ -11,6 +11,12 @@ const nextConfig = {
   // Production: standalone output (smaller deployment tree, only needed deps)
   output: 'standalone',
 
+  experimental: {
+    // RES completion verifies large files server-side (up to 300s per read).
+    // Let that operation return its own result instead of a proxy timeout at 30s.
+    proxyTimeout: 360_000,
+  },
+
   // Pin file-tracing root to this package directory. Without this, Next.js
   // walks upward looking for a lockfile. When it finds multiple lockfiles
   // (monorepo root + frontend + a stray one on BT Panel at /www/wwwroot/),

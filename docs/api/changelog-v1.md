@@ -1,5 +1,9 @@
 # 公开 API 更新记录
 
+## 2026-10-18 — 资源完成上传的超时处理
+
+- `POST /api/v1/resources/uploads/complete` 的服务端文件回读使用二进制传输超时预算；响应体读取中断或超时返回可重试的 503 `RESOURCE_STORAGE_UNAVAILABLE`，不再泄漏为通用 500。文件大小、SHA-256 校验与审核隔离要求保持不变。
+
 ## 2026-10-18 — 资源上传大小上限
 
 - `POST /api/v1/resources/uploads/init` 的 `size_bytes` 上限从 50 MiB 提高到 120 MiB（125829120 字节），原有请求字段、OAuth scope 和响应结构保持兼容。

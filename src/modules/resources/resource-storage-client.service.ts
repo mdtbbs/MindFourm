@@ -82,6 +82,7 @@ export class ResourceStorageClientService {
   private readonly enabled: boolean;
   private readonly requestTimeoutMs: number;
   private readonly uploadTimeoutMs: number;
+  private readonly downloadTimeoutMs: number;
 
   /** Consecutive dependency failures; reset by any successful call. */
   private consecutiveFailures = 0;
@@ -102,6 +103,7 @@ export class ResourceStorageClientService {
     this.enabled = configService.get<boolean>('res.enabled') !== false;
     this.requestTimeoutMs = configService.get<number>('res.requestTimeoutMs') || 10_000;
     this.uploadTimeoutMs = configService.get<number>('res.uploadTimeoutMs') || 120_000;
+    this.downloadTimeoutMs = configService.get<number>('res.downloadTimeoutMs') || 300_000;
     this.now = clock.now ?? (() => Date.now());
     // One slow dependency should not need many failed requests to be recognised,
     // but a single blip should not cut the dependency off either.
@@ -165,7 +167,7 @@ export class ResourceStorageClientService {
     }
   }
 
-  private async request(path: string, init: RequestInit = {}, timeoutMs = this.requestTimeoutMs): Promise<Response> {
+  private async request(path: string, init: RequestInit = {}, timeoutMs = this.requestTimeoutMs, deferSuccess = false): Promise<Response> {
     this.assertAvailable();
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
@@ -183,7 +185,7 @@ export class ResourceStorageClientService {
       throw new ResourceStorageClientError('unavailable', undefined, retryAfter);
     }
     if (response.ok) {
-      this.resetCircuit();
+      if (!deferSuccess) this.resetCircuit();
       return response;
     }
     // 5xx means the dependency itself is unhealthy; 4xx is an answer about this
@@ -322,10 +324,17 @@ export class ResourceStorageClientService {
   }
 
   async getObjectContent(id: string, options: { maxBytes?: number; signal?: AbortSignal } = {}): Promise<Buffer> {
-    const response = await this.request(`/api/v1/objects/${encodeURIComponent(id)}/content`, { signal: options.signal });
+    // Reading a large object is a byte transfer, just like PUT. The deadline
+    // must cover the response body, not only the arrival of its headers.
+    const timeout = AbortSignal.timeout(this.downloadTimeoutMs);
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    const response = await this.request(`/api/v1/objects/${encodeURIComponent(id)}/content`, { signal }, this.downloadTimeoutMs, true);
     const limit = options.maxBytes ?? 64 * 1024 * 1024;
     const reader = response.body?.getReader();
-    if (!reader) throw new ResourceStorageClientError('unavailable');
+    if (!reader) {
+      this.tripCircuit();
+      throw new ResourceStorageClientError('unavailable', undefined, this.circuitRetryAfter());
+    }
     const chunks: Buffer[] = [];
     let size = 0;
     try {
@@ -336,7 +345,13 @@ export class ResourceStorageClientService {
         if (size > limit) throw new ResourceStorageClientError('rejected');
         chunks.push(Buffer.from(value));
       }
-      return Buffer.concat(chunks, size);
+      const bytes = Buffer.concat(chunks, size);
+      this.resetCircuit();
+      return bytes;
+    } catch (error) {
+      if (error instanceof ResourceStorageClientError) throw error;
+      this.tripCircuit();
+      throw new ResourceStorageClientError(signal.aborted ? 'timeout' : 'unavailable', undefined, this.circuitRetryAfter());
     } finally {
       await reader.cancel().catch(() => undefined);
     }

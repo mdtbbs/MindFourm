@@ -107,3 +107,65 @@ describe('ResourceStorageClientService circuit breaker', () => {
     expect(failure.getStatus()).toBe(503);
   });
 });
+
+describe('ResourceStorageClientService binary reads', () => {
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  function delayedBody(signal: AbortSignal, delay?: number): Response {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return new Response(new ReadableStream({
+      start(controller) {
+        const abort = () => { clearTimeout(timer); controller.error(signal.reason); };
+        signal.addEventListener('abort', abort, { once: true });
+        if (delay !== undefined) timer = setTimeout(() => {
+          signal.removeEventListener('abort', abort);
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.close();
+        }, delay);
+      },
+      cancel() { clearTimeout(timer); },
+    }));
+  }
+
+  it('reads a body beyond the metadata deadline using the binary transfer budget', async () => {
+    const { service } = create({ 'res.requestTimeoutMs': 5, 'res.downloadTimeoutMs': 1_000 });
+    jest.spyOn(global, 'fetch').mockImplementation(async (_url, init) => delayedBody(init!.signal!, 30));
+    await expect(service.getObjectContent('p1')).resolves.toEqual(Buffer.from([1, 2, 3]));
+  });
+
+  it('maps a timeout after headers to a retryable 503 and releases the reader', async () => {
+    const { service } = create({ 'res.requestTimeoutMs': 5, 'res.downloadTimeoutMs': 25 });
+    let cancel: jest.SpyInstance;
+    jest.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      const response = delayedBody(init!.signal!);
+      const reader = response.body!.getReader();
+      cancel = jest.spyOn(reader, 'cancel');
+      jest.spyOn(response.body!, 'getReader').mockReturnValue(reader as any);
+      return response;
+    });
+    const error = await service.getObjectContent('p1').catch((failure) => failure);
+    expect(error).toBeInstanceOf(ResourceStorageClientError);
+    expect(error.code).toBe('timeout');
+    expect(error.getStatus()).toBe(503);
+    expect(cancel!).toHaveBeenCalled();
+  });
+
+  it('counts repeated body failures even when each response has successful headers', async () => {
+    const { service } = create({ 'res.circuitFailureThreshold': 2 });
+    const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error('connection reset during body')); },
+    })));
+    await expect(service.getObjectContent('p1')).rejects.toMatchObject({ code: 'unavailable' });
+    await expect(service.getObjectContent('p1')).rejects.toMatchObject({ code: 'unavailable', retryAfterSeconds: 15 });
+    expect(service.isReachable).toBe(false);
+    await expect(service.getObjectContent('p1')).rejects.toBeInstanceOf(ResourceStorageClientError);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('still rejects oversized bytes without treating them as a dependency outage', async () => {
+    const { service } = create({ 'res.circuitFailureThreshold': 1 });
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array([1, 2, 3])));
+    await expect(service.getObjectContent('p1', { maxBytes: 2 })).rejects.toMatchObject({ code: 'rejected' });
+    expect(service.isReachable).toBe(true);
+  });
+});

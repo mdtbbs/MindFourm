@@ -215,6 +215,7 @@ export class ResourcesService {
     dto: CreateResourceDto,
     file?: ResourceFileMeta,
     directUploadDraft = false,
+    verifiedBytes?: Buffer,
   ): Promise<PreparedModArchive | null> {
     const versionMode = dto.version_mode || (kind === 'mod' ? 'semver' : 'compatibility');
     try {
@@ -232,9 +233,9 @@ export class ResourcesService {
       if (file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 120 MiB 安全限制');
       if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
       try {
-        analysis = analyzeModArchive(file.storage_backend === 'res'
+        analysis = analyzeModArchive(verifiedBytes ?? (file.storage_backend === 'res'
           ? await this.readResUpload(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes)
-          : await this.resourceStorageService!.readManagedFile(file.file_path, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
+          : await this.resourceStorageService!.readManagedFile(file.file_path, MOD_ARCHIVE_LIMITS.maxArchiveBytes)));
       } catch (error) {
         if (error instanceof ModUploadValidationError) throw new BadRequestException({ code: error.code, message: error.message });
         throw error;
@@ -420,7 +421,7 @@ export class ResourcesService {
 
   /** Complete an initial metadata-only draft after re-reading the verified RES bytes. */
   async completeInitialDirectUpload(
-    input: { versionId: number; draftId: string; sessionId: string; objectPublicId: string; actor: { id: number; role?: string }; file: ResourceFileMeta },
+    input: { versionId: number; draftId: string; sessionId: string; objectPublicId: string; actor: { id: number; role?: string }; file: ResourceFileMeta; verifiedBytes?: Buffer },
   ): Promise<{ file_public_id: string; version_public_id: string }> {
     const version = await this.versionRepository.findOne({ where: { id: input.versionId } });
     if (!version?.public_id) throw new NotFoundException('资源版本不存在');
@@ -438,7 +439,7 @@ export class ResourcesService {
     let previewStored = false;
     if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, input.actor.role);
     try {
-      const preparedMod = await this.prepareInitialModArchive(resource.resource_kind || 'other', resource.resource_type, dto, input.file, false);
+      const preparedMod = await this.prepareInitialModArchive(resource.resource_kind || 'other', resource.resource_type, dto, input.file, false, input.verifiedBytes);
       const contentSource = resolveOptionalContentSource(dto.content, dto.content_json, dto.content_schema_version);
       if (contentSource) dto.content = contentSource.content;
       if (resource.resource_kind === 'map' || resource.resource_kind === 'schematic') {

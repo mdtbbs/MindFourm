@@ -66,6 +66,7 @@ export const appConfig = () => ({
     apiKey: process.env.RES_API_KEY || '',
     requestTimeoutMs: parsePositiveInt(process.env.RES_REQUEST_TIMEOUT_MS, 10_000),
     uploadTimeoutMs: parsePositiveInt(process.env.RES_UPLOAD_TIMEOUT_MS, 120_000),
+    downloadTimeoutMs: parsePositiveInt(process.env.RES_DOWNLOAD_TIMEOUT_MS, 300_000),
     // Circuit breaker around the dependency. Without it a RES that is merely slow
     // makes every resource request wait out the timeout and answer 503, while the
     // frontend multiplies each of those reads by its own retry count.

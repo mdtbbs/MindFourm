@@ -219,6 +219,21 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('analyzes verified initial Mod bytes without downloading the RES object again', async () => {
+    const { service } = createService();
+    const read = jest.spyOn(service as any, 'readResUpload').mockRejectedValue(new Error('unexpected second RES read'));
+    const bytes = Buffer.alloc(22);
+    bytes.writeUInt32LE(0x06054b50, 0); // Valid empty ZIP; missing manifest remains a review finding.
+    const result = await (service as any).prepareInitialModArchive('mod', 'upload', {
+      version: '1.0.0', mod_id: 'demo',
+    }, {
+      file_name: 'demo.jar', file_size: bytes.length,
+      storage_backend: 'res', provider_object_id: 'verified-object',
+    }, false, bytes);
+    expect(result).toMatchObject({ modId: 'demo', analysis: { manifest_path: null } });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('resolves detail UUIDs while rejecting malformed and missing identifiers', async () => {
     const { service, resourceRepository } = createService();
     await expect(service.resolveDetailId('27')).resolves.toBe(27);

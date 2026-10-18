@@ -152,6 +152,7 @@ describe('ResourceDirectUploadService', () => {
     });
     expect(resourceLifecycle.completeInitialDirectUpload).toHaveBeenCalledWith(expect.objectContaining({
       versionId: version.id, draftId: 'draft-id', sessionId: 'session', objectPublicId: 'object',
+      verifiedBytes: bytes,
       file: expect.objectContaining({ storage_backend: 'res', content_hash: sha256 }),
     }));
   });

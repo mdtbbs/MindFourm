@@ -309,6 +309,7 @@ export class ResourceDirectUploadService {
           sessionId: session.id,
           objectPublicId: object.public_id,
           actor,
+          verifiedBytes: bytes,
           file: {
             file_name: session.filename,
             file_path: tempFile,
