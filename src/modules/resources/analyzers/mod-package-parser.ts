@@ -9,6 +9,7 @@ export const MOD_ARCHIVE_LIMITS = {
   maxEntries: 20_000,
   maxTotalUncompressedBytes: 200 * 1024 * 1024,
   maxEntryUncompressedBytes: 8 * 1024 * 1024,
+  maxAudioEntryUncompressedBytes: 16 * 1024 * 1024,
   maxManifestBytes: 256 * 1024,
   maxContentJsonBytes: 512 * 1024,
   maxPropertiesBytes: 1024 * 1024,
@@ -128,7 +129,13 @@ function listZipEntries(buffer: Buffer): ZipEntry[] {
     if (fileType === 0xa000) throw new ModUploadValidationError('Mod archive contains a symbolic link');
     if (flags & 0x0001) throw new ModUploadValidationError('Encrypted Mod archives are not supported');
     if (![0, 8].includes(method)) throw new ModUploadValidationError('Mod archive compression method is not supported');
-    if (uncompressedSize > MOD_ARCHIVE_LIMITS.maxEntryUncompressedBytes) throw new ModUploadValidationError('Mod archive contains an oversized entry');
+    // Music is validated and hashed, then discarded rather than retained or
+    // decoded by this analyzer. Keep parsed metadata and all other assets at
+    // the existing bound while allowing ordinary long music tracks.
+    const entryLimit = /\.(ogg|mp3|wav)$/i.test(name)
+      ? MOD_ARCHIVE_LIMITS.maxAudioEntryUncompressedBytes
+      : MOD_ARCHIVE_LIMITS.maxEntryUncompressedBytes;
+    if (uncompressedSize > entryLimit) throw new ModUploadValidationError('Mod archive contains an oversized entry');
     totalBytes += uncompressedSize;
     if (totalBytes > MOD_ARCHIVE_LIMITS.maxTotalUncompressedBytes) throw new ModUploadValidationError('Mod archive expands beyond the safety limit');
     const directory = name.endsWith('/') || fileType === 0x4000;

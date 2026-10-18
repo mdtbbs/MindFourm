@@ -42,6 +42,25 @@ function makeStoredZip(files: Record<string, string | Buffer>): Buffer {
 }
 
 describe('Resource Center V2 Mod analyzer primitives', () => {
+  it('validates and hashes a music track above 8 MiB without retaining it as metadata', () => {
+    const result = analyzeModArchive(makeStoredZip({
+      'mod.json': '{"name":"music-mod","version":"1.0.0"}',
+      'music/long-track.ogg': Buffer.alloc(9 * 1024 * 1024, 65),
+    }));
+    expect(result.manifest.name).toBe('music-mod');
+    expect(result.files).toContainEqual({ name: 'music/long-track.ogg', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(result.content).toEqual([]);
+  });
+
+  it('keeps the 8 MiB non-audio limit and bounds audio entries at 16 MiB', () => {
+    expect(() => analyzeModArchive(makeStoredZip({
+      'content/blocks/oversized.json': Buffer.alloc(9 * 1024 * 1024, 65),
+    }))).toThrow('oversized entry');
+    expect(() => analyzeModArchive(makeStoredZip({
+      'music/oversized.ogg': Buffer.alloc(16 * 1024 * 1024 + 1, 65),
+    }))).toThrow('oversized entry');
+  });
+
   it('validates semantic versions and evaluates bounded compatibility ranges', () => {
     expect(validateResourceVersion('1.2.3-beta.1', 'semver')).toBe('1.2.3-beta.1');
     expect(() => validateResourceVersion('v157', 'semver')).toThrow();
