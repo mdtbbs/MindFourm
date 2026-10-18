@@ -20,6 +20,8 @@ The authenticated Public V1 Resource upload flow is `POST /api/v1/resources/uplo
 
 The forum creates a pending `ResourceFile` with `storage_backend=res`, `provider_object_id=<RES public_id>`, `provider_binding_id=<binding id>`, `storage_key=sha256:<hash>`, and verified SHA-256 integrity. `provider_file_id` remains the historical numeric MFL identifier. RES bindings use `namespace=mindforum`, `owner_type=resource_file`, `owner_id=<ResourceFile public_id>`, initially with private visibility. Approval upserts the same binding to public before committing forum approval; rejection or temporary withdrawal makes it private. Permanent removal deletes the binding, leaving physical byte reclamation to RES GC.
 
+Queue admission and status reads bound initial Redis readiness to 5 seconds before sending queue commands. Redis recovery after that deadline cannot enqueue work from the rejected request. Commands retain their separate 5-second budget; clients may retry. Job IDs use the stored upload-session UUID, so alternate UUID letter casing does not create separate jobs.
+
 ## Downloads and preview
 
 The forum still authorizes the download and records `DownloadGrant` and statistics. It then redirects (`302`) to `/o/<public_id>/<filename>` for a public RES file or to a short-lived `/private/<token>` URL created by the RES signed URL API for an authorized private file. The forum never proxies RES file bytes or Range requests. Renderer and other internal readers use the authenticated `GET /api/v1/objects/:id/content` endpoint with a size bound.

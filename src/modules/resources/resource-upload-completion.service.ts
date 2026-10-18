@@ -61,14 +61,26 @@ export class ResourceUploadCompletionService implements OnModuleInit, OnModuleDe
 
   private async queueOperation<T>(operation: (queue: Queue<CompletionJob, JobResult>) => Promise<T>): Promise<T> {
     if (!this.queue) throw new ServiceUnavailableException('上传处理服务暂不可用，请稍后重试');
-    try { return await operation(this.queue); }
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // BullMQ waits indefinitely for its initial Redis connection, even with
+      // offline commands disabled. Bound that read-only wait before invoking
+      // any mutation, so a rejected HTTP request cannot enqueue work later.
+      await Promise.race([
+        this.queue.waitUntilReady(),
+        new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('Queue readiness timeout')), 5000); }),
+      ]);
+      return await operation(this.queue);
+    }
     catch { throw new ServiceUnavailableException('上传处理服务暂不可用，请稍后重试'); }
+    finally { if (deadline) clearTimeout(deadline); }
   }
 
   async enqueue(sessionId: string, objectPublicId: string, userId: number) {
     const session = await this.ownedSession(sessionId, userId);
     const completed = this.completed(session);
     if (completed) return completed;
+    sessionId = session.id;
     if (session.expires_at.getTime() <= Date.now()) throw new ConflictException('上传会话已过期');
     if (session.object_public_id && session.object_public_id !== objectPublicId) throw new ConflictException('上传对象不匹配');
     // A session is one job, including across processes, retries and restarts.
@@ -85,6 +97,7 @@ export class ResourceUploadCompletionService implements OnModuleInit, OnModuleDe
     const session = await this.ownedSession(sessionId, userId);
     const completed = this.completed(session);
     if (completed) return completed;
+    sessionId = session.id;
     const job = await this.queueOperation(queue => queue.getJob(sessionId));
     if (!job || job.data.userId !== userId) throw new NotFoundException('上传处理任务不存在，请重新提交');
     return this.readJob(job, sessionId);

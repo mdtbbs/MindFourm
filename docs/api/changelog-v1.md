@@ -5,6 +5,7 @@
 - `POST /api/v1/resources/uploads/complete` 新增可选布尔字段 `background`。为 `true` 时将校验加入 Redis 队列并快速返回 `completed: false`、`session_id`、`status: processing` 和 `poll_after_ms`；省略或为 `false` 保持原同步契约。
 - 新增 `GET /api/v1/resources/uploads/{sessionId}/status`，使用相同 `resource.upload` scope，仅上传会话所属账号可读取，响应禁止缓存。处理结束返回原有 `completed: true` 和 `file_public_id`；校验失败通过原有 HTTP 错误响应返回，不将排队成功视为上传完成。
 - 队列按上传会话去重、串行处理并在后端重启后恢复。服务端继续校验权限、RES 元数据、字节大小与 SHA-256，完成原有资源事务后才进入待审核。网页改用后台完成和短请求轮询，避免 CDN 等待源站的时限导致 524。
+- Redis 首次连接等待限制为 5 秒，超时返回 503，恢复连接后也不会再提交该次已失败请求的任务；会话 ID 按数据库中的 UUID 统一，大小写变化不会重复排队。
 
 ## 2026-10-18 — 资源完成上传的超时处理
 

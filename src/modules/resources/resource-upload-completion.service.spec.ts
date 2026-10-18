@@ -8,7 +8,7 @@ describe('ResourceUploadCompletionService', () => {
     const uploads = { complete: jest.fn() };
     const users = { findOne: jest.fn().mockResolvedValue({ id: 3, role: 'user' }) };
     const job = { data: { sessionId, objectPublicId: 'object-1', userId: 3 }, getState: jest.fn().mockResolvedValue('active'), returnvalue: null as any };
-    const queue = { add: jest.fn(), getJob: jest.fn().mockResolvedValue(job) };
+    const queue = { add: jest.fn(), getJob: jest.fn().mockResolvedValue(job), waitUntilReady: jest.fn().mockResolvedValue(undefined) };
     const service = new ResourceUploadCompletionService({} as any, uploads as any, sessions as any, users as any);
     (service as any).queue = queue;
     return { service, sessions, uploads, users, job, queue };
@@ -65,5 +65,26 @@ describe('ResourceUploadCompletionService', () => {
     const { service, queue, uploads } = make(); queue.add.mockRejectedValue(new Error('Redis down'));
     await expect(service.enqueue(sessionId, 'object-1', 3)).rejects.toMatchObject({ status: 503 });
     expect(uploads.complete).not.toHaveBeenCalled();
+  });
+
+  it('bounds initial Redis readiness and never enqueues after the HTTP request has failed', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, queue } = make();
+      let ready!: () => void;
+      queue.waitUntilReady.mockImplementation(() => new Promise<void>(resolve => { ready = resolve; }));
+      const request = service.enqueue(sessionId, 'object-1', 3);
+      const assertion = expect(request).rejects.toMatchObject({ status: 503 });
+      await jest.advanceTimersByTimeAsync(5000);
+      await assertion;
+      ready(); await Promise.resolve();
+      expect(queue.add).not.toHaveBeenCalled();
+    } finally { jest.useRealTimers(); }
+  });
+
+  it('uses the stored session UUID to deduplicate case variants of the request ID', async () => {
+    const { service, queue } = make();
+    await service.enqueue(sessionId.toUpperCase(), 'object-1', 3);
+    expect(queue.add).toHaveBeenCalledWith('complete', expect.objectContaining({ sessionId }), { jobId: sessionId });
   });
 });
