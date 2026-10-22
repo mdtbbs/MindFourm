@@ -129,6 +129,9 @@ describe('MultiplayerService control-plane guards', () => {
     expect(service.relayAllocations.save).toHaveBeenCalledWith(expect.objectContaining({
       status: 'active', peer_id: 'peer_1', connection_id: null, connected_at: null,
     }));
+    const savedAllocation = service.relayAllocations.save.mock.calls[0][0];
+    expect(savedAllocation.expires_at.getUTCMilliseconds()).toBe(0);
+    expect(payload.expiry).toBe(Math.floor(savedAllocation.expires_at.getTime() / 1000));
     expect(service.realtime.emitSession).toHaveBeenCalledWith('ses_12345678901234567890', 'relay.allocated', expect.any(Object));
   });
 
@@ -245,6 +248,14 @@ describe('MultiplayerService control-plane guards', () => {
     expect(service.relayAllocations.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
       id: allocation.id, status: 'connected', connection_id: 'conn_01JXYZ', expires_at: expect.anything(),
     }), expect.objectContaining({ pending_expires_at: expect.any(Date) }));
+    expect(service.relayAllocations.findOneBy).toHaveBeenNthCalledWith(2, {
+      id: allocation.id, peer_id: allocation.peer_id, agent_id: agent.agent_id,
+      status: 'connected', connection_id: 'conn_01JXYZ',
+    });
+
+    const repeated = await service.allocateRelay(8, allocation.session_id);
+    expect(repeated).toEqual(refreshed);
+    expect(service.relayAllocations.update).toHaveBeenCalledTimes(1);
 
     const renewedExpiry = allocation.pending_expires_at;
     const input = { allocation_id: allocation.id, credential: refreshed.credential, connection_id: 'conn_01JXYZ' };
@@ -337,6 +348,50 @@ describe('MultiplayerService control-plane guards', () => {
       .toEqual({ allocation_id: allocation.id, revoked: true });
     expect(service.relayAllocations.update).toHaveBeenCalledTimes(1);
     expect(service.realtime.emitSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires a valid allocation credential before revoking an unconsumed Relay allocation', async () => {
+    const secret = 'r'.repeat(48);
+    const expiresAt = new Date(Math.ceil((Date.now() + 60_000) / 1000) * 1000);
+    const allocation = {
+      id: 'rly_active_123456789012', session_id: 'ses_12345678901234567890', peer_id: 'peer_owner',
+      agent_id: 'official-eu-1', status: 'active', connection_id: null, expires_at: expiresAt,
+    };
+    const claims = {
+      relay_session_id: allocation.id, session_id: allocation.session_id, peer_id: allocation.peer_id,
+      agent_id: allocation.agent_id, expiry: Math.floor(expiresAt.getTime() / 1000),
+    };
+    const serialized = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const signature = createHmac('sha256', secret).update(serialized).digest('base64url');
+    const credential = `${serialized}.${signature}`;
+    const mismatchedClaims = { ...claims, peer_id: 'peer_other' };
+    const mismatchedSerialized = Buffer.from(JSON.stringify(mismatchedClaims)).toString('base64url');
+    const mismatchedSignature = createHmac('sha256', secret).update(mismatchedSerialized).digest('base64url');
+    const mismatchedCredential = `${mismatchedSerialized}.${mismatchedSignature}`;
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.config = { get: jest.fn((key: string) => key === 'multiplayer.relayCredentialSecret' ? secret : 'official-eu-1') };
+    service.relayAllocations = {
+      findOneBy: jest.fn().mockResolvedValue(allocation),
+      update: jest.fn().mockImplementation(async () => { allocation.status = 'revoked'; return { affected: 1 }; }),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    service.redis = {
+      setIfNotExists: jest.fn().mockResolvedValue(true), getAndDeleteIfMatches: jest.fn().mockResolvedValue('lock'),
+      get: jest.fn().mockResolvedValue(null),
+    };
+    service.realtime = { emitSession: jest.fn().mockResolvedValue(null) };
+
+    await expect(service.revokeRelayAllocation('official-eu-1', allocation.id, 'conn_attempt', 'invalid'))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(service.revokeRelayAllocation('official-eu-1', allocation.id, 'conn_attempt', mismatchedCredential))
+      .rejects.toMatchObject({ status: 403 });
+    expect(allocation.status).toBe('active');
+    expect(service.relayAllocations.update).not.toHaveBeenCalled();
+
+    await expect(service.revokeRelayAllocation('official-eu-1', allocation.id, 'conn_attempt', credential))
+      .resolves.toEqual({ allocation_id: allocation.id, revoked: true });
+    expect(allocation.status).toBe('revoked');
+    expect(service.relayAllocations.update).toHaveBeenCalledTimes(1);
   });
 
   it('accepts only allowlisted secure WSS endpoints with an explicit valid port', async () => {

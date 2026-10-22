@@ -93,6 +93,15 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+/** Relay allocation timestamps are stored in MySQL DATETIME columns (FSP 0). */
+function nextRelayCredentialExpiry(currentExpiry?: Date): Date {
+  const ttlExpiry = Math.ceil((Date.now() + RELAY_CREDENTIAL_TTL_SECONDS * 1000) / 1000) * 1000;
+  const afterCurrentExpiry = currentExpiry
+    ? (Math.floor(currentExpiry.getTime() / 1000) + 1) * 1000
+    : 0;
+  return new Date(Math.max(ttlExpiry, afterCurrentExpiry));
+}
+
 function signRelayCredential(
   secret: string,
   allocation: { id: string; session_id: string; peer_id: string; agent_id: string },
@@ -1517,23 +1526,49 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
             let agent: RelayAgentRecord;
             try { agent = JSON.parse(raw) as RelayAgentRecord; } catch { return null; }
             if (agent.agent_id !== existing.agent_id || !isMultiplayerV1Endpoint(agent.endpoint)) return null;
-            const current = await this.relayAllocations.findOneBy({
-              id: existing.id, peer_id: peer.id, agent_id: existing.agent_id, status: 'connected',
-              connection_id: connectionId, expires_at: MoreThan(new Date()),
-            });
-            if (!current) return null;
-            const pendingExpiresAt = new Date(Date.now() + RELAY_CREDENTIAL_TTL_SECONDS * 1000);
-            const staged = await this.relayAllocations.update({
-              id: current.id, peer_id: peer.id, agent_id: existing.agent_id, status: 'connected',
-              connection_id: connectionId, expires_at: MoreThan(new Date()),
-            }, { pending_expires_at: pendingExpiresAt });
-            if (!staged.affected) return null;
-            const renewed = await this.relayAllocations.findOneBy({
-              id: current.id, peer_id: peer.id, agent_id: existing.agent_id, status: 'connected',
-              connection_id: connectionId, pending_expires_at: pendingExpiresAt,
-            });
-            if (!renewed) return null;
-            return { agent, allocationId: renewed.id, expiresAt: renewed.pending_expires_at! };
+            const identity = {
+              id: existing.id, peer_id: peer.id, agent_id: existing.agent_id,
+              status: 'connected' as const, connection_id: connectionId,
+            };
+
+            // Use the database value as the renewal credential's expiry. A
+            // DATETIME column rounds fractional seconds, so the pre-write JS
+            // Date cannot also serve as a post-write lookup identity.
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const now = new Date();
+              const current = await this.relayAllocations.findOneBy({
+                ...identity, expires_at: MoreThan(now),
+              });
+              if (!current) return null;
+
+              const existingPending = current.pending_expires_at;
+              if (existingPending
+                && existingPending.getTime() > now.getTime()
+                && existingPending.getTime() > current.expires_at.getTime()) {
+                return { agent, allocationId: current.id, expiresAt: existingPending };
+              }
+
+              const pendingExpiresAt = nextRelayCredentialExpiry(current.expires_at);
+              const staged = await this.relayAllocations.update({
+                ...identity,
+                expires_at: MoreThan(now),
+                pending_expires_at: existingPending ?? IsNull(),
+              }, { pending_expires_at: pendingExpiresAt });
+              if (!staged.affected) continue;
+
+              // Read by stable identity, then use the value MySQL actually
+              // stored. If an ACK promoted the pending value during this read,
+              // retry against the new base expiry instead of signing stale data.
+              const renewed = await this.relayAllocations.findOneBy(identity);
+              const readAt = new Date();
+              if (!renewed || renewed.expires_at.getTime() <= readAt.getTime()) return null;
+              if (renewed.pending_expires_at
+                && renewed.pending_expires_at.getTime() > readAt.getTime()
+                && renewed.pending_expires_at.getTime() > renewed.expires_at.getTime()) {
+                return { agent, allocationId: renewed.id, expiresAt: renewed.pending_expires_at };
+              }
+            }
+            return null;
           });
         }
 
@@ -1577,7 +1612,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
             if (activeCount >= agent.capacity) return null;
 
             const allocationId = opaqueId('rly');
-            const expiresAt = new Date(Date.now() + RELAY_CREDENTIAL_TTL_SECONDS * 1000);
+            const expiresAt = nextRelayCredentialExpiry();
             await this.relayAllocations.save(this.relayAllocations.create({
               id: allocationId, session_id: session.id, peer_id: peer.id, agent_id: agent.agent_id,
               status: 'active', connection_id: null, connected_at: null, pending_expires_at: null, expires_at: expiresAt,
@@ -1715,7 +1750,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return this.relayConnectionAck(connected, peer.role, input.connection_id);
   }
 
-  async revokeRelayAllocation(agentId: string, allocationId: string, connectionId?: string) {
+  async revokeRelayAllocation(agentId: string, allocationId: string, connectionId?: string, credential?: string) {
     this.assertRelayAgentAllowed(agentId);
     const allocation = await this.relayAllocations.findOneBy({ id: allocationId, agent_id: agentId });
     if (!allocation) fail(404, 'RELAY_UNAVAILABLE');
@@ -1724,7 +1759,31 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     }
     if (allocation.status === 'revoked') return { allocation_id: allocation.id, revoked: true };
     if (allocation.status === 'expired') return { allocation_id: allocation.id, revoked: false, status: 'expired' };
-    if (!(await this.transitionRelayAllocation(allocation, 'revoked'))) {
+
+    // An unconsumed allocation has no stored connection_id to bind a revoke to.
+    // Require the exact Forum-signed allocation credential plus the trusted
+    // Agent's connection identity before releasing it after failed AUTH.
+    if (!allocation.connection_id) {
+      const secret = this.config.get<string>('multiplayer.relayCredentialSecret') || '';
+      const claims = typeof credential === 'string' && secret.length >= 32
+        ? verifyRelayCredential(credential, secret)
+        : null;
+      const expiresAtSeconds = Math.floor(allocation.expires_at.getTime() / 1000);
+      const expiryMatches = claims?.expiry === expiresAtSeconds
+        // Existing active credentials may have been issued before expiry dates
+        // were normalized to whole seconds; MySQL DATETIME rounded those up.
+        || claims?.expiry === expiresAtSeconds - 1;
+      if (allocation.status !== 'active' || !connectionId || !claims
+        || claims.relay_session_id !== allocation.id || claims.agent_id !== agentId
+        || claims.session_id !== allocation.session_id || claims.peer_id !== allocation.peer_id
+        || !expiryMatches) {
+        fail(403, 'SESSION_PERMISSION_DENIED');
+      }
+    }
+    if (!(await this.transitionRelayAllocation(allocation, 'revoked', {
+      status: allocation.status === 'connected' ? 'connected' : 'active',
+      connection_id: allocation.connection_id,
+    }))) {
       const current = await this.relayAllocations.findOneBy({ id: allocation.id, agent_id: agentId });
       if (current?.status === 'revoked' && current.connection_id === allocation.connection_id) {
         return { allocation_id: current.id, revoked: true };
@@ -2034,10 +2093,20 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     finally { await this.redis.getAndDeleteIfMatches(key, token).catch(() => null); }
   }
 
-  private async transitionRelayAllocation(allocation: MultiplayerRelayAllocation, status: 'revoked' | 'expired'): Promise<boolean> {
+  private async transitionRelayAllocation(
+    allocation: MultiplayerRelayAllocation,
+    status: 'revoked' | 'expired',
+    guard?: { status: 'active' | 'connected'; connection_id: string | null },
+  ): Promise<boolean> {
     const changed = await this.withRelayAgentLock(allocation.agent_id, async () => {
+      const where = {
+        id: allocation.id,
+        agent_id: allocation.agent_id,
+        status: guard?.status ?? In(['active', 'connected']),
+        ...(guard ? { connection_id: guard.connection_id ?? IsNull() } : {}),
+      };
       const result = await this.relayAllocations.update(
-        { id: allocation.id, agent_id: allocation.agent_id, status: In(['active', 'connected']) }, { status },
+        where, { status },
       );
       if (!result.affected) return false;
       const key = `multiplayer:relay:agent:${allocation.agent_id}`;

@@ -187,6 +187,6 @@ export class RelayInternalV1Controller {
 
   @Post(':id/revoke')
   revoke(@Param('id') id: string, @Body() body: RelayAllocationRevokeDto) {
-    return this.multiplayer.revokeRelayAllocation(id, body.allocation_id, body.connection_id);
+    return this.multiplayer.revokeRelayAllocation(id, body.allocation_id, body.connection_id, body.credential);
   }
 }

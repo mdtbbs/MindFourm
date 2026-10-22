@@ -180,7 +180,11 @@ export class RelayAllocationRevokeDto {
   @IsString() @MaxLength(48)
   allocation_id: string;
 
-  @ApiPropertyOptional({ example: 'conn_01J...', maxLength: 128, description: '已连接分配必须提供原 connection_id；未消费的分配可省略。' })
+  @ApiPropertyOptional({ example: 'conn_01J...', maxLength: 128, description: '当前 Agent WSS 认证尝试的稳定 connection_id。' })
   @IsOptional() @IsString() @MinLength(1) @MaxLength(128)
   connection_id?: string;
+
+  @ApiPropertyOptional({ example: '<RELAY_CREDENTIAL>', maxLength: 2048, description: '仅撤销尚未消费的分配时需要；Forum 会校验签名、分配 ID、Agent 与 expiry。' })
+  @IsOptional() @IsString() @MaxLength(2048)
+  credential?: string;
 }
