@@ -30,6 +30,31 @@ describe('PresenceConnectionsService', () => {
     expect(redis.mget).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps connections beyond the first twenty in the account presence snapshot', async () => {
+    const ids = Array.from({ length: 21 }, (_, index) => `connection-${index}`);
+    const records = new Map(ids.map((connectionId, index) => [connectionId, JSON.stringify({
+      connection_id: connectionId, user_id: 7, client_id: `client-${index}`, platform: 'launcher',
+      created_at: index, last_seen_at: index,
+    })]));
+    const redis = {
+      hgetallMany: jest.fn().mockResolvedValue([Object.fromEntries(ids.map((connectionId) => [connectionId, 'index']))]),
+      mget: jest.fn(async (...keys: string[]) => keys.map((key) => key.startsWith('presence:conn:')
+        ? records.get(key.slice('presence:conn:'.length)) || null
+        : key === `activity:conn:${ids[20]}` ? JSON.stringify({ type: 'playing', name: 'Mindustry', updated_at: 200 }) : null)),
+      hdel: jest.fn(),
+    };
+    const privacy = { statusForMany: jest.fn().mockResolvedValue(new Map([[7, 'online']])) };
+    const preferences = { findBy: jest.fn().mockResolvedValue([{ user_id: 7, last_seen_at: null }]) };
+    const service = new PresenceConnectionsService(
+      redis as any, privacy as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, preferences as any,
+    );
+
+    const snapshot = (await service.getSnapshots([7])).get(7);
+
+    expect(snapshot).toMatchObject({ status: 'online', activity: { name: 'Mindustry' } });
+    expect(redis.hdel).not.toHaveBeenCalled();
+  });
+
   it('shows invisible users as offline while their live connection remains active', async () => {
     const redis = {
       hgetallMany: jest.fn().mockResolvedValue([{ 'web-1': 'index' }]),

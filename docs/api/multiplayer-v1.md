@@ -7,8 +7,8 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 
 论坛负责账号、好友和联机控制信令，包括在线状态、会话、网络候选地址交换与官方中继凭证分配。客户端负责 STUN/NAT 探测、P2P 建连和 Mindustry 协议接入。游戏数据在客户端之间传输；P2P 不通时经过官方中继代理服务。论坛 API 服务不转发或保存游戏数据包。
 
-1. 在 MindAuth 注册公开客户端，使用授权码模式 + PKCE S256。只申请产品实际需要的权限范围；启动器集成另需提交启动 URI 模板并申请对应客户端能力。
-2. 请求 `GET /api/v1/capabilities`，确认 `multiplayer` 下需要的功能开关已启用。第三方客户端还需要获批 `third_party_multiplayer_v1` 能力。
+1. 在 MindAuth 注册公开客户端，使用授权码模式 + PKCE S256，并启用论坛访问。只申请产品实际需要的权限范围；若要处理加入意图，还需在客户端公开资料中配置受信任的启动 URI 模板。
+2. 请求 `GET /api/v1/capabilities`，确认 `multiplayer` 下需要的站点功能已启用。Presence/Multiplayer 不另查 MindAuth 应用目录的逐项能力审批；每个接口仍校验 OAuth 范围、用户权限、隐私与站点开关。
 3. 客户端登录后调用 `POST /api/v1/presence/connections` 创建在线连接。请求中的 `platform` 表示客户端类型；服务端返回连接 ID 和心跳间隔。
 4. 调用 `PUT /api/v1/presence/connections/{connection_id}/activity` 发布游戏状态。应用名称和图标由已审核的 OAuth 客户端资料提供，客户端无需重复提交。
 5. 调用 `POST /api/v1/multiplayer/sessions` 创建会话，再按服务端返回的策略加入、邀请或请求加入。连接建立后，双方分别提交网络候选地址。
@@ -74,7 +74,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前对端请求官方中继凭证 |
 | POST | `/api/v1/realtime/tickets` | `friends.read` | 创建有效期 60 秒的一次性 WebSocket 票据 |
 
-**可见范围 `visibility`（单选）**回答“谁能在联机大厅、好友列表或联机状态中发现这个房间”：`private`（仅房主与已在房内的对端）、`friends`（房主好友）、`public`（所有人）。
+**可见范围 `visibility`（单选）**回答“谁能发现或查看这个房间”：`private`（仅房主与已在房内的活跃对端；不会出现在联机大厅列表）、`friends`（房主好友）、`public`（所有人）。`GET /multiplayer/sessions` 是发现列表，始终不返回 `private` 会话；知道会话 ID 的房主或活跃对端仍可通过受权的单会话接口读取它。
 
 **加入权限 `join_policy`（单选）**回答“谁有资格加入”：`invite_only`（仅持有当前有效邀请或已批准加入请求的用户）、`friends`（房主好友）、`public`（所有通过基础登录、封禁、容量、会话状态检查的用户）。
 
@@ -129,7 +129,9 @@ Content-Type: application/json
 | `platform` | 是 | `web`、`launcher`、`lanlink`、`mindustry_mod`、`android` | 当前连接的客户端类型。 |
 | `status` | 否 | `online`、`idle`、`dnd`、`invisible` | 更新用户状态；省略时保留现有状态。 |
 
-响应为 `{"connection_id":"prs_…","heartbeat_interval":30,"expires_in":90}`。每个客户端实例应单独创建连接，并每 30 秒调用 `POST /api/v1/presence/connections/{id}/heartbeat`；90 秒没有心跳时连接过期。`PATCH /api/v1/presence/connections/{id}` 可只提交 `{"status":"idle"}`；DELETE 会结束该连接。心跳返回 `acknowledged`、`heartbeat_interval`、`expires_in`；删除返回 `removed`。
+响应为 `{"connection_id":"prs_…","heartbeat_interval":30,"expires_in":90}`。每个客户端实例应单独创建连接，并每 30 秒调用 `POST /api/v1/presence/connections/{id}/heartbeat`；90 秒没有心跳时连接过期。服务端没有额外的账号级并发连接数上限；创建接口仍受每用户或请求身份的限流规则约束。任意一条连接有效时账号在线；删除一个连接只结束该连接，所有连接均失效或删除后账号才离线。`status` 是账号级状态，设为 `invisible` 时所有设备对外都显示离线。
+
+`PATCH /api/v1/presence/connections/{id}` 可只提交 `{"status":"idle"}`；DELETE 会结束该连接。心跳返回 `acknowledged`、`heartbeat_interval`、`expires_in`；删除返回 `removed`。同一账号的富活动状态按所有有效连接合并，好友列表显示最近一次更新的那条活动。
 
 富活动状态由当前连接提交到 `PUT /api/v1/presence/connections/{id}/activity`：
 
@@ -151,12 +153,12 @@ Content-Type: application/json
 | `type` | 是 | `playing`、`hosting`、`editing`、`browsing`、`downloading`、`uploading`、`launcher`、`custom` | 活动状态类型。 |
 | `name` | 是 | 非空字符串，最多 160 字符 | 活动状态主标题。 |
 | `details` / `state` | 否 | 字符串，各最多 300 字符 | 次级文字与状态说明。 |
-| `game.id` | 有 `game` 时必填 | 字符串，最多 128 字符 | 游戏稳定标识。`game.version` 可选，最多 64 字符。 |
+| `game.id` | 有 `game` 时必填 | 字符串，最多 128 字符 | 游戏稳定标识；服务端不限定为 `mindustry`。`game.version` 可选，最多 64 字符。 |
 | `party.current` / `party.max` | 否 | 0–10000 整数 | 当前人数与队伍上限。 |
 | `timestamps.started_at` | 否 | 非负 Unix 秒 | 活动状态开始时间。 |
 | `join.session_id` | 否 | 当前用户活跃对端所属会话 ID | 允许好友查看时提供可加入会话；服务端会检查归属。 |
 
-活动状态的 `client_id`、`platform`、`updated_at` 由已认证连接补齐。第三方应用的名称、图标、开发者信息来自 MindAuth 审核后的应用资料，不能在活动状态请求体中伪造。`DELETE .../{id}/activity` 清除活动状态，响应为 `{"removed":true}`。
+活动状态的 `client_id`、`platform`、`updated_at` 由已认证连接补齐。第三方公开客户端可在获得 `presence.write` 并且站点开启在线状态、富活动开关后调用；活动是否对好友可见由账号的 `activity_visibility` 隐私设置决定。`join.session_id` 必须是该用户当前活跃对端所属的会话，服务端会验证归属。第三方应用的名称、图标、开发者信息来自 MindAuth 客户端公开资料，不能在活动状态请求体中伪造。`DELETE .../{id}/activity` 清除活动状态，响应为 `{"removed":true}`。
 
 ### 好友在线聚合
 
@@ -189,7 +191,7 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 | 字段 | 含义 |
 |---|---|
-| `user` | 好友公开资料；隐私策略不允许展示的资料不会借此接口泄漏。 |
+| `user` | 好友公开资料；隐私策略不允许展示的资料不会借此接口泄漏。`avatar_url` 可为 `null`；绝对 URL 原样使用，以 `/` 开头的站内路径相对于请求所用的 API origin 解析。 |
 | `presence.status` | `online`、`idle`、`dnd` 或 `offline`。隐藏或不可见状态按隐私策略显示为离线。 |
 | `presence.last_seen_at` | 可选 Unix 秒时间戳；只在设置允许且当前离线时出现。 |
 | `activity` | 富活动状态或 `null`。其中 `client` 是审核目录里的客户端公开资料；无权查看的活动或加入会话信息会被剔除。 |
@@ -287,7 +289,9 @@ Content-Type: application/json
 
 ### 联机大厅
 
-`GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话。`page` 从 1 起，`limit` 最大 50。返回值只包含 `visibility = public` 的会话、`visibility = friends` 且调用者是房主好友的会话，以及调用者自己已在房内的会话；`private` 会话永不出现。被任一方屏蔽的房主同样不会出现。响应中的会话对象与创建、查询接口同构（不含 `code_hash` 或中继内部字段），`current_players` 为实时占用人数。
+`GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话。`page` 从 1 起，`limit` 最大 50。可选 `game_id`、`game_version` 以精确匹配筛选游戏；空白值按未指定处理。返回值只包含 `visibility = public` 的会话，以及 `visibility = friends` 且调用者是房主好友的会话；`private` 会话永不出现在该发现列表中。被任一方屏蔽的房主同样不会出现。响应中的会话对象与创建、查询接口同构（不含 `code_hash` 或中继内部字段），`current_players` 为实时占用人数。
+
+当前会话模型没有模组清单字段，因此大厅暂不支持按模组筛选；客户端可按已有的 `game_id` 和 `game_version` 筛选。新增模组筛选前，需要先定义会话如何声明及验证模组标识。
 
 大厅只是发现入口：列表里的每个会话在实际加入时仍会走同一套加入鉴权，服务端返回的 `can_join` 才是最终结论。客户端不得根据列表可见性推断加入权限。
 
@@ -355,7 +359,22 @@ Content-Type: application/json
 
 ### 邀请与中继
 
-创建邀请的请求体为 `{"session_id":"ses_AbCdEf0123456789_-wxyz","target_user_id":456}`。`session_id` 必须属于当前活跃对端，`target_user_id` 是论坛用户整数 ID；邀请 5 分钟过期。目标用户 GET `/api/v1/multiplayer/invites` 收到的是数组，元素含 `invite_id`、`session_id`、`sender_user_id`、`target_user_id`、`status`、`expires_at` 和会话摘要 `session`。接受邀请返回 `join_intent`；拒绝/撤销不需要请求体，返回更新后的 `status`。
+创建邀请的请求体为 `{"session_id":"ses_AbCdEf0123456789_-wxyz","target_user_id":456}`。`session_id` 必须属于当前活跃对端，`target_user_id` 是论坛用户整数 ID；邀请 5 分钟过期。目标用户 GET `/api/v1/multiplayer/invites` 收到的是数组，元素含 `invite_id`、`session_id`、`sender_user_id`、`target_user_id`、`status`、`expires_at` 和会话摘要 `session`。
+
+`POST /api/v1/multiplayer/invites/{id}/accept` 接受邀请后**签发加入意图，不会直接把客户端加入会话**。成功响应的业务数据形状如下，外层仍是标准 `{data, meta}` 信封：
+
+```json
+{
+  "invite_id": "inv_AbCdEf0123456789_-wxyz",
+  "status": "accepted",
+  "join_intent": {
+    "intent_id": "jnt_AbCdEf0123456789_-wxyz",
+    "expires_in": 60
+  }
+}
+```
+
+客户端从 `data.join_intent.intent_id` 读取意图 ID，并调用 `POST /api/v1/multiplayer/join-intents/{intent_id}/consume`。拒绝或撤销不需要请求体，返回更新后的 `status`。重复接受在意图可恢复时返回相同的可用结果。
 
 公共中继分配 `POST /api/v1/multiplayer/sessions/{id}/relay` 不需要请求体，返回如下结构：
 
@@ -370,6 +389,8 @@ Content-Type: application/json
 ```
 
 `credential` 是短期秘密，只允许放入 WSS 第一条 AUTH 文本帧，不可放在 URL、查询参数、日志或分析事件里。中继凭证的时效、消费与撤销语义见[生命周期与时效](#生命周期与时效)，端到端接法见[第三方联机接入指南](./multiplayer-guide.md)。
+
+当前分配已由 Agent 确认并处于连接状态时，对端可在凭证到期前再次调用同一个 `POST /api/v1/multiplayer/sessions/{id}/relay` 续期。响应沿用相同的 `allocation_id` 和 Agent，并签发新的短期 `credential`；Agent 需使用原连接身份确认新凭证。若初次分配尚未确认、连接已断开或分配已过期，则不能用此路径续期，需按返回错误重新建立中继分配。
 
 中继 Agent 向论坛边缘提交中继状态时使用的机器接口与 `MULTIPLAYER_RELAY_MACHINE_CREDENTIAL` 凭证属于私有基础设施：它们不面向第三方客户端，不出现在公开 V1 OpenAPI 中，也不能被客户端代码依赖。第三方客户端与中继服务之间的公开契约只有本文件描述的凭证分配与数据通道部分。
 
@@ -394,11 +415,27 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 {"type":"resume","last_event_id":"1790758200000-0","sessions":{"ses_AbCdEf0123456789_-wxyz":"1790758200000-1"}}
 ```
 
-服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。每条事件包含 `id`、`event`、`timestamp`、`data`；用户和会话事件可分别订阅。事件流最多保留 600 秒，恢复最多补发 200 条；游标已过期或无法恢复时，客户端应重新读取快照。对端状态以 API 返回的最新会话和对端快照为准。
+服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。成功连接后会自动关联当前用户事件流；会话事件必须通过 `subscribe` 显式订阅。每条事件包含 `id`、`event`、`timestamp`、`data`。`data` 是供客户端定位变化的轻量通知，不保证携带完整资源；事件流最多保留 600 秒，恢复最多补发 200 条。600 秒是事件保留窗口，不是 WebSocket 连接时长上限。游标已过期或无法恢复时会收到 `resume_failed`（`reason: snapshot_required`），客户端应按事件资源重新读取快照。对端状态以 API 返回的最新会话和对端快照为准。
 
 连接与协议约束：票据校验失败以关闭码 4401 `AUTH_REQUIRED` 拒绝；来源与站点不同源时以 4403 `ORIGIN_DENIED` 拒绝。`subscribe` 最多同时订阅 32 个会话，且调用者必须是这些会话的活跃对端，否则对该会话返回 `error` 帧 `SESSION_PERMISSION_DENIED`。单条客户端消息上限 16 KiB，超过时由协议层关闭连接；无法解析的消息返回 `error` 帧（当前实现为通用 `ACTIVITY_INVALID`）。`hello` 中的 `client_id` 来自票据签发时的已认证客户端，客户端无法在帧内替换。
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
+
+常用用户事件的 `data` 字段如下；这些事件不包含完整好友、邀请或 Presence 对象：
+
+| 事件 | `data` 字段 | 获取完整当前状态 |
+|---|---|---|
+| `friend.request.created` | `request_id`、`requester_user_id` | `GET /api/v1/friends/requests` |
+| `friend.request.accepted` | `friendship_id`、`friend_user_id` | `GET /api/v1/friends` |
+| `friend.removed` | `user_id` | `GET /api/v1/friends` |
+| `presence.updated`、`activity.updated` | `user_id`、`status`；不会附带完整活动对象 | `GET /api/v1/social/friends/presence` |
+| `multiplayer.invite.created` | `invite_id`、`session_id`、`sender_user_id` | `GET /api/v1/multiplayer/invites` |
+| `multiplayer.invite.accepted`、`multiplayer.invite.revoked` | `invite_id`、`session_id` | 按需读取邀请或会话快照 |
+| `multiplayer.join_request.created` | `join_request_id`、`session_id`、`requester_user_id` | `GET /api/v1/multiplayer/join-requests` |
+| `multiplayer.join_request.approved` | `join_request_id`、`session_id`、`intent_id` | 直接消费 `intent_id`；不需要重新查意图 |
+| `multiplayer.join_request.rejected` | `join_request_id`、`session_id` | 重新读取对应会话或请求状态 |
+
+会话流事件包含定位所需的 `session_id`，对端事件包含 `peer_id`，候选事件包含 `candidate_id`；`candidate.created` 还带候选对象。`session.updated` 包含 `status`，进入关闭宽限期时还带 `grace_seconds`。`relay.allocated` / `relay.revoked` 包含 `session_id`、`peer_id` 和 `allocation_id`。收到会话流的 `resume_failed` 后，按需求读取 `GET /api/v1/multiplayer/sessions/{id}`、`.../peers` 或候选接口。
 
 `multiplayer.join_request.approved` 发给申请者的原 OAuth 客户端，`data` 包含 `join_request_id`、`session_id` 和可传给启动器的 `intent_id`。批准事件会在处理完成前重发；`intent_id` 在批准后 10 分钟失效。相同用户和客户端在结果恢复窗口内重新使用意图会得到相同结果。客户端只有在成功使用意图后才发送确认消息；崩溃后收到新事件 ID 时，可重复使用意图并恢复结果。
 

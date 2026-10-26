@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
@@ -11,6 +11,23 @@ import {
   RelayAgentRegisterDto, RelayAllocationAckDto, RelayAllocationRevokeDto, SetDefaultMultiplayerClientDto,
 } from './dto/multiplayer.dto';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
+
+const ACCEPT_INVITE_RESPONSE_SCHEMA: any = {
+  type: 'object',
+  required: ['invite_id', 'status', 'join_intent'],
+  properties: {
+    invite_id: { type: 'string', example: 'inv_AbCdEf0123456789_-wxyz', description: '已接受的邀请 ID。' },
+    status: { type: 'string', enum: ['accepted'], example: 'accepted', description: '邀请状态。' },
+    join_intent: {
+      type: 'object',
+      required: ['intent_id', 'expires_in'],
+      properties: {
+        intent_id: { type: 'string', example: 'jnt_AbCdEf0123456789_-wxyz', description: '传给 join-intents/{id}/consume 的一次性加入意图 ID。' },
+        expires_in: { type: 'integer', example: 60, description: '加入意图首次消费前剩余有效秒数。' },
+      },
+    },
+  },
+};
 
 @ApiV1()
 @ApiTags('联机会话')
@@ -112,6 +129,10 @@ export class MultiplayerV1Controller {
   @ApiTags('联机邀请')
   @MultiplayerOAuthProtected('multiplayer.write')
   @Post('invites/:id/accept')
+  @ApiOkResponse({
+    description: '成功响应使用标准 {data, meta} 信封；本 schema 描述 data 中的业务字段。接受邀请后客户端随后调用 POST /api/v1/multiplayer/join-intents/{intent_id}/consume。',
+    schema: ACCEPT_INVITE_RESPONSE_SCHEMA,
+  })
   acceptInvite(@Param('id') id: string, @Req() request: any) { return this.multiplayer.acceptInvite(request.user.id, id); }
 
   @ApiTags('联机邀请')

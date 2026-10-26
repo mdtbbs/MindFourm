@@ -104,6 +104,8 @@
 
 `GET /api/v1/me` 需要 `profile` 权限范围。首次在论坛建立账号只需 `profile`；邮箱权限范围独立可选。除了兼容字段外，响应增加 `verification.phone` 与 `permissions`：
 
+`avatar_url` 可能为 `null`；绝对 URL 可直接使用，以 `/` 开头的站内路径相对于请求所用的 API origin 解析。
+
 ```json
 {
   "verification": { "phone": true },

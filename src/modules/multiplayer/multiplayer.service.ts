@@ -380,19 +380,26 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
    * Rows are projected through `toPublicSession`, so relay internals, room-code
    * hashes and peer-level network data never leave the control plane.
    */
-  async listDiscoverableSessions(viewerId: number, options: { page?: number; limit?: number } = {}) {
+  async listDiscoverableSessions(viewerId: number, options: { page?: number; limit?: number; game_id?: string; game_version?: string } = {}) {
     await this.requireEnabled('multiplayer_sessions_v1');
     const page = Math.max(1, Math.floor(options.page ?? 1));
     const limit = Math.min(50, Math.max(1, Math.floor(options.limit ?? 20)));
     const now = new Date();
+    const gameId = options.game_id?.trim() || undefined;
+    const gameVersion = options.game_version?.trim() || undefined;
+
+    const criteria = (visibility: 'public' | 'friends') => ({
+      visibility,
+      status: 'active' as const,
+      expires_at: MoreThan(now),
+      ...(gameId ? { game_id: gameId } : {}),
+      ...(gameVersion ? { game_version: gameVersion } : {}),
+    });
 
     // A private Session is never listed, so the query can restrict itself to the
     // two discoverable scopes before doing any per-row work.
     const rows = await this.sessions.find({
-      where: [
-        { visibility: 'public', status: 'active', expires_at: MoreThan(now) },
-        { visibility: 'friends', status: 'active', expires_at: MoreThan(now) },
-      ],
+      where: [criteria('public'), criteria('friends')],
       order: { created_at: 'DESC' },
       // Page over the candidate set, then drop rows the viewer may not see. The
       // friend-scope rows are the only ones that need per-viewer filtering and a

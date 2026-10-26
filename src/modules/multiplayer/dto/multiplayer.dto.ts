@@ -46,6 +46,14 @@ export class CreateMultiplayerSessionDto {
 }
 
 export class ListMultiplayerSessionsDto {
+  @ApiPropertyOptional({ example: 'mindustry', maxLength: 128, description: '按游戏稳定 ID 精确筛选。' })
+  @IsOptional() @IsString() @MaxLength(128)
+  game_id?: string;
+
+  @ApiPropertyOptional({ example: 'v157', maxLength: 64, description: '按游戏版本精确筛选。' })
+  @IsOptional() @IsString() @MaxLength(64)
+  game_version?: string;
+
   @ApiPropertyOptional({ minimum: 1, example: 1, description: '页码，从 1 开始。' })
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   page?: number;

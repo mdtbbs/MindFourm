@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { OAuthProtected } from '../../common/decorators/oauth-protected.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
@@ -11,6 +11,65 @@ import { PresenceConnectionsService } from './presence-connections.service';
 import {
   CreatePresenceConnectionDto, FriendPresenceQueryDto, PatchPresenceConnectionDto, PutRichActivityDto,
 } from './dto/presence-v1.dto';
+
+const FRIEND_PRESENCE_RESPONSE_SCHEMA: any = {
+  type: 'object',
+  required: ['data', 'pagination'],
+  properties: {
+    data: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['user', 'presence', 'activity', 'actions'],
+        properties: {
+          user: {
+            type: 'object',
+            required: ['id', 'username', 'avatar_url'],
+            properties: {
+              id: { type: 'integer', example: 456 },
+              username: { type: 'string', example: 'friend' },
+              avatar_url: {
+                type: 'string', nullable: true, example: '/uploads/avatars/example.jpg',
+                description: '头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。',
+              },
+            },
+            additionalProperties: true,
+          },
+          presence: {
+            type: 'object',
+            required: ['status'],
+            properties: {
+              status: { type: 'string', enum: ['online', 'idle', 'dnd', 'offline'] },
+              last_seen_at: { type: 'integer', nullable: true, description: '允许展示时提供的 Unix 秒时间戳。' },
+            },
+          },
+          activity: { type: 'object', nullable: true, description: '当前可见的富活动状态；不可见或无活动时为 null。', additionalProperties: true },
+          actions: {
+            type: 'object',
+            required: ['can_join', 'can_request_join', 'can_invite', 'session_visible'],
+            properties: {
+              can_join: { type: 'boolean' },
+              can_request_join: { type: 'boolean' },
+              can_invite: { type: 'boolean' },
+              invite_session_id: { type: 'string' },
+              session_visible: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+    pagination: {
+      type: 'object',
+      required: ['page', 'limit', 'total', 'totalPages'],
+      properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' },
+      },
+    },
+  },
+};
 
 @ApiV1()
 @ApiTags('在线状态')
@@ -69,6 +128,7 @@ export class SocialFriendsPresenceV1Controller {
   @OAuthProtected('friends.read', 'presence.read')
   @Get()
   @RateLimit({ max: 60, window: 60 })
+  @ApiOkResponse({ description: '成功响应使用标准 {data, meta} 信封；本 schema 描述 data 中的分页业务对象，标准分页摘要同时位于 meta.pagination。', schema: FRIEND_PRESENCE_RESPONSE_SCHEMA })
   @ApiQuery({ name: 'page', required: false, type: Number, schema: { minimum: 1 }, example: 1, description: '好友列表页码，从 1 开始。' })
   @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 50, description: '每页好友数，最大 50。' })
   async list(@Query() query: FriendPresenceQueryDto, @Req() request: any) {
@@ -108,7 +168,7 @@ export class SocialFriendsPresenceV1Controller {
       } : null;
       const setting = settings.get(friend.id);
       return {
-        user: friend,
+        user: { ...friend, avatar_url: friend.avatar_url ?? null },
         presence: {
           status,
           ...(visible && setting?.show_last_seen && status === 'offline' && snapshot?.last_seen_at

@@ -161,7 +161,17 @@ Content-Type: application/json
 
 ## 保留策略的取值范围
 
-`GET /game-saves/quota` 返回的 `limit_bytes`、`max_file_size_bytes` 和管理端可改；`slots.limit`（每用户槽位上限）、`retention.max_unpinned_versions_per_slot` 和 `retention.max_unpinned_age_days` 由部署时的环境变量决定（`CLOUD_SAVES_MAX_SLOTS`、`CLOUD_SAVES_MAX_HISTORY_PER_SLOT`、`CLOUD_SAVES_RETENTION_DAYS`），修改后需重启服务。要拿到当前生效值，读这个接口，不要假设默认值。
+`GET /game-saves/quota` 的限制字段含义如下：
+
+| 字段 | 含义 |
+|---|---|
+| `limit_bytes` | 当前账号的总存储字节配额。 |
+| `max_file_size_bytes` | 单个上传文件/快照的最大字节数。 |
+| `slots.limit` | 当前账号可创建的存档槽数量上限；这是槽位数，不是账号内所有快照的总数上限。 |
+| `retention.max_unpinned_versions_per_slot` | 每个槽位最多保留的未固定历史快照数。 |
+| `retention.max_unpinned_age_days` | 未固定快照按年龄清理的保留天数。 |
+
+`limit_bytes`、`max_file_size_bytes` 可由管理端调整；`slots.limit`、`retention.max_unpinned_versions_per_slot` 和 `retention.max_unpinned_age_days` 由部署环境变量 `CLOUD_SAVES_MAX_SLOTS`、`CLOUD_SAVES_MAX_HISTORY_PER_SLOT`、`CLOUD_SAVES_RETENTION_DAYS` 控制，修改后需重启服务。要拿到当前生效值，读取此接口，不要假设默认值。云存档目前没有单独的“账号内快照总数上限”字段；总字节配额与每槽未固定历史策略共同约束快照数量。
 
 ## 功能可用性
 

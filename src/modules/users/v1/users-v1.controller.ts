@@ -37,7 +37,7 @@ const ME_SCHEMA: any = {
   properties: {
     id: { type: 'integer', example: 45, description: '当前论坛用户 ID。' },
     username: { type: 'string', example: 'builder', description: '用户名。' },
-    avatar_url: { type: 'string', nullable: true, example: null, description: '头像 URL。' },
+    avatar_url: { type: 'string', nullable: true, example: '/uploads/avatars/example.jpg', description: '头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。' },
     avatar_status: { type: 'string', example: 'approved', description: '头像审核状态。' },
     bio: { type: 'string', nullable: true, example: 'Mindustry 玩家', description: '个人简介。' },
     role: { type: 'string', example: 'user', description: '论坛角色。' },
@@ -64,7 +64,7 @@ const PUBLIC_USER_SCHEMA: any = {
   properties: {
     id: { type: 'integer', example: 45, description: '论坛用户 ID。' },
     username: { type: 'string', example: 'builder', description: '用户名。' },
-    avatar_url: { type: 'string', nullable: true, example: null, description: '头像 URL。' },
+    avatar_url: { type: 'string', nullable: true, example: '/uploads/avatars/example.jpg', description: '头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。' },
     avatar_status: { type: 'string', example: 'approved', description: '头像审核状态。' },
     bio: { type: 'string', nullable: true, example: 'Mindustry 玩家', description: '个人简介。' },
     role: { type: 'string', example: 'user', description: '论坛角色。' },

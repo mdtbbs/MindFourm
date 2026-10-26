@@ -603,6 +603,19 @@ describe('MultiplayerService lobby discovery', () => {
     }));
   });
 
+  it('applies optional game ID and version filters in the lobby query', async () => {
+    const service = createLobbyService({ sessions: [row('ses_public', 1, 'public')], occupying: [] });
+
+    await service.listDiscoverableSessions(7, { game_id: ' mindustry ', game_version: ' v157 ' });
+
+    expect(service.sessions.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: [
+        expect.objectContaining({ visibility: 'public', game_id: 'mindustry', game_version: 'v157' }),
+        expect.objectContaining({ visibility: 'friends', game_id: 'mindustry', game_version: 'v157' }),
+      ],
+    }));
+  });
+
   it('drops friend-scoped Sessions the viewer is not a friend of and blocked owners', async () => {
     const service = createLobbyService({
       sessions: [row('ses_friends', 2, 'friends'), row('ses_blocked', 3, 'public')],

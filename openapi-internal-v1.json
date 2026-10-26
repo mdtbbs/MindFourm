@@ -15830,8 +15830,8 @@
                     "avatar_url": {
                       "type": "string",
                       "nullable": true,
-                      "example": null,
-                      "description": "头像 URL。"
+                      "example": "/uploads/avatars/example.jpg",
+                      "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
                     },
                     "avatar_status": {
                       "type": "string",
@@ -16049,8 +16049,8 @@
                     "avatar_url": {
                       "type": "string",
                       "nullable": true,
-                      "example": null,
-                      "description": "头像 URL。"
+                      "example": "/uploads/avatars/example.jpg",
+                      "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
                     },
                     "avatar_status": {
                       "type": "string",
@@ -16152,8 +16152,8 @@
                     "avatar_url": {
                       "type": "string",
                       "nullable": true,
-                      "example": null,
-                      "description": "头像 URL。"
+                      "example": "/uploads/avatars/example.jpg",
+                      "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
                     },
                     "avatar_status": {
                       "type": "string",
@@ -16368,8 +16368,8 @@
                     "avatar_url": {
                       "type": "string",
                       "nullable": true,
-                      "example": null,
-                      "description": "头像 URL。"
+                      "example": "/uploads/avatars/example.jpg",
+                      "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
                     },
                     "avatar_status": {
                       "type": "string",
@@ -17933,6 +17933,138 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "成功响应使用标准 {data, meta} 信封；本 schema 描述 data 中的分页业务对象，标准分页摘要同时位于 meta.pagination。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "pagination"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "user",
+                          "presence",
+                          "activity",
+                          "actions"
+                        ],
+                        "properties": {
+                          "user": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "username",
+                              "avatar_url"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "integer",
+                                "example": 456
+                              },
+                              "username": {
+                                "type": "string",
+                                "example": "friend"
+                              },
+                              "avatar_url": {
+                                "type": "string",
+                                "nullable": true,
+                                "example": "/uploads/avatars/example.jpg",
+                                "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "presence": {
+                            "type": "object",
+                            "required": [
+                              "status"
+                            ],
+                            "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "online",
+                                  "idle",
+                                  "dnd",
+                                  "offline"
+                                ]
+                              },
+                              "last_seen_at": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "允许展示时提供的 Unix 秒时间戳。"
+                              }
+                            }
+                          },
+                          "activity": {
+                            "type": "object",
+                            "nullable": true,
+                            "description": "当前可见的富活动状态；不可见或无活动时为 null。",
+                            "additionalProperties": true
+                          },
+                          "actions": {
+                            "type": "object",
+                            "required": [
+                              "can_join",
+                              "can_request_join",
+                              "can_invite",
+                              "session_visible"
+                            ],
+                            "properties": {
+                              "can_join": {
+                                "type": "boolean"
+                              },
+                              "can_request_join": {
+                                "type": "boolean"
+                              },
+                              "can_invite": {
+                                "type": "boolean"
+                              },
+                              "invite_session_id": {
+                                "type": "string"
+                              },
+                              "session_visible": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "required": [
+                        "page",
+                        "limit",
+                        "total",
+                        "totalPages"
+                      ],
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "totalPages": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -18095,6 +18227,28 @@
           "multiplayer.read"
         ],
         "parameters": [
+          {
+            "name": "game_id",
+            "required": false,
+            "in": "query",
+            "description": "按游戏稳定 ID 精确筛选。",
+            "schema": {
+              "maxLength": 128,
+              "example": "mindustry",
+              "type": "string"
+            }
+          },
+          {
+            "name": "game_version",
+            "required": false,
+            "in": "query",
+            "description": "按游戏版本精确筛选。",
+            "schema": {
+              "maxLength": 64,
+              "example": "v157",
+              "type": "string"
+            }
+          },
           {
             "name": "page",
             "required": false,
@@ -18625,6 +18779,55 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "成功响应使用标准 {data, meta} 信封；本 schema 描述 data 中的业务字段。接受邀请后客户端随后调用 POST /api/v1/multiplayer/join-intents/{intent_id}/consume。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invite_id",
+                    "status",
+                    "join_intent"
+                  ],
+                  "properties": {
+                    "invite_id": {
+                      "type": "string",
+                      "example": "inv_AbCdEf0123456789_-wxyz",
+                      "description": "已接受的邀请 ID。"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "accepted"
+                      ],
+                      "example": "accepted",
+                      "description": "邀请状态。"
+                    },
+                    "join_intent": {
+                      "type": "object",
+                      "required": [
+                        "intent_id",
+                        "expires_in"
+                      ],
+                      "properties": {
+                        "intent_id": {
+                          "type": "string",
+                          "example": "jnt_AbCdEf0123456789_-wxyz",
+                          "description": "传给 join-intents/{id}/consume 的一次性加入意图 ID。"
+                        },
+                        "expires_in": {
+                          "type": "integer",
+                          "example": 60,
+                          "description": "加入意图首次消费前剩余有效秒数。"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -25069,7 +25272,7 @@
   "info": {
     "title": "MDTBBS Internal V1 API",
     "description": "Internal development contract. This specification may contain privileged operations and must not be exposed from the public developer portal. Third-party clients use the separately filtered Public Client V1 contract. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "contact": {}
   },
   "tags": [],

@@ -158,7 +158,7 @@ export class PresenceConnectionsService {
     const preferences = await this.preferences.findBy({ user_id: In(uniqueIds) });
     const preferenceByUser = new Map(preferences.map((item) => [item.user_id, item]));
     const indexByUser = new Map(uniqueIds.map((userId, index) => [userId, indices[index] || {}]));
-    const connectionIds = [...new Set(indices.flatMap((index) => Object.keys(index || {})))].slice(0, uniqueIds.length * 20);
+    const connectionIds = [...new Set(indices.flatMap((index) => Object.keys(index || {})))];
     const connectionValues = await this.redis.mget(...connectionIds.map(connectionKey));
     const connectionValueById = new Map(connectionIds.map((connectionId, index) => [connectionId, connectionValues[index]]));
     const liveByUser = new Map<number, PresenceConnectionRecord[]>();

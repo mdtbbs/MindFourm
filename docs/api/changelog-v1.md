@@ -1,5 +1,24 @@
 # 公开 API 更新记录
 
+## 2026-10-26 — Public API 1.8.0
+
+本次为现有 Public V1 行为补齐机器可读契约，并给联机大厅增加可选游戏筛选；不改变既有必填参数或身份语义。
+
+### Added
+
+- `GET /api/v1/multiplayer/sessions` 新增可选 `game_id` 与 `game_version` 精确筛选参数；原分页、隐私范围和 `current_players` 行为保持不变。
+- `POST /api/v1/multiplayer/invites/{id}/accept` 在 OpenAPI 中公开成功响应，明确 `join_intent.intent_id` 与 `expires_in`，并注明后续需调用 `join-intents/{id}/consume`。
+- `GET /api/v1/social/friends/presence` 在 OpenAPI 中公开分页成功响应，包含好友 `avatar_url` 字段及其空值语义。
+
+### Fixed
+
+- 好友 Presence 响应在资料来源未提供 `avatar_url` 时显式返回 `null`，避免 JSON 序列化省略必需字段。
+- Presence 快照不再丢弃每个账号第 20 条之后的连接索引，避免有效设备连接被误判为过期。
+
+### Clarified
+
+- 头像路径以当前 API origin 为基准；实时事件 payload 是轻量变更通知；多设备在线、第三方活动状态、会话筛选和已连接 Relay 续期语义见多人联机 API 指南。云存档配额字段含义见云存档 API 指南。
+
 ## 2026-10-18 — 资源上传后台完成与进度查询
 
 - `POST /api/v1/resources/uploads/complete` 新增可选布尔字段 `background`。为 `true` 时将校验加入 Redis 队列并快速返回 `completed: false`、`session_id`、`status: processing` 和 `poll_after_ms`；省略或为 `false` 保持原同步契约。
