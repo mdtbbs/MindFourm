@@ -48,6 +48,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | GET | `/api/v1/friends/requests` | `friends.read` | 待处理请求 |
 | POST | `/api/v1/friends/requests/{id}/accept`、`.../{id}/reject` | `friends.read` | 接受/拒绝好友请求 |
 | DELETE | `/api/v1/friends/{userId}` | `friends.read` | 删除好友 |
+| GET | `/api/v1/users/search?q=builder&limit=10` | `friends.read` | 搜索非好友公开用户；排除自己、好友及屏蔽关系 |
 | GET/POST/DELETE | `/api/v1/blocks`、`/api/v1/users/{id}/block` | `friends.read` | 查询、屏蔽和解除屏蔽 |
 | POST | `/api/v1/presence/connections` | `presence.write` | 创建在线连接 |
 | PATCH/DELETE | `/api/v1/presence/connections/{id}` | `presence.write` | 更新或删除在线连接 |
@@ -56,7 +57,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | GET/PATCH | `/api/v1/multiplayer/preferences` | `multiplayer.read` / `multiplayer.write` | 读取/设置用户默认加入意图客户端 |
 | GET | `/api/v1/multiplayer/capabilities` | `multiplayer.read` | 多人联机能力与约束 |
 | GET | `/api/v1/multiplayer/sessions` | `multiplayer.read` | 公开联机大厅；按可见范围列出可发现的会话（`page`/`limit`，最多 50/页） |
-| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；可选可见范围、join_policy、require_approval、max_players |
+| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；每账号最多一个活跃会话 |
 | GET | `/api/v1/multiplayer/sessions/{id}`、`.../{id}/peers` | `multiplayer.read` | 查询可见会话和对端 |
 | POST | `/api/v1/multiplayer/sessions/resolve-code` | `multiplayer.read` | 解析不公开会话加入码 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join`、`.../{id}/leave` | `multiplayer.write` | 加入/退出或用绑定的恢复令牌恢复对端 |
@@ -65,7 +66,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | GET | `/api/v1/multiplayer/sessions/{id}/peers/{peerId}/candidates` | `multiplayer.read` | 读取对端候选地址 |
 | DELETE | `/api/v1/multiplayer/sessions/{id}/candidates/{candidateId}` | `multiplayer.write` | 删除候选地址 |
 | POST | `/api/v1/multiplayer/invites` | `multiplayer.write` | 创建邀请 |
-| GET | `/api/v1/multiplayer/invites` | `multiplayer.read` | 列出自己的邀请 |
+| GET | `/api/v1/multiplayer/invites?page=1&limit=50` | `multiplayer.read` | 分页列出收到的待处理邀请 |
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 处理邀请；接受返回加入意图 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入 `join_policy=request` 的会话 |
 | POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 房主批准/拒绝；批准返回 10 分钟有效、绑定申请者 OAuth 客户端的加入意图 |
@@ -129,7 +130,9 @@ Content-Type: application/json
 | `platform` | 是 | `web`、`launcher`、`lanlink`、`mindustry_mod`、`android` | 当前连接的客户端类型。 |
 | `status` | 否 | `online`、`idle`、`dnd`、`invisible` | 更新用户状态；省略时保留现有状态。 |
 
-响应为 `{"connection_id":"prs_…","heartbeat_interval":30,"expires_in":90}`。每个客户端实例应单独创建连接，并每 30 秒调用 `POST /api/v1/presence/connections/{id}/heartbeat`；90 秒没有心跳时连接过期。服务端没有额外的账号级并发连接数上限；创建接口仍受每用户或请求身份的限流规则约束。任意一条连接有效时账号在线；删除一个连接只结束该连接，所有连接均失效或删除后账号才离线。`status` 是账号级状态，设为 `invisible` 时所有设备对外都显示离线。
+响应为 `{"connection_id":"prs_…","heartbeat_interval":30,"expires_in":90}`。每个客户端实例应单独创建连接，并每 30 秒调用 `POST /api/v1/presence/connections/{id}/heartbeat`；90 秒没有心跳时连接过期。每账号最多 32 条有效 Presence 连接；超限返回 `409 PRESENCE_CONNECTION_LIMIT_REACHED`。任意一条连接有效时账号在线；删除一个连接只结束该连接，所有连接均失效或删除后账号才离线。`status` 是账号级状态，设为 `invisible` 时所有设备对外都显示离线。
+
+公开头像路径可附加 `?size=32`、`?size=64` 或 `?size=128` 获取等比裁切后的 WebP 缩略图；省略 `size` 时仍返回原文件。缩略图带缓存头，头像文件名变化后客户端应使用资料中的新 URL。
 
 `PATCH /api/v1/presence/connections/{id}` 可只提交 `{"status":"idle"}`；DELETE 会结束该连接。心跳返回 `acknowledged`、`heartbeat_interval`、`expires_in`；删除返回 `removed`。同一账号的富活动状态按所有有效连接合并，好友列表显示最近一次更新的那条活动。
 
@@ -219,7 +222,16 @@ Authorization: Bearer <ACCESS_TOKEN>
   "visibility_join_policy_combinations": ["private+invite_only","private+friends","private+public","friends+invite_only","friends+friends","friends+public","public+invite_only","public+friends","public+public"],
   "require_approval": true,
   "transports": ["udp","tcp","quic","custom"],
-  "relay_credential_ttl_seconds": 120
+  "relay_credential_ttl_seconds": 120,
+  "limits": {
+    "max_active_sessions_per_user": 1,
+    "max_players_per_session": 64,
+    "max_pending_invites_per_sender": 50,
+    "max_pending_invites_per_session_target": 1,
+    "max_presence_connections_per_user": 32,
+    "max_lobby_page_size": 50,
+    "max_realtime_session_subscriptions": 32
+  }
 }
 ```
 
@@ -255,6 +267,8 @@ Content-Type: application/json
 
 创建响应包含 `session`、`peer`、`resume_token`；`join_policy = public` 的会话还包含一次性展示的 `join_code`。立即安全保存 `resume_token`；它绑定用户和 OAuth `client_id`、只能使用一次，断线恢复后会旋转出新令牌。
 
+每个账号最多有一个 `active` 会话。再次创建时返回 HTTP 409 `SESSION_ALREADY_ACTIVE`，`error.details[0].session_id` 指向现有会话；客户端可打开该会话或结束后再建房。重复提交同一 `session_id` 与 `target_user_id` 的邀请时，如果仍有未过期邀请，服务端幂等返回原邀请且不再创建通知。每个发送者最多保留 50 个待处理邀请；超限返回 409 `INVITE_LIMIT_REACHED`，`error.details[0].retry_after_seconds` 表示最早何时可重试。每个 Presence 账号最多 32 条有效连接；这些限制也会出现在 `GET /multiplayer/capabilities.limits`。
+
 ```json
 {
   "session": {
@@ -289,11 +303,20 @@ Content-Type: application/json
 
 ### 联机大厅
 
-`GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话。`page` 从 1 起，`limit` 最大 50。可选 `game_id`、`game_version` 以精确匹配筛选游戏；空白值按未指定处理。返回值只包含 `visibility = public` 的会话，以及 `visibility = friends` 且调用者是房主好友的会话；`private` 会话永不出现在该发现列表中。被任一方屏蔽的房主同样不会出现。响应中的会话对象与创建、查询接口同构（不含 `code_hash` 或中继内部字段），`current_players` 为实时占用人数。
+`GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话数组。`page` 从 1 起，`limit` 最大 50。可选 `game_id`、`game_version` 以精确匹配筛选游戏；空白值按未指定处理。返回值只包含 `visibility = public` 的会话，以及 `visibility = friends` 且调用者是房主好友或该会话活跃对端的会话；`private` 会话永不出现在该发现列表中。被任一方屏蔽的房主同样不会出现。每个会话对象含 `joinable`（调用者可直接加入）、`blocked_reason`（`null`、`ALREADY_IN_SESSION`、`PRIVACY_DENIED`、`SESSION_NOT_JOINABLE`、`FRIEND_REQUIRED`、`SESSION_FULL` 或 `JOIN_REQUEST_REQUIRED`）和 `can_request_join`（是否可请求审批）。`current_players` 为实时占用人数。
+
+`GET /api/v1/multiplayer/invites?page=1&limit=50` 同样返回邀请数组，默认每页 50、最大 50。两类列表都使用标准 `{data, meta}` 信封，`data` 始终是数组；分页摘要放在 `meta.pagination`（`page`、`limit`、`total`、`total_pages`、`has_more`）。例如：
+
+```json
+{
+  "data": [{ "id": "ses_AbCdEf0123456789_-wxyz", "joinable": true, "blocked_reason": null }],
+  "meta": { "request_id": "req_...", "pagination": { "page": 1, "limit": 20, "total": 1, "total_pages": 1, "has_more": false } }
+}
+```
 
 当前会话模型没有模组清单字段，因此大厅暂不支持按模组筛选；客户端可按已有的 `game_id` 和 `game_version` 筛选。新增模组筛选前，需要先定义会话如何声明及验证模组标识。
 
-大厅只是发现入口：列表里的每个会话在实际加入时仍会走同一套加入鉴权，服务端返回的 `can_join` 才是最终结论。客户端不得根据列表可见性推断加入权限。
+大厅只是发现入口：列表里的每个会话在实际加入时仍会走同一套加入鉴权，`joinable` 是列表生成时的策略快照，加入接口仍会重新鉴权。客户端不得根据列表可见性推断加入权限。
 
 ### 解析、加入、退出和恢复
 
@@ -406,36 +429,56 @@ Content-Type: application/json
 
 ## WebSocket 实时事件
 
-WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `hello` 含心跳间隔。客户端发送：
+WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `hello.heartbeat_interval` 是建议发送间隔（当前 15 秒），不是服务端空闲超时。连接成功后立即发一次 `heartbeat`，此后按建议间隔发送；服务端回复 `heartbeat_ack`。Presence HTTP 心跳是独立机制，仍为 30 秒/90 秒租期。客户端发送：
 
 ```json
 {"type":"heartbeat"}
 {"type":"subscribe","sessions":["ses_AbCdEf0123456789_-wxyz"]}
 {"type":"ack","stream":"user","id":"1790758200000-0"}
+{"type":"ack","stream":"session","session_id":"ses_AbCdEf0123456789_-wxyz","id":"1790758200000-1"}
 {"type":"resume","last_event_id":"1790758200000-0","sessions":{"ses_AbCdEf0123456789_-wxyz":"1790758200000-1"}}
 ```
 
 服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。成功连接后会自动关联当前用户事件流；会话事件必须通过 `subscribe` 显式订阅。每条事件包含 `id`、`event`、`timestamp`、`data`。`data` 是供客户端定位变化的轻量通知，不保证携带完整资源；事件流最多保留 600 秒，恢复最多补发 200 条。600 秒是事件保留窗口，不是 WebSocket 连接时长上限。游标已过期或无法恢复时会收到 `resume_failed`（`reason: snapshot_required`），客户端应按事件资源重新读取快照。对端状态以 API 返回的最新会话和对端快照为准。
 
-连接与协议约束：票据校验失败以关闭码 4401 `AUTH_REQUIRED` 拒绝；来源与站点不同源时以 4403 `ORIGIN_DENIED` 拒绝。`subscribe` 最多同时订阅 32 个会话，且调用者必须是这些会话的活跃对端，否则对该会话返回 `error` 帧 `SESSION_PERMISSION_DENIED`。单条客户端消息上限 16 KiB，超过时由协议层关闭连接；无法解析的消息返回 `error` 帧（当前实现为通用 `ACTIVITY_INVALID`）。`hello` 中的 `client_id` 来自票据签发时的已认证客户端，客户端无法在帧内替换。
+连接与协议约束：票据校验失败以关闭码 4401 `AUTH_REQUIRED` 拒绝；来源与站点不同源时以 4403 `ORIGIN_DENIED` 拒绝。每个 WebSocket 连接最多同时订阅 32 个会话，调用者必须是每个会话的活跃对端；无权订阅时返回 `SESSION_PERMISSION_DENIED`，超过上限时返回 `SESSION_SUBSCRIPTION_LIMIT_REACHED`，该订阅不会生效。单条客户端消息上限 16 KiB，超过时由协议层关闭连接；无法解析的消息返回 `error` 帧（当前实现为通用 `ACTIVITY_INVALID`）。`hello` 中的 `client_id` 来自票据签发时的已认证客户端，客户端无法在帧内替换。
+
+每个交付的 `event` 帧都保证带非空游标 `id`、事件名 `event`、Unix 毫秒时间戳 `timestamp`、`data` 和来源 stream。`id` 只在对应的 user 或 session stream 中有序；断线恢复时按 stream 分别保存和提交游标。普通事件无需 ACK 才能送达，ACK 不改变 600 秒事件保留窗口。服务端接受 user 与 session stream 的 ACK，但只有 `multiplayer.join_request.approved` 的 user ACK 会确认持久化批准通知；其他 ACK 不改变事件保留、重放或业务状态。客户端应持久化最后处理的游标，并在 `resume` 中提交。对批准事件，客户端先成功消费 `intent_id` 并持久化游标，再 ACK；未 ACK 的批准事件会被重发，客户端可在结果恢复窗口内重复消费同一意图。
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
-常用用户事件的 `data` 字段如下；这些事件不包含完整好友、邀请或 Presence 对象：
+每个事件帧中的 `id` 都由服务端生成并保证存在；下表给出各用户流事件的确切 `data` 形状。用户事件不包含完整好友、邀请或 Presence 对象：
 
-| 事件 | `data` 字段 | 获取完整当前状态 |
+| 事件 | `data` JSON 示例 | 获取完整当前状态 |
 |---|---|---|
-| `friend.request.created` | `request_id`、`requester_user_id` | `GET /api/v1/friends/requests` |
-| `friend.request.accepted` | `friendship_id`、`friend_user_id` | `GET /api/v1/friends` |
-| `friend.removed` | `user_id` | `GET /api/v1/friends` |
-| `presence.updated`、`activity.updated` | `user_id`、`status`；不会附带完整活动对象 | `GET /api/v1/social/friends/presence` |
-| `multiplayer.invite.created` | `invite_id`、`session_id`、`sender_user_id` | `GET /api/v1/multiplayer/invites` |
-| `multiplayer.invite.accepted`、`multiplayer.invite.revoked` | `invite_id`、`session_id` | 按需读取邀请或会话快照 |
-| `multiplayer.join_request.created` | `join_request_id`、`session_id`、`requester_user_id` | `GET /api/v1/multiplayer/join-requests` |
-| `multiplayer.join_request.approved` | `join_request_id`、`session_id`、`intent_id` | 直接消费 `intent_id`；不需要重新查意图 |
-| `multiplayer.join_request.rejected` | `join_request_id`、`session_id` | 重新读取对应会话或请求状态 |
+| `friend.request.created` | `{"request_id":42,"requester_user_id":123}` | `GET /api/v1/friends/requests` |
+| `friend.request.accepted` | `{"friendship_id":42,"friend_user_id":123}` | `GET /api/v1/friends` |
+| `friend.removed` | `{"user_id":123}` | `GET /api/v1/friends` |
+| `presence.updated`、`activity.updated` | `{"user_id":123,"status":"online"}`；不会附带完整活动对象 | `GET /api/v1/social/friends/presence` |
+| `multiplayer.invite.created` | `{"invite_id":"inv_…","session_id":"ses_…","sender_user_id":123}` | `GET /api/v1/multiplayer/invites` |
+| `multiplayer.invite.accepted`、`multiplayer.invite.revoked` | `{"invite_id":"inv_…","session_id":"ses_…"}` | 按需读取邀请或会话快照 |
+| `multiplayer.join_request.created` | `{"join_request_id":"jrq_…","session_id":"ses_…","requester_user_id":123}` | `GET /api/v1/multiplayer/join-requests` |
+| `multiplayer.join_request.approved` | `{"join_request_id":"jrq_…","session_id":"ses_…","intent_id":"jnt_…"}` | 直接消费 `intent_id`；不需要重新查意图 |
+| `multiplayer.join_request.rejected` | `{"join_request_id":"jrq_…","session_id":"ses_…"}` | 重新读取对应会话或请求状态 |
+| `session.updated`（房主用户流） | `{"session_id":"ses_…","status":"active"}` | `GET /api/v1/multiplayer/sessions/{id}` |
 
 会话流事件包含定位所需的 `session_id`，对端事件包含 `peer_id`，候选事件包含 `candidate_id`；`candidate.created` 还带候选对象。`session.updated` 包含 `status`，进入关闭宽限期时还带 `grace_seconds`。`relay.allocated` / `relay.revoked` 包含 `session_id`、`peer_id` 和 `allocation_id`。收到会话流的 `resume_failed` 后，按需求读取 `GET /api/v1/multiplayer/sessions/{id}`、`.../peers` 或候选接口。
+
+会话流事件 `data` 的形状如下：
+
+| 事件 | `data` 示例 |
+|---|---|
+| `session.updated` | `{"session_id":"ses_…","status":"closing","grace_seconds":60}`；正常创建或恢复时 `status` 也可能为 `active` |
+| `session.closed` | `{"session_id":"ses_…","status":"closed"}` |
+| `peer.joined` | `{"session_id":"ses_…","peer_id":"peer_…","user_id":123}` |
+| `peer.updated` | `{"session_id":"ses_…","peer_id":"peer_…","status":"active"}` 或 `status:"expired"` |
+| `peer.disconnected`、`peer.left` | `{"session_id":"ses_…","peer_id":"peer_…"}` |
+| `candidate.created` | `{"session_id":"ses_…","peer_id":"peer_…","candidate_id":"cnd_…","candidate":{"kind":"public","transport":"udp","address":"203.0.113.10","port":6567}}` |
+| `candidate.removed` | `{"session_id":"ses_…","peer_id":"peer_…","candidate_id":"cnd_…"}` |
+| `relay.allocated` | `{"session_id":"ses_…","peer_id":"peer_…","allocation_id":"rly_…","agent_id":"official-cn-1"}` |
+| `relay.revoked` | `{"session_id":"ses_…","peer_id":"peer_…","allocation_id":"rly_…"}` |
+
+生命周期通知清单是 `session.updated`、`session.closed`、`peer.disconnected`、`peer.left` 和 `peer.updated`（过期时 `status: expired`）。房主退出或断线进入关闭宽限期时收到 `session.updated`；宽限期结束收到 `session.closed`。如果实时通道不可用，客户端仍需读取 API 快照；没有收到事件不表示状态未变化。
 
 `multiplayer.join_request.approved` 发给申请者的原 OAuth 客户端，`data` 包含 `join_request_id`、`session_id` 和可传给启动器的 `intent_id`。批准事件会在处理完成前重发；`intent_id` 在批准后 10 分钟失效。相同用户和客户端在结果恢复窗口内重新使用意图会得到相同结果。客户端只有在成功使用意图后才发送确认消息；崩溃后收到新事件 ID 时，可重复使用意图并恢复结果。
 
@@ -498,7 +541,7 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 
 ## 错误码
 
-稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
+稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`PRESENCE_CONNECTION_LIMIT_REACHED`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_ALREADY_ACTIVE`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_LIMIT_REACHED`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
 
 客户端依据 `error.code` 和 HTTP 状态处理错误，不依赖提示文字。主要码的语义：
 
@@ -508,6 +551,9 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 | `INSUFFICIENT_SCOPE` | 403 | 否 | 用户重新授权补 scope |
 | `CLIENT_CAPABILITY_NOT_APPROVED` | 403 | 否 | 等待或修订应用审核状态 |
 | `FEATURE_DISABLED` | 403 | 否 | 站点未开放，隐藏入口 |
+| `SESSION_CLOSED` / `SESSION_EXPIRED` | 404 | 否 | 终态业务响应；结束本地会话状态，不要重试该会话 |
+| `SESSION_ALREADY_ACTIVE` | 409 | 否 | `error.details[0].session_id` 指向账号已有会话 |
+| `INVITE_LIMIT_REACHED` / `PRESENCE_CONNECTION_LIMIT_REACHED` | 409 | 否 | 先等待邀请过期或关闭已有 Presence 连接 |
 | `SESSION_FULL` | 409 | 否 | 换会话或稍后重试 |
 | `SESSION_NOT_JOINABLE` / `JOIN_REQUEST_REQUIRED` | 400 / 409 | 否 | 换加入路径（邀请或审批） |
 | `PEER_RESUME_INVALID` | 403 | 否 | 恢复令牌单次消费，不得重放 |
@@ -519,6 +565,8 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 | `RATE_LIMITED` | 429 | 是 | 至少等待 `Retry-After` |
 
 个别路由可能在该码的注册状态之外返回 404（例如删除不存在的候选返回 404 `CANDIDATE_INVALID`）。控制流按 `error.code`，状态码只作辅助判断。
+
+如果客户端没有收到 HTTP 响应（例如 DNS、TLS、连接重置或超时），这属于传输层失败；不会有 `{error, meta}`、业务 `error.code` 或服务端 `request_id`。有 HTTP 响应时才按 V1 信封、HTTP 状态和 `error.retryable` 分流。传输失败的写请求结果可能未知：对幂等邀请可安全重试；建房重试若收到 `SESSION_ALREADY_ACTIVE`，应读取 details 中的现有 `session_id`。
 
 ## 客户端恢复
 

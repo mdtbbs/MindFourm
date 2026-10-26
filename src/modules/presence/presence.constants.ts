@@ -1,0 +1,1 @@
+export const MAX_PRESENCE_CONNECTIONS_PER_USER = 32;

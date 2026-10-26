@@ -144,7 +144,7 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 ## 错误处理、重试与幂等
 
-统一按 HTTP 状态与稳定 `error.code` 处理，不解析 `message`。联机全部稳定错误码、HTTP 状态与是否可重试，见[多人联机 API V1 的错误码表](./multiplayer-v1.md#错误码)。
+有 HTTP 响应时统一按 HTTP 状态、稳定 `error.code` 和 `error.retryable` 处理，不解析 `message`。没有 HTTP 响应（DNS、TLS、连接重置、超时）就是传输层失败，不应伪造业务异常或业务错误码。联机全部稳定错误码、HTTP 状态与是否可重试，见[多人联机 API V1 的错误码表](./multiplayer-v1.md#错误码)。
 
 重试纪律：
 

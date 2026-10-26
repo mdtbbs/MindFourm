@@ -393,6 +393,10 @@ export class FriendsService {
     const qb = this.userRepo.createQueryBuilder('user')
       .where('user.username LIKE :search', { search: `%${escapeLike(query)}%` })
       .andWhere('user.id NOT IN (:...excludeIds)', { excludeIds: [...excludeIds] })
+      .andWhere(`NOT EXISTS (
+        SELECT 1 FROM user_blocks user_block
+        WHERE user_block.blocker_id = user.id AND user_block.blocked_id = :viewerId
+      )`, { viewerId: userId })
       .orderBy('user.username', 'ASC')
       .take(cappedLimit);
 

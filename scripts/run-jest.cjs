@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 // needs fresh processes: a single ts-jest process can exceed the 1 GiB limit
 // even with collection between files, on both Node 20 CI and Node 24 production.
 const fullSuite = args.length === 0 || (args.length === 1 && args[0] === '--runInBand');
-const batchCount = 8;
+const batchCount = 16;
 const batches = fullSuite
   ? Array.from({ length: batchCount }, (_, index) => ['--runInBand', `--shard=${index + 1}/${batchCount}`])
   : [args];

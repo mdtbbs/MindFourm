@@ -24,6 +24,7 @@ import { DataSource } from 'typeorm';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { clientContextMiddleware } from './common/middleware/client-context.middleware';
+import { avatarVariantMiddleware } from './common/middleware/avatar-variant.middleware';
 import { SwaggerModule } from '@nestjs/swagger';
 import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { registerOpenApiJsonRoutes } from './openapi/register-openapi-json-routes';
@@ -156,6 +157,9 @@ async function bootstrap() {
   });
 
   app.use(csrfMiddleware);
+  // Handle only thumbnail requests here; requests without `size` continue to
+  // the existing static avatar mount registered by ServeStaticModule.
+  app.use('/uploads/avatars', avatarVariantMiddleware);
 
   // Global pipes
   app.useGlobalPipes(

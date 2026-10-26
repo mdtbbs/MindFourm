@@ -16998,6 +16998,162 @@
         }
       }
     },
+    "/v1/users/search": {
+      "get": {
+        "operationId": "UsersV1Controller_searchPublicUsers",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "friends.read"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "按用户名搜索。",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "最多返回数量，默认 10，最大 50。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "标准成功信封；data 是不含调用者自身、好友及屏蔽用户的公开用户数组。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "username",
+                          "avatar_url",
+                          "avatar_status",
+                          "bio",
+                          "role",
+                          "post_count",
+                          "reply_count",
+                          "created_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "example": 45,
+                            "description": "论坛用户 ID。"
+                          },
+                          "username": {
+                            "type": "string",
+                            "example": "builder",
+                            "description": "用户名。"
+                          },
+                          "avatar_url": {
+                            "type": "string",
+                            "nullable": true,
+                            "example": "/uploads/avatars/example.jpg",
+                            "description": "头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。"
+                          },
+                          "avatar_status": {
+                            "type": "string",
+                            "example": "approved",
+                            "description": "头像审核状态。"
+                          },
+                          "bio": {
+                            "type": "string",
+                            "nullable": true,
+                            "example": "Mindustry 玩家",
+                            "description": "个人简介。"
+                          },
+                          "role": {
+                            "type": "string",
+                            "example": "user",
+                            "description": "论坛角色。"
+                          },
+                          "post_count": {
+                            "type": "integer",
+                            "example": 12,
+                            "description": "讨论数。"
+                          },
+                          "reply_count": {
+                            "type": "integer",
+                            "example": 34,
+                            "description": "回复数。"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-01-01T00:00:00.000Z",
+                            "description": "账号创建时间。"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "request_id"
+                      ],
+                      "properties": {
+                        "request_id": {
+                          "type": "string",
+                          "example": "req_..."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-users"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/users/{id}": {
       "get": {
         "operationId": "UsersV1Controller_getPublic",
@@ -19588,6 +19744,128 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "标准成功信封；data 是数组，分页摘要位于 meta.pagination。每项包含调用者可发现的会话与加入判定。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "current_players",
+                          "max_players",
+                          "joinable",
+                          "blocked_reason",
+                          "can_request_join"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "ses_AbCdEf0123456789_-wxyz"
+                          },
+                          "owner_user_id": {
+                            "type": "integer"
+                          },
+                          "visibility": {
+                            "type": "string"
+                          },
+                          "join_policy": {
+                            "type": "string"
+                          },
+                          "require_approval": {
+                            "type": "boolean"
+                          },
+                          "game": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "activity_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "current_players": {
+                            "type": "integer"
+                          },
+                          "max_players": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "joinable": {
+                            "type": "boolean",
+                            "description": "当前调用者能否直接加入。"
+                          },
+                          "blocked_reason": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "不能直接加入时的稳定原因码。"
+                          },
+                          "can_request_join": {
+                            "type": "boolean",
+                            "description": "是否可改为请求房主批准。"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "request_id",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "request_id": {
+                          "type": "string",
+                          "example": "req_..."
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "total_pages",
+                            "has_more"
+                          ],
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "total_pages": {
+                              "type": "integer"
+                            },
+                            "has_more": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -20161,8 +20439,128 @@
         "x-required-scopes": [
           "multiplayer.read"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始。",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页邀请数，最大 50。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "example": 50,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "标准成功信封；data 是数组，分页摘要位于 meta.pagination。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "invite_id",
+                          "session_id",
+                          "sender_user_id",
+                          "target_user_id",
+                          "status",
+                          "expires_at"
+                        ],
+                        "properties": {
+                          "invite_id": {
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "type": "string"
+                          },
+                          "sender_user_id": {
+                            "type": "integer"
+                          },
+                          "target_user_id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "session": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": true
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "request_id",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "request_id": {
+                          "type": "string",
+                          "example": "req_..."
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "total_pages",
+                            "has_more"
+                          ],
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "total_pages": {
+                              "type": "integer"
+                            },
+                            "has_more": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },

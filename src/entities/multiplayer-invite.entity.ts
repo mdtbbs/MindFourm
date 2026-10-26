@@ -5,6 +5,8 @@ import { MultiplayerSession } from './multiplayer-session.entity';
 @Entity('multiplayer_invites')
 @Index('idx_multiplayer_invites_target_status_expiry', ['target_user_id', 'status', 'expires_at'])
 @Index('idx_multiplayer_invites_session_status', ['session_id', 'status'])
+@Index('idx_multiplayer_invites_sender_status_expiry', ['sender_user_id', 'status', 'expires_at'])
+@Index('idx_multiplayer_invites_session_target_status_expiry', ['session_id', 'target_user_id', 'status', 'expires_at'])
 export class MultiplayerInvite {
   @PrimaryColumn({ type: 'varchar', length: 48 })
   id: string;

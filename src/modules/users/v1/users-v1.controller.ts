@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, Put, Req, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Get, Optional, Param, ParseIntPipe, Post, Put, Query, Req, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { UsersService } from '../users.service';
@@ -8,6 +8,9 @@ import { avatarUploadInterceptor, cleanupUploadedFile } from '../users.controlle
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { V1PermissionResolverService } from './v1-permission-resolver.service';
 import { AllowBannedUser } from '../../../common/decorators/allow-banned-user.decorator';
+import { FriendsService } from '../../friends/friends.service';
+import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
+import { SearchPublicUsersDto } from '../dto/search-public-users.dto';
 
 export type V1MeDto = {
   id: number;
@@ -78,7 +81,11 @@ const PUBLIC_USER_SCHEMA: any = {
 @ApiTags('v1-users')
 @Controller('v1')
 export class UsersV1Controller {
-  constructor(private readonly usersService: UsersService, private readonly permissionResolver: V1PermissionResolverService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly permissionResolver: V1PermissionResolverService,
+    @Optional() private readonly friendsService?: FriendsService,
+  ) {}
 
   @Get('me')
   @AllowBannedUser()
@@ -89,6 +96,22 @@ export class UsersV1Controller {
     if (!userId) throw new UnauthorizedException('Not authenticated');
     const user = await this.usersService.getById(userId);
     return this.toMe(user, req.authContext);
+  }
+
+  @Get('users/search')
+  @OAuthProtected('friends.read')
+  @RateLimit({ max: 30, window: 60 })
+  @ApiOkResponse({ description: '标准成功信封；data 是不含调用者自身、好友及屏蔽用户的公开用户数组。', schema: {
+    type: 'object', required: ['data', 'meta'], properties: {
+      data: { type: 'array', items: PUBLIC_USER_SCHEMA },
+      meta: { type: 'object', required: ['request_id'], properties: { request_id: { type: 'string', example: 'req_...' } } },
+    },
+  } })
+  @ApiQuery({ name: 'q', required: true, type: String, schema: { minLength: 1, maxLength: 100 }, example: 'builder', description: '按用户名搜索。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 10 })
+  async searchPublicUsers(@Query() query: SearchPublicUsersDto, @Req() req: any) {
+    if (!this.friendsService) return [];
+    return this.friendsService.searchNonFriends(req.user.id, query.q.trim(), query.limit || 10);
   }
 
   @Get('users/:id')

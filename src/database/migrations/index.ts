@@ -1,5 +1,6 @@
 import { HtmlDocumentProjection1720000370000 } from './1720000370000-HtmlDocumentProjection';
 import { MultiplayerVisibilityJoinPolicySplit1720000380000 } from './1720000380000-MultiplayerVisibilityJoinPolicySplit';
+import { MultiplayerInviteLimits1720000390000 } from './1720000390000-MultiplayerInviteLimits';
 import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
 import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceViewsAnalytics';
 import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
@@ -177,4 +178,5 @@ export const migrations = [
   GenericBlobApi1720000360000,
   HtmlDocumentProjection1720000370000,
   MultiplayerVisibilityJoinPolicySplit1720000380000,
+  MultiplayerInviteLimits1720000390000,
 ];

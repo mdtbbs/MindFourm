@@ -7,7 +7,7 @@ import { MultiplayerOAuthProtected } from './multiplayer-oauth-protected.decorat
 import { MultiplayerService } from './multiplayer.service';
 import {
   CreateCandidateDto, CreateJoinIntentDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto,
-  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
+  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListMultiplayerInvitesDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
   RelayAgentRegisterDto, RelayAllocationAckDto, RelayAllocationRevokeDto, SetDefaultMultiplayerClientDto,
 } from './dto/multiplayer.dto';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
@@ -26,6 +26,45 @@ const ACCEPT_INVITE_RESPONSE_SCHEMA: any = {
         expires_in: { type: 'integer', example: 60, description: '加入意图首次消费前剩余有效秒数。' },
       },
     },
+  },
+};
+
+const MULTIPLAYER_SESSION_LIST_SCHEMA: any = {
+  type: 'object', required: ['data', 'meta'], properties: {
+    data: { type: 'array', items: { type: 'object', required: ['id', 'current_players', 'max_players', 'joinable', 'blocked_reason', 'can_request_join'], properties: {
+      id: { type: 'string', example: 'ses_AbCdEf0123456789_-wxyz' },
+      owner_user_id: { type: 'integer' }, visibility: { type: 'string' }, join_policy: { type: 'string' },
+      require_approval: { type: 'boolean' }, game: { type: 'object', additionalProperties: true },
+      activity_name: { type: 'string', nullable: true }, current_players: { type: 'integer' }, max_players: { type: 'integer' },
+      status: { type: 'string' }, expires_at: { type: 'string', format: 'date-time' },
+      joinable: { type: 'boolean', description: '当前调用者能否直接加入。' },
+      blocked_reason: { type: 'string', nullable: true, description: '不能直接加入时的稳定原因码。' },
+      can_request_join: { type: 'boolean', description: '是否可改为请求房主批准。' },
+    } } },
+    meta: { type: 'object', required: ['request_id', 'pagination'], properties: {
+      request_id: { type: 'string', example: 'req_...' },
+      pagination: { type: 'object', required: ['page', 'limit', 'total', 'total_pages', 'has_more'], properties: {
+        page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' },
+        total_pages: { type: 'integer' }, has_more: { type: 'boolean' },
+      } },
+    } },
+  },
+};
+
+const MULTIPLAYER_INVITE_LIST_SCHEMA: any = {
+  type: 'object', required: ['data', 'meta'], properties: {
+    data: { type: 'array', items: { type: 'object', required: ['invite_id', 'session_id', 'sender_user_id', 'target_user_id', 'status', 'expires_at'], properties: {
+      invite_id: { type: 'string' }, session_id: { type: 'string' }, sender_user_id: { type: 'integer' },
+      target_user_id: { type: 'integer' }, status: { type: 'string' }, expires_at: { type: 'string', format: 'date-time' },
+      session: { type: 'object', nullable: true, additionalProperties: true },
+    } } },
+    meta: { type: 'object', required: ['request_id', 'pagination'], properties: {
+      request_id: { type: 'string', example: 'req_...' },
+      pagination: { type: 'object', required: ['page', 'limit', 'total', 'total_pages', 'has_more'], properties: {
+        page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' },
+        total_pages: { type: 'integer' }, has_more: { type: 'boolean' },
+      } },
+    } },
   },
 };
 
@@ -58,6 +97,7 @@ export class MultiplayerV1Controller {
 
   @MultiplayerOAuthProtected('multiplayer.read')
   @Get('sessions')
+  @ApiOkResponse({ description: '标准成功信封；data 是数组，分页摘要位于 meta.pagination。每项包含调用者可发现的会话与加入判定。', schema: MULTIPLAYER_SESSION_LIST_SCHEMA })
   listSessions(@Query() query: ListMultiplayerSessionsDto, @Req() request: any) {
     return this.multiplayer.listDiscoverableSessions(request.user.id, query);
   }
@@ -124,7 +164,10 @@ export class MultiplayerV1Controller {
   @ApiTags('联机邀请')
   @MultiplayerOAuthProtected('multiplayer.read')
   @Get('invites')
-  invites(@Req() request: any) { return this.multiplayer.listInvites(request.user.id); }
+  @ApiOkResponse({ description: '标准成功信封；data 是数组，分页摘要位于 meta.pagination。', schema: MULTIPLAYER_INVITE_LIST_SCHEMA })
+  invites(@Query() query: ListMultiplayerInvitesDto, @Req() request: any) {
+    return this.multiplayer.listInvites(request.user.id, query);
+  }
 
   @ApiTags('联机邀请')
   @MultiplayerOAuthProtected('multiplayer.write')

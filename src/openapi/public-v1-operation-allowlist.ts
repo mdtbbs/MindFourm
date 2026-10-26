@@ -149,6 +149,7 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'POST /v1/uploads/images',
   'GET /v1/me',
   'GET /v1/users/{id}',
+  'GET /v1/users/search',
   'PUT /v1/me/profile',
   'POST /v1/me/avatar',
   'GET /v1/me/bookmarks',

@@ -30,7 +30,12 @@ import {
 } from './dto/multiplayer.dto';
 import { InvitePolicyService } from './invite-policy.service';
 import { canDiscover, evaluateJoin, SessionPolicyService } from './session-policy.service';
-import { MULTIPLAYER_CAPACITY_PEER_STATUSES } from './multiplayer.constants';
+import {
+  MAX_ACTIVE_SESSIONS_PER_USER, MAX_PENDING_INVITES_PER_SENDER,
+  MAX_PENDING_INVITES_PER_SESSION_TARGET, MAX_REALTIME_SESSION_SUBSCRIPTIONS,
+  MULTIPLAYER_CAPACITY_PEER_STATUSES,
+} from './multiplayer.constants';
+import { MAX_PRESENCE_CONNECTIONS_PER_USER } from '../presence/presence.constants';
 
 const PRESENCE_TTL_SECONDS = 90;
 const PEER_DISCONNECT_GRACE_SECONDS = 60;
@@ -166,7 +171,7 @@ function isMultiplayerV1Endpoint(value: string): boolean {
   }
 }
 
-function fail(status: number, code: string): never {
+function fail(status: number, code: string, details: unknown[] = []): never {
   // Prefer the status, message and retryability declared in the V1 error
   // registry; it also keeps SESSION_PERMISSION_DENIED (403) from being emitted
   // as a 400. The literal statuses passed below stay the fallback for codes the
@@ -177,9 +182,18 @@ function fail(status: number, code: string): never {
     (definition?.httpStatus ?? status) as HttpStatus,
     definition?.defaultMessage ?? code,
     definition?.retryable ?? false,
-    [],
+    details,
     status,
   );
+}
+
+function withPagination<T>(items: T[], page: number, limit: number, total: number): T[] {
+  const totalPages = Math.ceil(total / limit);
+  Object.defineProperty(items, '__v1Pagination', {
+    value: { page, limit, total, total_pages: totalPages, has_more: page < totalPages },
+    enumerable: false,
+  });
+  return items;
 }
 
 @Injectable()
@@ -242,6 +256,15 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       require_approval: true as const,
       transports: ['udp', 'tcp', 'quic', 'custom'] as const,
       relay_credential_ttl_seconds: RELAY_CREDENTIAL_TTL_SECONDS,
+      limits: {
+        max_active_sessions_per_user: MAX_ACTIVE_SESSIONS_PER_USER,
+        max_players_per_session: 64,
+        max_pending_invites_per_sender: MAX_PENDING_INVITES_PER_SENDER,
+        max_pending_invites_per_session_target: MAX_PENDING_INVITES_PER_SESSION_TARGET,
+        max_presence_connections_per_user: MAX_PRESENCE_CONNECTIONS_PER_USER,
+        max_lobby_page_size: 50,
+        max_realtime_session_subscriptions: MAX_REALTIME_SESSION_SUBSCRIPTIONS,
+      },
     };
   }
 
@@ -340,6 +363,13 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     const peerId = opaqueId('peer');
     const resumeToken = randomBytes(32).toString('base64url');
     await this.dataSource.transaction(async (manager) => {
+      // Serialize room creation for one account so concurrent retries cannot
+      // both pass the active-session cap.
+      await manager.findOne(User, { where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+      const existingSession = await manager.findOne(MultiplayerSession, {
+        where: { owner_user_id: userId, status: 'active', expires_at: MoreThan(new Date()) },
+      });
+      if (existingSession) fail(409, 'SESSION_ALREADY_ACTIVE', [{ session_id: existingSession.id }]);
       await manager.save(MultiplayerSession, session);
       await manager.save(MultiplayerPeer, manager.create(MultiplayerPeer, {
         id: peerId, session_id: id, user_id: userId, client_id: clientId,
@@ -388,48 +418,83 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     const gameId = options.game_id?.trim() || undefined;
     const gameVersion = options.game_version?.trim() || undefined;
 
-    const criteria = (visibility: 'public' | 'friends') => ({
-      visibility,
-      status: 'active' as const,
-      expires_at: MoreThan(now),
-      ...(gameId ? { game_id: gameId } : {}),
-      ...(gameVersion ? { game_version: gameVersion } : {}),
-    });
-
-    // A private Session is never listed, so the query can restrict itself to the
-    // two discoverable scopes before doing any per-row work.
-    const rows = await this.sessions.find({
-      where: [criteria('public'), criteria('friends')],
-      order: { created_at: 'DESC' },
-      // Page over the candidate set, then drop rows the viewer may not see. The
-      // friend-scope rows are the only ones that need per-viewer filtering and a
-      // page is bounded at 50, so the batch stays constant-size.
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-    if (!rows.length) return { data: [], total: 0, page, limit };
+    // Apply visibility and block policy in SQL before pagination. Loading every
+    // live public room to compute a correct total would grow with site activity.
+    const query = this.sessions.createQueryBuilder('session')
+      .where("session.status = 'active'")
+      .andWhere('session.expires_at > :now', { now })
+      .andWhere("session.visibility IN ('public', 'friends')")
+      .andWhere(`(
+        session.visibility = 'public'
+        OR session.owner_user_id = :viewerId
+        OR EXISTS (
+          SELECT 1 FROM multiplayer_peers viewer_peer
+          WHERE viewer_peer.session_id = session.id
+            AND viewer_peer.user_id = :viewerId
+            AND viewer_peer.status = 'active'
+        )
+        OR EXISTS (
+          SELECT 1 FROM friendships friendship
+          WHERE friendship.status = 'accepted'
+            AND ((friendship.requester_id = :viewerId AND friendship.addressee_id = session.owner_user_id)
+              OR (friendship.requester_id = session.owner_user_id AND friendship.addressee_id = :viewerId))
+        )
+      )`, { viewerId })
+      .andWhere(`NOT EXISTS (
+        SELECT 1 FROM user_blocks user_block
+        WHERE (user_block.blocker_id = :viewerId AND user_block.blocked_id = session.owner_user_id)
+          OR (user_block.blocker_id = session.owner_user_id AND user_block.blocked_id = :viewerId)
+      )`, { viewerId });
+    if (gameId) query.andWhere('session.game_id = :gameId', { gameId });
+    if (gameVersion) query.andWhere('session.game_version = :gameVersion', { gameVersion });
+    const [rows, total] = await query
+      .orderBy('session.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    if (!rows.length) return withPagination([], page, limit, total);
 
     const ownerIds = [...new Set(rows.map((session) => session.owner_user_id))];
     const sessionIds = rows.map((session) => session.id);
-    const [friendRows, blocks, viewerPeers, occupyingPeers] = await Promise.all([
+    const [friendRows, blocks, viewerPeers, occupyingPeers, ownerAllowsJoin, ownerAllowsRequest] = await Promise.all([
       this.socialPolicy.areFriendsMany(viewerId, ownerIds),
       this.socialPolicy.isBlockedMany(viewerId, ownerIds),
       this.peers.find({ where: { session_id: In(sessionIds), user_id: viewerId, status: 'active' }, select: ['session_id'] }),
       this.peers.find({ where: { session_id: In(sessionIds), status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) }, select: ['session_id'] }),
+      this.socialPolicy.canPerformMany(viewerId, ownerIds, 'allow_join'),
+      this.socialPolicy.canPerformMany(viewerId, ownerIds, 'allow_join_request'),
     ]);
     const alreadyIn = new Set(viewerPeers.map((peer) => peer.session_id));
     const playerCounts = new Map<string, number>();
     for (const peer of occupyingPeers) playerCounts.set(peer.session_id, (playerCounts.get(peer.session_id) || 0) + 1);
 
-    const data = rows.flatMap((session) => {
+    const visibleSessions = rows.flatMap((session) => {
       const blocked = blocks.get(session.owner_user_id) === true;
       const friend = friendRows.get(session.owner_user_id) === true;
       const visible = canDiscover(viewerId, session, {
         blocked, friend, activePeer: alreadyIn.has(session.id),
       });
-      return visible ? [this.toPublicSession(session, playerCounts.get(session.id) || 0)] : [];
+      if (!visible) return [];
+      const inSession = viewerId === session.owner_user_id || alreadyIn.has(session.id);
+      const decision = evaluateJoin({
+        joinPolicy: session.join_policy,
+        requireApproval: session.require_approval === true,
+        blocked,
+        friend,
+        ownerAllowsJoin: ownerAllowsJoin.get(session.owner_user_id) === true,
+        ownerAllowsRequest: ownerAllowsRequest.get(session.owner_user_id) === true,
+        approvedPath: false,
+        viaJoinCode: false,
+        spaceAvailable: (playerCounts.get(session.id) || 0) < session.max_players,
+      });
+      return [{
+        ...this.toPublicSession(session, playerCounts.get(session.id) || 0),
+        joinable: !inSession && decision.can_join,
+        blocked_reason: inSession ? 'ALREADY_IN_SESSION' : decision.denial,
+        can_request_join: !inSession && decision.can_request_join,
+      }];
     });
-    return { data, total: data.length, page, limit };
+    return withPagination(visibleSessions, page, limit, total);
   }
 
   async resolveCode(viewerId: number, code: string) {
@@ -697,16 +762,53 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async createInvite(senderId: number, input: CreateMultiplayerInviteDto) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
-    const session = await this.findActiveSession(input.session_id);
-    await this.requireActivePeer(senderId, session.id);
-    const target = await this.users.findOne({ where: { id: input.target_user_id }, select: ['id', 'username'] });
-    if (!target) fail(404, 'INVITE_NOT_FOUND');
-    const denial = await this.invitePolicy.denialCode(senderId, target.id, session);
-    if (denial) this.failPolicy(denial);
-    const invite = await this.invites.save(this.invites.create({
-      id: opaqueId('inv'), session_id: session.id, sender_user_id: senderId, target_user_id: target.id,
-      status: 'pending', expires_at: new Date(Date.now() + INVITE_TTL_MS),
-    }));
+    const result = await this.dataSource.transaction(async (manager) => {
+      const sender = await manager.findOne(User, { where: { id: senderId }, lock: { mode: 'pessimistic_write' } });
+      if (!sender) fail(404, 'INVITE_NOT_FOUND');
+      const session = await manager.findOne(MultiplayerSession, {
+        where: { id: input.session_id }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!session) fail(404, 'SESSION_NOT_FOUND');
+      await this.assertSessionActive(session);
+      await this.requireActivePeer(senderId, session.id);
+      const target = await manager.findOne(User, {
+        where: { id: input.target_user_id }, select: { id: true, username: true },
+      });
+      if (!target) fail(404, 'INVITE_NOT_FOUND');
+      const denial = await this.invitePolicy.denialCode(senderId, target.id, session);
+      if (denial) this.failPolicy(denial);
+
+      const now = new Date();
+      const invites = manager.getRepository(MultiplayerInvite);
+      const existing = await invites.findOne({ where: {
+        session_id: session.id, target_user_id: target.id, status: 'pending', expires_at: MoreThan(now),
+      }, order: { created_at: 'DESC' } });
+      if (existing) return { invite: existing, session, target, created: false };
+
+      await invites.update({
+        session_id: session.id, target_user_id: target.id, status: 'pending', expires_at: LessThanOrEqual(now),
+      }, { status: 'expired' });
+      const senderPending = await invites.createQueryBuilder('invite')
+        .select('COUNT(*)', 'pending_count')
+        .addSelect('MIN(invite.expires_at)', 'earliest_expiry')
+        .where('invite.sender_user_id = :senderId', { senderId })
+        .andWhere("invite.status = 'pending'")
+        .andWhere('invite.expires_at > :now', { now })
+        .getRawOne<{ pending_count: string; earliest_expiry: Date | string | null }>();
+      if (Number(senderPending?.pending_count || 0) >= MAX_PENDING_INVITES_PER_SENDER) {
+        const earliestExpiry = senderPending?.earliest_expiry
+          ? new Date(String(senderPending.earliest_expiry)).getTime()
+          : now.getTime();
+        fail(409, 'INVITE_LIMIT_REACHED', [{ retry_after_seconds: Math.max(1, Math.ceil((earliestExpiry - now.getTime()) / 1000)) }]);
+      }
+      const invite = await invites.save(invites.create({
+        id: opaqueId('inv'), session_id: session.id, sender_user_id: senderId, target_user_id: target.id,
+        status: 'pending', expires_at: new Date(Date.now() + INVITE_TTL_MS),
+      }));
+      return { invite, session, target, created: true };
+    });
+    const { invite, session, target, created } = result;
+    if (!created) return this.toPublicInvite(invite, session);
     await this.auditEvent(senderId, 'invite.created', 'invite', invite.id, { session_id: session.id });
     await this.notifications.create({ user_id: target.id, type: 'multiplayer_invite', actor_id: senderId,
       content: `你收到一个 ${session.activity_name || session.game_id} 联机邀请`, emailEvent: false });
@@ -714,11 +816,33 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return this.toPublicInvite(invite, session);
   }
 
-  async listInvites(userId: number) {
+  async listInvites(userId: number, options: { page?: number; limit?: number } = {}) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
-    const rows = await this.invites.find({ where: { target_user_id: userId, status: 'pending', expires_at: MoreThan(new Date()) }, order: { created_at: 'DESC' }, take: 50 });
-    return Promise.all(rows.map(async (invite) => this.toPublicInvite(invite, await this.sessions.findOneBy({ id: invite.session_id }))));
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Math.floor(options.limit ?? 50)));
+    const [rows, total] = await this.invites.findAndCount({
+      where: { target_user_id: userId, status: 'pending', expires_at: MoreThan(new Date()) },
+      order: { created_at: 'DESC' }, skip: (page - 1) * limit, take: limit,
+    });
+    const sessionIds = [...new Set(rows.map((invite) => invite.session_id))];
+    const sessions = sessionIds.length ? await this.sessions.findBy({ id: In(sessionIds) }) : [];
+    const sessionById = new Map(sessions.map((session) => [session.id, session]));
+    const playerCounts = new Map<string, number>();
+    if (sessionIds.length) {
+      const counts = await this.peers.createQueryBuilder('peer')
+        .select('peer.session_id', 'session_id')
+        .addSelect('COUNT(*)', 'player_count')
+        .where('peer.session_id IN (:...sessionIds)', { sessionIds })
+        .andWhere('peer.status IN (:...statuses)', { statuses: MULTIPLAYER_CAPACITY_PEER_STATUSES })
+        .groupBy('peer.session_id')
+        .getRawMany<{ session_id: string; player_count: string }>();
+      for (const row of counts) playerCounts.set(row.session_id, Number(row.player_count));
+    }
+    const invites = await Promise.all(rows.map((invite) => this.toPublicInvite(
+      invite, sessionById.get(invite.session_id) || null, playerCounts.get(invite.session_id) || 0,
+    )));
+    return withPagination(invites, page, limit, total);
   }
 
   async listJoinRequests(ownerId: number) {
@@ -2168,11 +2292,11 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async toPublicInvite(invite: MultiplayerInvite, session: MultiplayerSession | null) {
+  private async toPublicInvite(invite: MultiplayerInvite, session: MultiplayerSession | null, currentPlayers?: number) {
     return {
       invite_id: invite.id, session_id: invite.session_id, sender_user_id: invite.sender_user_id,
       target_user_id: invite.target_user_id, status: invite.status, expires_at: invite.expires_at,
-      session: session ? this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } })) : null,
+      session: session ? this.toPublicSession(session, currentPlayers ?? await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } })) : null,
     };
   }
 

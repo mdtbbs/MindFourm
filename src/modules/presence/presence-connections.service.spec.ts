@@ -1,6 +1,32 @@
 import { PresenceConnectionsService } from './presence-connections.service';
 
 describe('PresenceConnectionsService', () => {
+  it('atomically refuses a connection after the per-account limit', async () => {
+    const preferences = {
+      createQueryBuilder: jest.fn(() => ({
+        insert: jest.fn().mockReturnThis(),
+        orIgnore: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue(undefined),
+      })),
+    };
+    const redis = { eval: jest.fn().mockResolvedValue(0) };
+    const service = Object.create(PresenceConnectionsService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.preferences = preferences;
+    service.redis = redis;
+    service.syncLegacyPresence = jest.fn();
+    service.emitToFriends = jest.fn();
+
+    await expect(service.create(7, 'launcher', 'desktop')).rejects.toMatchObject({
+      code: 'PRESENCE_CONNECTION_LIMIT_REACHED', status: 409,
+    });
+
+    expect(redis.eval.mock.calls[0][2][3]).toBe(32);
+    expect(service.syncLegacyPresence).not.toHaveBeenCalled();
+    expect(service.emitToFriends).not.toHaveBeenCalled();
+  });
+
   it('aggregates multiple client connections and takes the latest activity', async () => {
     const records = new Map([
       ['web-1', JSON.stringify({ connection_id: 'web-1', user_id: 7, client_id: 'web-app', platform: 'web', created_at: 1, last_seen_at: 20 })],

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
@@ -12,6 +12,8 @@ import { SettingsService } from '../settings/settings.service';
 import { randomBytes } from 'crypto';
 import { UserPresencePreference, UserPresenceStatus } from '../../entities/user-presence-preference.entity';
 import { PutRichActivityDto } from './dto/presence-v1.dto';
+import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
+import { MAX_PRESENCE_CONNECTIONS_PER_USER } from './presence.constants';
 
 export const PRESENCE_CONNECTION_TTL_SECONDS = 90;
 const PRESENCE_HEARTBEAT_SECONDS = 30;
@@ -41,6 +43,9 @@ export interface PresenceSnapshot {
 function id(): string { return `prs_${randomBytes(18).toString('base64url')}`; }
 function fail(code: string): never {
   const payload = { code, message: code };
+  if (code === 'PRESENCE_CONNECTION_LIMIT_REACHED') {
+    throw new ApiV1Exception(code, HttpStatus.CONFLICT, 'Presence 并发连接数已达上限', false, []);
+  }
   if (code === 'PRESENCE_CONNECTION_NOT_FOUND') throw new NotFoundException(payload);
   if (code === 'ACTIVITY_INVALID') throw new BadRequestException(payload);
   throw new ForbiddenException(payload);
@@ -69,10 +74,29 @@ export class PresenceConnectionsService {
     const connectionId = id();
     const now = Date.now();
     const record: PresenceConnectionRecord = { connection_id: connectionId, user_id: userId, client_id: clientId, platform, created_at: now, last_seen_at: now };
-    await this.redis.set(connectionKey(connectionId), JSON.stringify(record), PRESENCE_CONNECTION_TTL_SECONDS);
     const indexKey = connectionIndexKey(userId);
-    await this.redis.hset(indexKey, connectionId, JSON.stringify(record));
-    await this.redis.expire(indexKey, CONNECTION_INDEX_TTL_SECONDS);
+    const stored = await this.redis.eval(`
+      local fields = redis.call('HKEYS', KEYS[1])
+      local active = 0
+      for _, id in ipairs(fields) do
+        if redis.call('EXISTS', ARGV[1] .. id) == 1 then
+          active = active + 1
+        else
+          redis.call('HDEL', KEYS[1], id)
+        end
+      end
+      if active >= tonumber(ARGV[4]) then return 0 end
+      redis.call('SET', ARGV[1] .. ARGV[2], ARGV[3], 'EX', tonumber(ARGV[5]))
+      redis.call('HSET', KEYS[1], ARGV[2], ARGV[3])
+      redis.call('EXPIRE', KEYS[1], tonumber(ARGV[6]))
+      return active + 1
+    `, [indexKey], [
+      'presence:conn:', connectionId, JSON.stringify(record), MAX_PRESENCE_CONNECTIONS_PER_USER,
+      PRESENCE_CONNECTION_TTL_SECONDS, CONNECTION_INDEX_TTL_SECONDS,
+    ]).catch(() => {
+      throw new ApiV1Exception('SECURITY_DEPENDENCY_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'Presence 暂不可用', true, []);
+    });
+    if (Number(stored) === 0) fail('PRESENCE_CONNECTION_LIMIT_REACHED');
     if (status) await this.privacy.setStatus(userId, status);
     await this.syncLegacyPresence(userId);
     await this.emitToFriends(userId, 'presence.updated');

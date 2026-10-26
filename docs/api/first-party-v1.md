@@ -268,6 +268,7 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 | GET / PATCH | `/api/v1/social/privacy` | `presence.read` / `presence.write` | 读取或更新好友、在线状态与联机隐私策略 |
 | GET | `/api/v1/social/friends/presence?page=1&limit=50` | `friends.read presence.read` | 分页好友、在线状态与活动状态聚合 |
 | GET | `/api/v1/friends`、`/api/v1/friends/requests` | `friends.read` | 好友列表与待处理请求 |
+| GET | `/api/v1/users/search?q=builder&limit=10` | `friends.read` | 搜索非好友公开用户；排除自己、好友及屏蔽关系 |
 | POST | `/api/v1/friends/requests` | `friends.read` | 发送好友请求 |
 | POST | `/api/v1/friends/requests/{id}/accept`、`.../reject` | `friends.read` | 接受或拒绝好友请求 |
 | DELETE | `/api/v1/friends/{userId}` | `friends.read` | 删除好友 |

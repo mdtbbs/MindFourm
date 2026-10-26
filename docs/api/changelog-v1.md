@@ -1,5 +1,24 @@
 # 公开 API 更新记录
 
+## 2026-10-26 — Multiplayer API consistency
+
+### Added
+
+- `GET /api/v1/users/search?q=...`：新增需要 `friends.read` 的公开用户搜索，排除调用者、好友与屏蔽用户。
+- 联机能力响应增加 `limits`，公开每账号活跃会话、待处理邀请、Presence 并发连接、每会话人数、列表页大小和 Realtime 订阅数上限。
+- Presence 头像 URL 支持 `?size=32|64|128`，返回带缓存头的 WebP 缩略图。
+
+### Changed
+
+- Multiplayer 会话大厅和邀请列表统一返回数组，分页摘要位于 `meta.pagination`。会话列表增加 `joinable`、`blocked_reason` 和 `can_request_join`。
+- 会话创建现在限制每账号一个活跃会话；重复建房返回 `SESSION_ALREADY_ACTIVE` 与现有 `session_id`。重复发送仍有效的同房间/目标邀请会幂等返回原邀请。
+- Realtime `hello.heartbeat_interval` 调整为 15 秒建议发送间隔，并支持显式确认会话流事件。
+
+### Clarified
+
+- 无 HTTP 响应表示传输层失败；`SESSION_CLOSED` 和 `SESSION_EXPIRED` 是不可重试的 404 业务错误。
+- `/realtime/v1` 的会话关闭、Peer 离开和过期事件清单、payload 与 ACK 语义已补充。
+
 ## 2026-10-26 — Public API 1.8.0
 
 本次为现有 Public V1 行为补齐机器可读契约，并给联机大厅增加可选游戏筛选；不改变既有必填参数或身份语义。

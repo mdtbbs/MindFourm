@@ -5,8 +5,11 @@ import Redis from 'ioredis';
 import { IncomingMessage } from 'http';
 import { WebSocket } from 'ws';
 import { MultiplayerService } from '../multiplayer/multiplayer.service';
+import { MAX_REALTIME_SESSION_SUBSCRIPTIONS } from '../multiplayer/multiplayer.constants';
 import { RedisService } from '../../database/redis.service';
 import { RealtimeEvent, RealtimeEventsService } from './realtime-events.service';
+
+const REALTIME_HEARTBEAT_RECOMMENDATION_SECONDS = 15;
 
 interface ClientState {
   userId: number;
@@ -130,7 +133,10 @@ export class RealtimeGateway implements OnModuleInit, OnModuleDestroy {
     this.states.set(client, state);
     this.clients.add(client);
     state.cursors.set('user', await this.events.latestUserEventId(state.userId));
-    this.send(client, { type: 'hello', heartbeat_interval: 30, resume_supported: true, client_id: state.clientId });
+    this.send(client, {
+      type: 'hello', heartbeat_interval: REALTIME_HEARTBEAT_RECOMMENDATION_SECONDS,
+      resume_supported: true, client_id: state.clientId,
+    });
     let messageQueue = Promise.resolve();
     client.on('message', (value) => {
       const raw = value.toString();
@@ -160,9 +166,14 @@ export class RealtimeGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (message.type === 'subscribe') {
-      const requested = Array.isArray(message.sessions) ? message.sessions.slice(0, 32) : [];
+      const requested = Array.isArray(message.sessions) ? message.sessions : [];
       for (const sessionId of requested) {
         if (typeof sessionId !== 'string' || !/^ses_[A-Za-z0-9_-]{16,32}$/.test(sessionId)) continue;
+        if (state.sessions.has(sessionId)) continue;
+        if (state.sessions.size >= MAX_REALTIME_SESSION_SUBSCRIPTIONS) {
+          this.send(client, { type: 'error', code: 'SESSION_SUBSCRIPTION_LIMIT_REACHED' });
+          break;
+        }
         try {
           await this.multiplayer.authorizeRealtimeSession(state.userId, sessionId);
           state.sessions.add(sessionId);
@@ -180,8 +191,10 @@ export class RealtimeGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (message.type === 'ack') {
+      const sessionId = typeof message.session_id === 'string' ? message.session_id : '';
       const stream = message.stream === 'user' ? 'user'
-        : typeof message.session_id === 'string' && state.sessions.has(message.session_id) ? `session:${message.session_id}` : null;
+        : (message.stream === 'session' || message.stream === undefined) && state.sessions.has(sessionId)
+          ? `session:${sessionId}` : null;
       const delivered = stream ? state.delivered.get(stream) : undefined;
       const previousAck = stream ? state.acked.get(stream) : undefined;
       if (stream && validCursor(message.id) && delivered && cursorAtOrBefore(message.id, delivered)
