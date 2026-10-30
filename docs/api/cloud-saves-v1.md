@@ -32,6 +32,13 @@
 | DELETE | `/game-saves/uploads/{uploadId}` | 写入 | 取消未完成的上传 |
 | POST | `/game-saves/{slotId}/snapshots/{snapshotId}/download` | 读取 | 获取二进制文件下载路径和元数据 |
 | GET | `/game-saves/{slotId}/snapshots/{snapshotId}/file` | 读取 | 下载私有存档文件 |
+| POST | `/game-saves/blobs/check` | 读取 | 按 SHA-256 查询本账号已持有的文件内容（差量预检） |
+| POST | `/game-saves/blobs` | 写入 | 为单个缺失文件创建上传会话；已持有时返回 `no_upload_required` |
+| PUT | `/game-saves/blobs/uploads/{uploadId}/file` | 写入 | 上传单个文件字节；校验大小与 SHA-256 |
+| POST | `/game-saves/{slotId}/snapshots` | 写入 | 用 `base_snapshot_id` + manifest 创建不可变差量快照 |
+| GET | `/game-saves/{slotId}/snapshots/{snapshotId}/manifest` | 读取 | 读取差量快照的文件清单（path / size / sha256） |
+| POST | `/game-saves/{slotId}/snapshots/{snapshotId}/blobs/download` | 读取 | 获取清单中缺失文件的下载地址 |
+| GET | `/game-saves/{slotId}/snapshots/{snapshotId}/blobs/{sha256}/file` | 读取 | 下载清单中的单个文件 |
 
 JSON 响应使用 V1 结构 `{ "data": ..., "meta": { "request_id": ... } }`。二进制下载响应直接包含文件内容。
 
@@ -146,6 +153,72 @@ Content-Type: application/json
 
 客户端应先将文件流式写入临时文件，校验文件大小和 SHA-256，保留现有本地存档，确认无误后再替换。
 
+## 文件级差量上传（manifest + blob）
+
+整包上传快照（`format = "zip"`）保持不变；需要差量时，客户端改为上传「文件清单 + 缺失的文件内容」。服务端按账号内 `sha256 + size` 内容寻址去重，未变化的文件只被新快照引用，不重复传输、不重复占用配额。
+
+### 上传流程
+
+1. 本地扫描数据目录，得到 `path / size / sha256` 清单；
+2. `POST /game-saves/blobs/check`，body `{"sha256":["...", "..."]}`，返回 `{"exists":[...],"missing":[...]}`；
+3. 对每个 `missing` 项调用 `POST /game-saves/blobs`（body `{"sha256":"...","size":123}`）。账号已持有该内容时直接返回 `{"no_upload_required":true,"sha256":"...","size":123}`，无需重复上传；否则返回 `upload.url`，客户端把原始字节 `PUT` 到该路径；
+4. 用 `base_snapshot_id` + 完整清单创建快照：
+
+```http
+POST /api/v1/game-saves/{slotId}/snapshots
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "base_snapshot_id": "<当前 head>",
+  "manifest": {
+    "format": "copper-save-manifest-v1",
+    "files": [
+      {"path": "saves/0.msav", "size": 4194304, "sha256": "<64 位小写十六进制>"},
+      {"path": "settings.bin", "size": 20480, "sha256": "<...>"}
+    ]
+  },
+  "reason": "manual",
+  "conflict_resolution": "normal",
+  "game": {"version": "v160.7", "build": 8},
+  "save": {"map_name": "...", "wave": 42, "playtime_seconds": 7993},
+  "mods": [{"id": "...", "version": "..."}],
+  "device_id": "..."
+}
+```
+
+响应为快照摘要，额外包含 `format: "manifest"` 与 `file_count`。清单要求：
+
+- `path` 是数据目录内相对路径；绝对路径、`..`、`.`、空段、反斜杠、冒号、首尾斜杠、重复路径全部拒绝；
+- 单文件 ≤ 50 MiB（`max_file_size_bytes`）；清单默认最多 5000 项、序列化 ≤ 1 MiB，分别由 `CLOUD_SAVES_MAX_MANIFEST_FILES`、`CLOUD_SAVES_FILE_MANIFEST_MAX_BYTES` 控制，当前生效值见 `GET /game-saves/quota` 的 `manifest_limits`；
+- 清单中每个 `sha256` 必须已由本账号持有（旧快照引用过，或第 3 步已上传），否则返回 `SAVE_BLOB_MISSING` (409) 并在 `details` 中列出缺失项；校验与建快照在同一事务内，任何一项失败整体回滚；
+- 与整包上传相同，`base_snapshot_id` 不是当前 head 时返回 `SAVE_CONFLICT` (409)；`create_conflict_copy` / `force_replace_head` 语义不变。
+
+### 下载流程
+
+1. `GET /game-saves/{slotId}/snapshots/{snapshotId}/manifest` 取清单（整包快照调用会返回 `SAVE_SNAPSHOT_FORMAT_MISMATCH` (409)）；
+2. 客户端比对本机缓存，得到缺失或摘要不一致的文件；
+3. `POST /game-saves/{slotId}/snapshots/{snapshotId}/blobs/download`，body `{"sha256":[...]}`，返回每项的 `path`、`size`、`sha256` 与下载地址；
+4. 对每个地址发送带 Bearer 的 `GET`，校验 SHA-256 后写入临时文件再替换。
+
+单文件下载地址与整包下载一样是**同源、非签名、可复用**路径；服务端每次重新校验账号与快照归属，只返回该清单内的文件。整包接口拒绝 manifest 快照，manifest 接口拒绝整包快照——客户端按快照对象的 `format` 字段选择路径。
+
+### 配额与清理
+
+- 配额仍按**账号内唯一 blob 字节**计费（`used_bytes`），同一内容被多个快照引用只计一次；
+- 独立 blob 上传会话在提交前会预留配额，过期未使用的内容与已无快照引用的 blob 均由维护任务按宽限期回收；
+- 整包快照（`format = "zip"`）继续按原有方式下载与恢复，行为不变。
+
+### 错误码
+
+| 错误码 | HTTP | 含义 |
+|---|---|---|
+| `SAVE_MANIFEST_INVALID` | 400 | 清单结构非法、路径不安全、包含重复路径或 `sha256` / `size` 非法。 |
+| `SAVE_MANIFEST_LIMIT_EXCEEDED` | 413 | 文件数、单文件大小或清单序列化大小超过上限。 |
+| `SAVE_BLOB_MISSING` | 409 | 清单引用了本账号尚未持有的文件内容；`details` 列出缺失项，需先上传。 |
+| `SAVE_BLOB_NOT_IN_SNAPSHOT` | 404 | 请求的 `sha256` 不属于该 manifest 快照。 |
+| `SAVE_SNAPSHOT_FORMAT_MISMATCH` | 409 | 用整包接口访问 manifest 快照（或反之）；按快照的 `format` 选择接口。 |
+
 ## 冲突、去重与保留策略
 
 - 每个存档槽都有不可变且递增的快照历史。恢复旧快照会创建一个新版本。
@@ -165,8 +238,12 @@ Content-Type: application/json
 
 | 字段 | 含义 |
 |---|---|
+| `used_bytes` | 按账号内唯一 blob 字节计费的使用量；同一内容被多个快照引用只计一次。 |
+| `logical_bytes` | 所有存活快照清单的逻辑大小之和；用于向用户解释「删除快照后 `used_bytes` 缓慢下降」。 |
 | `limit_bytes` | 当前账号的总存储字节配额。 |
 | `max_file_size_bytes` | 单个上传文件/快照的最大字节数。 |
+| `formats` | 当前服务端支持的快照格式：`zip`、`manifest`。 |
+| `manifest_limits.max_files` / `max_manifest_bytes` | manifest 快照的文件数上限与清单序列化上限。 |
 | `slots.limit` | 当前账号可创建的存档槽数量上限；这是槽位数，不是账号内所有快照的总数上限。 |
 | `retention.max_unpinned_versions_per_slot` | 每个槽位最多保留的未固定历史快照数。 |
 | `retention.max_unpinned_age_days` | 未固定快照按年龄清理的保留天数。 |

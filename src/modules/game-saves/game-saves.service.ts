@@ -5,7 +5,10 @@ import { DataSource, EntityManager } from 'typeorm';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { SettingsService } from '../settings/settings.service';
 import { CloudSaveStorageService } from './cloud-save-storage.service';
-import { decodeSaveCursor, encodeSaveCursor, normalizeCloudSaveName, normalizeSaveMetadata, shouldCreateConflictCopy } from './game-save-validation';
+import {
+  decodeSaveCursor, encodeSaveCursor, MANIFEST_FORMAT, normalizeCloudSaveName, normalizeHashList,
+  normalizeManifest, normalizeSaveMetadata, NormalizedSaveMetadata, shouldCreateConflictCopy,
+} from './game-save-validation';
 
 export type CloudSaveActor = { clientId?: string; deviceId?: string; requestId?: string; ip?: string; userAgent?: string };
 
@@ -35,16 +38,40 @@ export class GameSavesService {
       let snapshots = 0;
       if (slotIds.length) {
         const marks = slotIds.map(() => '?').join(',');
-        const references = await manager.query(`SELECT blob_id FROM game_save_snapshots WHERE slot_id IN (${marks}) AND deleted_at IS NULL`, slotIds);
+        // A zip snapshot contributes one reference to its package blob; a
+        // manifest snapshot contributes one reference per distinct file blob.
+        // Counting per snapshot (not per file row) keeps the refcount semantics
+        // identical to releaseBlob's "references = live snapshots" contract.
+        const references = await manager.query(`SELECT s.id AS snapshot_id, s.blob_id AS blob_id
+          FROM game_save_snapshots s WHERE s.slot_id IN (${marks}) AND s.deleted_at IS NULL
+          UNION ALL
+          SELECT f.snapshot_id, f.blob_id FROM game_save_snapshot_files f
+          JOIN game_save_snapshots s ON s.id=f.snapshot_id
+          WHERE s.slot_id IN (${marks}) AND s.deleted_at IS NULL`, [...slotIds, ...slotIds]);
+        const bySnapshot = new Map<string, Set<string>>();
+        for (const row of references) {
+          if (!row.blob_id) continue;
+          const set = bySnapshot.get(String(row.snapshot_id)) || new Set<string>();
+          set.add(String(row.blob_id));
+          bySnapshot.set(String(row.snapshot_id), set);
+        }
         const counts = new Map<string, number>();
-        for (const row of references) counts.set(String(row.blob_id), (counts.get(String(row.blob_id)) || 0) + 1);
+        for (const set of bySnapshot.values()) for (const blobId of set) counts.set(blobId, (counts.get(blobId) || 0) + 1);
         for (const [blobId, count] of counts) await this.releaseBlob(manager, blobId, count);
+        // The file rows keep a RESTRICT foreign key to blobs; leaving them
+        // behind would make the GC delete of every manifest blob fail forever.
+        for (const snapshotId of bySnapshot.keys()) {
+          await manager.query('DELETE FROM game_save_snapshot_files WHERE snapshot_id=?', [snapshotId]);
+        }
         const updated = await manager.query(`UPDATE game_save_snapshots SET deleted_at=NOW() WHERE slot_id IN (${marks}) AND deleted_at IS NULL`, slotIds);
         snapshots = Number(updated?.affectedRows || 0);
         await manager.query(`UPDATE game_save_slots SET current_snapshot_id=NULL,deleted_at=NOW(),updated_at=NOW() WHERE id IN (${marks})`, slotIds);
       }
       const cancelled = await manager.query('UPDATE game_save_upload_sessions SET status=? WHERE user_id=? AND status IN (?,?)', ['cancelled', userId, 'pending', 'uploaded']);
       const uploads = Number(cancelled?.affectedRows || 0);
+      // Staged differential blobs are user-owned bytes too; mark them expired so
+      // the next maintenance pass deletes their objects.
+      await manager.query("UPDATE game_save_blob_uploads SET status='expired' WHERE user_id=? AND status IN ('pending','ready')", [userId]);
       if (slotIds.length || uploads) {
         await this.audit(manager, userId, 'cloud_save.account_delete', { slots: slotIds.length, snapshots, uploads }, {});
       }
@@ -63,8 +90,8 @@ export class GameSavesService {
       args.push(decoded.updated_at, decoded.updated_at, decoded.id);
     }
     const rows = await this.dataSource.query(`SELECT s.id, s.name, s.created_at, s.updated_at,
-        sn.id AS snapshot_id, sn.revision, sn.sha256, sn.size_bytes, sn.game_version, sn.game_build,
-        sn.map_name, sn.wave, sn.playtime_seconds, sn.created_at AS snapshot_created_at
+        sn.id AS snapshot_id, sn.revision, sn.format AS snapshot_format, sn.manifest_file_count, sn.sha256, sn.size_bytes,
+        sn.game_version, sn.game_build, sn.map_name, sn.wave, sn.playtime_seconds, sn.created_at AS snapshot_created_at
       FROM game_save_slots s LEFT JOIN game_save_snapshots sn ON sn.id = s.current_snapshot_id AND sn.deleted_at IS NULL
       WHERE ${condition} ORDER BY s.updated_at DESC, s.id DESC LIMIT ?`, [...args, pageSize + 1]);
     const hasMore = rows.length > pageSize;
@@ -77,8 +104,8 @@ export class GameSavesService {
   async getSlot(userId: number, slotId: string) {
     this.assertEnabled();
     const rows = await this.dataSource.query(`SELECT s.id, s.name, s.created_at, s.updated_at,
-        sn.id AS snapshot_id, sn.revision, sn.sha256, sn.size_bytes, sn.game_version, sn.game_build,
-        sn.map_name, sn.wave, sn.playtime_seconds, sn.created_at AS snapshot_created_at
+        sn.id AS snapshot_id, sn.revision, sn.format AS snapshot_format, sn.manifest_file_count, sn.sha256, sn.size_bytes,
+        sn.game_version, sn.game_build, sn.map_name, sn.wave, sn.playtime_seconds, sn.created_at AS snapshot_created_at
       FROM game_save_slots s LEFT JOIN game_save_snapshots sn ON sn.id = s.current_snapshot_id AND sn.deleted_at IS NULL
       WHERE s.id = ? AND s.user_id = ? AND s.deleted_at IS NULL LIMIT 1`, [slotId, userId]);
     if (!rows.length) this.notFound('SAVE_NOT_FOUND', '云存档不存在。');
@@ -117,10 +144,17 @@ export class GameSavesService {
     return this.dataSource.transaction(async manager => {
       await this.lockUser(manager, userId);
       const slot = await this.lockSlot(manager, userId, slotId);
-      const counts = await manager.query(`SELECT blob_id, COUNT(*) AS ref_count FROM game_save_snapshots
-        WHERE slot_id = ? AND deleted_at IS NULL GROUP BY blob_id`, [slotId]);
-      for (const row of counts) await this.releaseBlob(manager, String(row.blob_id), Number(row.ref_count));
+      const counts = new Map<string, number>();
+      const zipRefs = await manager.query(`SELECT blob_id, COUNT(*) AS ref_count FROM game_save_snapshots
+        WHERE slot_id = ? AND deleted_at IS NULL AND blob_id IS NOT NULL GROUP BY blob_id`, [slotId]);
+      for (const row of zipRefs) counts.set(String(row.blob_id), Number(row.ref_count));
+      const fileRefs = await manager.query(`SELECT f.blob_id, COUNT(DISTINCT f.snapshot_id) AS ref_count
+        FROM game_save_snapshot_files f JOIN game_save_snapshots s ON s.id=f.snapshot_id
+        WHERE s.slot_id = ? AND s.deleted_at IS NULL GROUP BY f.blob_id`, [slotId]);
+      for (const row of fileRefs) counts.set(String(row.blob_id), (counts.get(String(row.blob_id)) || 0) + Number(row.ref_count));
+      for (const [blobId, count] of counts) await this.releaseBlob(manager, blobId, count);
       await manager.query('UPDATE game_save_snapshots SET deleted_at = NOW() WHERE slot_id = ? AND deleted_at IS NULL', [slotId]);
+      await manager.query(`DELETE f FROM game_save_snapshot_files f JOIN game_save_snapshots s ON s.id=f.snapshot_id WHERE s.slot_id = ?`, [slotId]);
       await manager.query('UPDATE game_save_upload_sessions SET status = IF(status IN (\'pending\',\'uploaded\'), \'cancelled\', status) WHERE slot_id = ? AND status IN (\'pending\',\'uploaded\')', [slotId]);
       await manager.query('UPDATE game_save_slots SET current_snapshot_id = NULL, deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [slot.id]);
       await this.audit(manager, userId, 'cloud_save.slot.delete', { slot_id: slotId }, actor);
@@ -132,9 +166,20 @@ export class GameSavesService {
     this.assertEnabled();
     const [{ used_bytes }] = await this.dataSource.query('SELECT COALESCE(SUM(size_bytes), 0) AS used_bytes FROM game_save_blobs WHERE user_id = ? AND ref_count > 0', [userId]);
     const [{ used_slots }] = await this.dataSource.query('SELECT COUNT(*) AS used_slots FROM game_save_slots WHERE user_id = ? AND deleted_at IS NULL', [userId]);
+    // Unique-blob bytes are what the quota charges; logical bytes let clients
+    // explain "I deleted a snapshot but the quota barely moved" without a
+    // second, differently-scoped number in the UI.
+    const [{ logical_bytes }] = await this.dataSource.query(`SELECT COALESCE(SUM(sn.size_bytes), 0) AS logical_bytes
+      FROM game_save_snapshots sn JOIN game_save_slots s ON s.id = sn.slot_id
+      WHERE s.user_id = ? AND s.deleted_at IS NULL AND sn.deleted_at IS NULL`, [userId]);
     return {
-      used_bytes: Number(used_bytes), limit_bytes: this.number('maxBytesPerUser', 524288000),
+      used_bytes: Number(used_bytes), logical_bytes: Number(logical_bytes), limit_bytes: this.number('maxBytesPerUser', 524288000),
       max_file_size_bytes: this.number('maxFileBytes', 52428800),
+      formats: ['zip', 'manifest'],
+      manifest_limits: {
+        max_files: this.number('maxManifestFiles', 5000),
+        max_manifest_bytes: this.number('fileManifestMaxBytes', 1048576),
+      },
       slots: { used: Number(used_slots), limit: this.number('maxSlots', 100) },
       retention: { max_unpinned_versions_per_slot: this.number('maxHistoryPerSlot', 20), max_unpinned_age_days: this.number('retentionDays', 90) },
     };
@@ -164,13 +209,13 @@ export class GameSavesService {
         if (!baseRows.length) this.fail('SAVE_BASE_SNAPSHOT_INVALID', HttpStatus.CONFLICT, '基准快照不属于此存档或已删除。');
         base = baseRows[0];
       }
-      const currentRows = slot.current_snapshot_id ? await manager.query('SELECT id, sha256 FROM game_save_snapshots WHERE id = ? AND deleted_at IS NULL LIMIT 1', [slot.current_snapshot_id]) : [];
+      const currentRows = slot.current_snapshot_id ? await manager.query('SELECT id, sha256, format FROM game_save_snapshots WHERE id = ? AND deleted_at IS NULL LIMIT 1', [slot.current_snapshot_id]) : [];
       const current = currentRows[0] || null;
       // Head already holds these bytes. Return the upload-session shape anyway,
       // marked committed, so a client that always PUTs what it is given keeps
       // working; `no_upload_required` remains for compatibility with clients
       // that check it first.
-      if (current && current.sha256 === sha256) {
+      if (current && current.format !== 'manifest' && current.sha256 === sha256) {
         const uploadId = randomUUID();
         await manager.query(`INSERT INTO game_save_upload_sessions
           (id,user_id,slot_id,expected_sha256,expected_size_bytes,game_version,game_build,map_name,wave,playtime_seconds,
@@ -275,6 +320,18 @@ export class GameSavesService {
       ['uploaded', uploadId, userId, 'pending', 'uploaded'],
     );
     if (!update.affectedRows) {
+      // A concurrent PUT won the status transition. Deleting the object here
+      // would remove the bytes that client just verified, leaving a `ready`
+      // row without content. Re-read first and only clean up when the row
+      // really expired or failed.
+      const currentRows = await this.dataSource.query(
+        'SELECT status, size_bytes, sha256, expires_at FROM game_save_blob_uploads WHERE id=? AND user_id=? LIMIT 1',
+        [uploadId, userId],
+      );
+      const current = currentRows[0];
+      if (current && ['ready', 'committed'].includes(current.status)) {
+        return { upload_id: uploadId, uploaded: true, size_bytes: Number(current.size_bytes), sha256: current.sha256, status: 'ready' };
+      }
       await this.storage.deleteObject(session.object_key).catch(() => undefined);
       this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期或已取消。');
     }
@@ -282,6 +339,393 @@ export class GameSavesService {
       slot_id: session.slot_id, upload_id: uploadId, size_bytes: Number(session.expected_size_bytes),
     }, actor);
     return { upload_id: uploadId, uploaded: true, size_bytes: Number(session.expected_size_bytes), sha256: session.expected_sha256 };
+  }
+
+  /**
+   * Differential upload, step 1: which manifest hashes does this account
+   * already hold? The answer is advisory; snapshot creation re-checks every
+   * blob under a transaction, so a stale `exists` can only cost a retry.
+   */
+  async checkBlobs(userId: number, body: any) {
+    this.assertEnabled();
+    const hashes = normalizeHashList(body?.sha256, this.number('maxManifestFiles', 5000));
+    if (!hashes.length) return { exists: [], missing: [] };
+    const marks = hashes.map(() => '?').join(',');
+    const blobs = await this.dataSource.query(`SELECT DISTINCT sha256 FROM game_save_blobs
+      WHERE user_id=? AND sha256 IN (${marks})
+        AND (ref_count>0 OR (pending_delete_at IS NOT NULL AND pending_delete_at>NOW()))`, [userId, ...hashes]);
+    const uploads = await this.dataSource.query(`SELECT DISTINCT sha256 FROM game_save_blob_uploads
+      WHERE user_id=? AND sha256 IN (${marks}) AND status='ready' AND expires_at>NOW()`, [userId, ...hashes]);
+    const exists = new Set([...blobs, ...uploads].map((row: any) => String(row.sha256)));
+    return {
+      exists: hashes.filter((hash) => exists.has(hash)),
+      missing: hashes.filter((hash) => !exists.has(hash)),
+    };
+  }
+
+  /**
+   * Differential upload, step 2: stage one file's bytes.
+   *
+   * The session does not create a snapshot reference. Until a manifest
+   * snapshot commits, a ready object is only a reservation; maintenance drops
+   * it after the grace period.
+   */
+  async createBlobUpload(userId: number, body: any, actor: CloudSaveActor) {
+    this.assertEnabled();
+    const sha256 = String(body?.sha256 || '');
+    if (!/^[a-f0-9]{64}$/.test(sha256)) this.fail('SAVE_INVALID_HASH', HttpStatus.BAD_REQUEST, 'SHA-256 格式无效。');
+    const size = Number(body?.size);
+    const maxFile = this.number('maxFileBytes', 52428800);
+    if (!Number.isSafeInteger(size) || size <= 0) this.fail('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '文件大小无效。');
+    if (size > maxFile) this.fail('SAVE_FILE_TOO_LARGE', HttpStatus.PAYLOAD_TOO_LARGE, '存档文件超过单文件大小限制。');
+    return this.dataSource.transaction(async manager => {
+      await this.lockUser(manager, userId);
+      const existing = await manager.query(`SELECT id,gc_in_progress,ref_count,object_key,storage_provider FROM game_save_blobs
+        WHERE user_id=? AND sha256=? AND size_bytes=?
+          AND (ref_count>0 OR (pending_delete_at IS NOT NULL AND pending_delete_at>NOW())) LIMIT 1`,
+        [userId, sha256, String(size)]);
+      if (existing.length) {
+        if (existing[0].gc_in_progress) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存储清理正在处理此内容，请稍后重试。', true);
+        const info = await this.storage.statObject(existing[0].object_key).catch(() => null);
+        if (info?.exists && info.size_bytes === size) return { no_upload_required: true, sha256, size };
+        // A blob row whose object vanished must not strand the client: an
+        // unreferenced row can be dropped so the bytes are uploaded again, but
+        // a referenced row means snapshot content is already lost.
+        if (Number(existing[0].ref_count) > 0) {
+          this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档存储中的文件缺失，请联系管理员。', true);
+        }
+        await manager.query('DELETE FROM game_save_blobs WHERE id=? AND ref_count=0', [existing[0].id]);
+      }
+      const ready = await manager.query(`SELECT id,object_key FROM game_save_blob_uploads
+        WHERE user_id=? AND sha256=? AND size_bytes=? AND status='ready' AND expires_at>NOW() ORDER BY created_at LIMIT 1`,
+        [userId, sha256, String(size)]);
+      if (ready.length) {
+        const info = await this.storage.statObject(ready[0].object_key).catch(() => null);
+        if (info?.exists && info.size_bytes === size) return { no_upload_required: true, sha256, size };
+        await manager.query("UPDATE game_save_blob_uploads SET status='failed' WHERE id=? AND status='ready'", [ready[0].id]);
+      }
+      const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
+      const reserved = await this.reservedBlobBytes(manager, userId, []);
+      if (Number(used_bytes) + reserved + size > this.number('maxBytesPerUser', 524288000)) {
+        this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
+      }
+      const uploadId = randomUUID();
+      // Must match CloudSaveStorageService.objectPath's key grammar, which is
+      // shared with whole-package objects.
+      const objectKey = `cloud-saves/${userId}/${randomUUID()}`;
+      const expiresAt = new Date(Date.now() + this.number('blobUploadMinutes', 10) * 60_000);
+      await manager.query(`INSERT INTO game_save_blob_uploads
+        (id,user_id,sha256,size_bytes,object_key,storage_provider,status,created_by_client_id,expires_at)
+        VALUES (?,?,?,?,?,?,'pending',?,?)`,
+        [uploadId, userId, sha256, String(size), objectKey, this.storage.provider, actor.clientId || null, expiresAt]);
+      await this.audit(manager, userId, 'cloud_save.blob.upload.create', { upload_id: uploadId, sha256, size_bytes: size }, actor);
+      return {
+        upload_id: uploadId,
+        upload: {
+          method: 'PUT',
+          url: `/api/v1/game-saves/blobs/uploads/${encodeURIComponent(uploadId)}/file`,
+          headers: { 'Content-Type': 'application/octet-stream' },
+          expires_at: expiresAt.toISOString(),
+        },
+      };
+    });
+  }
+
+  async receiveBlobUpload(userId: number, uploadId: string, source: NodeJS.ReadableStream, actor: CloudSaveActor) {
+    this.assertEnabled();
+    const rows = await this.dataSource.query('SELECT * FROM game_save_blob_uploads WHERE id=? AND user_id=? LIMIT 1', [uploadId, userId]);
+    if (!rows.length) this.notFound('SAVE_UPLOAD_NOT_FOUND', '上传会话不存在。');
+    const session = rows[0];
+    if (session.status === 'ready') {
+      if (new Date(session.expires_at).getTime() <= Date.now()) {
+        this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期或已取消。');
+      }
+      return { upload_id: uploadId, uploaded: true, size_bytes: Number(session.size_bytes), sha256: session.sha256, status: 'ready' };
+    }
+    if (session.status !== 'pending' || new Date(session.expires_at).getTime() <= Date.now()) {
+      this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期或已取消。');
+    }
+    try {
+      await this.storage.writeObject(
+        session.object_key,
+        source as any,
+        Number(session.size_bytes),
+        String(session.sha256),
+        this.number('maxFileBytes', 52428800),
+      );
+    } catch (error: any) {
+      const code = error?.code;
+      if (code === 'SAVE_FILE_TOO_LARGE') this.fail('SAVE_FILE_TOO_LARGE', HttpStatus.PAYLOAD_TOO_LARGE, '存档文件超过单文件大小限制。');
+      if (code === 'SAVE_UPLOAD_SIZE_MISMATCH') this.fail('SAVE_UPLOAD_SIZE_MISMATCH', HttpStatus.CONFLICT, '上传文件大小与声明不一致。');
+      if (code === 'SAVE_UPLOAD_CHECKSUM_MISMATCH') this.fail('SAVE_UPLOAD_CHECKSUM_MISMATCH', HttpStatus.CONFLICT, '上传文件 SHA-256 与声明不一致。');
+      this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '无法写入论坛本地存档目录。', true);
+    }
+    const update = await this.dataSource.query(
+      "UPDATE game_save_blob_uploads SET status='ready' WHERE id=? AND user_id=? AND status='pending' AND expires_at>NOW()",
+      [uploadId, userId],
+    );
+    if (!update.affectedRows) {
+      // A concurrent PUT won the status transition. Deleting the object here
+      // would remove the bytes that client just verified, leaving a `ready`
+      // row without content. Re-read first and only clean up when the row
+      // really expired or failed.
+      const currentRows = await this.dataSource.query(
+        'SELECT status, size_bytes, sha256, expires_at FROM game_save_blob_uploads WHERE id=? AND user_id=? LIMIT 1',
+        [uploadId, userId],
+      );
+      const current = currentRows[0];
+      if (current && ['ready', 'committed'].includes(current.status)) {
+        return { upload_id: uploadId, uploaded: true, size_bytes: Number(current.size_bytes), sha256: current.sha256, status: 'ready' };
+      }
+      await this.storage.deleteObject(session.object_key).catch(() => undefined);
+      this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期或已取消。');
+    }
+    await this.audit(this.dataSource.manager, userId, 'cloud_save.blob.upload.received', {
+      upload_id: uploadId, size_bytes: Number(session.size_bytes), sha256: session.sha256,
+    }, actor);
+    return { upload_id: uploadId, uploaded: true, size_bytes: Number(session.size_bytes), sha256: session.sha256, status: 'ready' };
+  }
+
+  /**
+   * Differential upload, step 3: commit a manifest as an immutable snapshot.
+   *
+   * Every referenced blob must already exist for this account (either from an
+   * older snapshot or from a verified standalone upload). The function locks
+   * the user and slot first, so conflict detection and refcount updates share
+   * one serialization point with the whole-package commit path.
+   */
+  async createManifestSnapshot(userId: number, slotId: string, body: any, actor: CloudSaveActor, key?: string) {
+    this.assertEnabled();
+    const manifest = normalizeManifest(
+      body?.manifest,
+      this.number('maxManifestFiles', 5000),
+      this.number('maxFileBytes', 52428800),
+      this.number('fileManifestMaxBytes', 1048576),
+    );
+    if (body?.manifest?.format && body.manifest.format !== MANIFEST_FORMAT) {
+      throw new ApiV1Exception('SAVE_MANIFEST_INVALID', HttpStatus.BAD_REQUEST, '不支持的清单格式。', false, [{ field: 'manifest.format' }]);
+    }
+    const metadata = normalizeSaveMetadata({
+      game: body?.game ?? body?.manifest?.game,
+      save: body?.save ?? body?.manifest?.save,
+      mods: body?.mods ?? body?.manifest?.mods,
+    }, this.number('maxMods', 100), this.number('maxManifestBytes', 16384));
+    const reason = ['manual', 'before_launch', 'after_exit', 'periodic', 'restore', 'conflict', 'import'].includes(body?.reason) ? body.reason : 'manual';
+    const resolution = ['normal', 'create_conflict_copy', 'force_replace_head'].includes(body?.conflict_resolution) ? body.conflict_resolution : 'normal';
+    const baseId = body?.base_snapshot_id || null;
+    const confirmedCurrentId = body?.confirm_current_snapshot_id || null;
+    const deviceId = boundedOpaque(body?.device_id) || boundedOpaque(actor.deviceId);
+    // Fingerprint the file list in path order so an idempotent retry that
+    // reorders the same entries still matches its original request.
+    const payload = {
+      slotId,
+      manifest: {
+        format: manifest.format,
+        files: [...manifest.files].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)),
+      },
+      metadata, reason, resolution, baseId, confirmedCurrentId, deviceId,
+    };
+    return this.idempotent(userId, 'snapshot.manifest.create', key, payload, async manager => {
+      await this.lockUser(manager, userId);
+      const slot = await this.lockSlot(manager, userId, slotId);
+      if (baseId) {
+        const baseRows = await manager.query('SELECT id FROM game_save_snapshots WHERE id = ? AND slot_id = ? AND deleted_at IS NULL LIMIT 1', [baseId, slotId]);
+        if (!baseRows.length) this.fail('SAVE_BASE_SNAPSHOT_INVALID', HttpStatus.CONFLICT, '基准快照不属于此存档或已删除。');
+      }
+      const currentRows = slot.current_snapshot_id
+        ? await manager.query('SELECT * FROM game_save_snapshots WHERE id = ? AND deleted_at IS NULL LIMIT 1', [slot.current_snapshot_id])
+        : [];
+      const current = currentRows[0] || null;
+      // The manifest hash is the snapshot identity: resubmitting the same file
+      // set must not burn a revision or another quota sample.
+      if (current && current.format === 'manifest' && current.sha256 === manifest.manifest_hash) {
+        return { ...this.shapeSnapshot(current, slot.id), no_changes: true };
+      }
+      if (!current && baseId) this.fail('SAVE_BASE_SNAPSHOT_INVALID', HttpStatus.CONFLICT, '云存档当前没有基准快照。');
+      const hasConflict = (current?.id || null) !== (baseId || null);
+      const createConflictCopy = shouldCreateConflictCopy(resolution, hasConflict);
+      if (resolution === 'normal' && hasConflict) this.conflict(baseId, current?.id || null, true);
+      if (resolution === 'force_replace_head' && (confirmedCurrentId || null) !== (current?.id || null)) {
+        this.conflict(baseId, current?.id || null);
+      }
+      const destination = createConflictCopy
+        ? await this.createConflictCopySlot(manager, userId, slot, actor)
+        : slot;
+
+      const unique = new Map<string, { sha256: string; size: number }>();
+      for (const file of manifest.files) unique.set(`${file.sha256}:${file.size}`, file);
+      const resolved = new Map<string, string>();
+      let newBytes = 0;
+      for (const file of unique.values()) {
+        const blobRows = await manager.query(
+          'SELECT id,ref_count,gc_in_progress,object_key FROM game_save_blobs WHERE user_id=? AND sha256=? AND size_bytes=? FOR UPDATE',
+          [userId, file.sha256, String(file.size)],
+        );
+        if (blobRows.length) {
+          if (blobRows[0].gc_in_progress) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存储清理正在处理此内容，请稍后重试。', true);
+          const info = await this.storage.statObject(blobRows[0].object_key).catch(() => null);
+          if (!info?.exists || info.size_bytes !== file.size) {
+            this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档存储中的文件缺失，请重新上传。', true);
+          }
+          if (Number(blobRows[0].ref_count) === 0) newBytes += file.size;
+          resolved.set(`${file.sha256}:${file.size}`, String(blobRows[0].id));
+          continue;
+        }
+        const uploadRows = await manager.query(`SELECT id,object_key,storage_provider FROM game_save_blob_uploads
+          WHERE user_id=? AND sha256=? AND size_bytes=? AND status='ready' AND expires_at>NOW()
+          ORDER BY created_at ASC LIMIT 1 FOR UPDATE`, [userId, file.sha256, String(file.size)]);
+        if (!uploadRows.length) {
+          throw new ApiV1Exception('SAVE_BLOB_MISSING', HttpStatus.CONFLICT, '清单中的文件尚未上传。', false, [{ sha256: file.sha256, size: file.size }]);
+        }
+        const info = await this.storage.statObject(uploadRows[0].object_key).catch(() => null);
+        if (!info?.exists || info.size_bytes !== file.size) {
+          // The staged object is gone; fail the session so the client uploads
+          // the bytes again instead of retrying the same broken reference.
+          await manager.query("UPDATE game_save_blob_uploads SET status='failed' WHERE id=? AND status='ready'", [uploadRows[0].id]);
+          this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '暂存的存档文件缺失，请重新上传。', true);
+        }
+        const blobId = randomUUID();
+        await manager.query(`INSERT INTO game_save_blobs
+          (id,user_id,sha256,size_bytes,storage_provider,object_key,ref_count) VALUES (?,?,?,?,?,?,0)`,
+          [blobId, userId, file.sha256, String(file.size), uploadRows[0].storage_provider || this.storage.provider, uploadRows[0].object_key]);
+        await manager.query("UPDATE game_save_blob_uploads SET status='committed', committed_blob_id=? WHERE id=?", [blobId, uploadRows[0].id]);
+        newBytes += file.size;
+        resolved.set(`${file.sha256}:${file.size}`, blobId);
+      }
+
+      const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
+      const reserved = await this.reservedBlobBytes(manager, userId, [...unique.values()]);
+      if (Number(used_bytes) + newBytes + reserved > this.number('maxBytesPerUser', 524288000)) {
+        this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
+      }
+
+      const files = manifest.files.map((file) => ({
+        path: file.path,
+        size: file.size,
+        sha256: file.sha256,
+        blobId: resolved.get(`${file.sha256}:${file.size}`)!,
+      }));
+      const snapshot = await this.insertManifestSnapshot(manager, destination, {
+        sha256: manifest.manifest_hash,
+        size_bytes: manifest.total_size,
+        file_count: files.length,
+        metadata,
+        reason: createConflictCopy ? 'conflict' : reason,
+        base_snapshot_id: baseId || slot.current_snapshot_id || null,
+        created_by_client_id: actor.clientId || null,
+        device_id: deviceId,
+      }, files, actor);
+      await manager.query('UPDATE game_save_slots SET current_snapshot_id=?, updated_at=NOW() WHERE id=?', [snapshot.id, destination.id]);
+      await this.audit(manager, userId, 'cloud_save.snapshot.manifest.create', {
+        slot_id: destination.id, snapshot_id: snapshot.id, revision: snapshot.revision,
+        file_count: files.length, size_bytes: manifest.total_size, manifest_hash: manifest.manifest_hash,
+      }, actor);
+      return this.shapeSnapshot(snapshot, destination.id);
+    });
+  }
+
+  async getManifest(userId: number, slotId: string, snapshotId: string) {
+    this.assertEnabled();
+    await this.findSlot(userId, slotId);
+    const rows = await this.dataSource.query(
+      'SELECT * FROM game_save_snapshots WHERE id=? AND slot_id=? AND deleted_at IS NULL LIMIT 1',
+      [snapshotId, slotId],
+    );
+    if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
+    const snapshot = rows[0];
+    this.assertManifestFormat(snapshot);
+    const files = await this.dataSource.query(
+      'SELECT path,size_bytes,sha256 FROM game_save_snapshot_files WHERE snapshot_id=? ORDER BY path ASC',
+      [snapshotId],
+    );
+    const mods = parseJson(snapshot.mods_manifest_json);
+    return {
+      format: MANIFEST_FORMAT,
+      snapshot_id: snapshotId,
+      revision: Number(snapshot.revision),
+      sha256: snapshot.sha256,
+      size: Number(snapshot.size_bytes),
+      files: files.map((file: any) => ({ path: file.path, size: Number(file.size_bytes), sha256: file.sha256 })),
+      game: { version: snapshot.game_version ?? null, build: snapshot.game_build ?? null },
+      save: {
+        map_name: snapshot.map_name ?? null,
+        wave: snapshot.wave ?? null,
+        playtime_seconds: snapshot.playtime_seconds == null ? null : Number(snapshot.playtime_seconds),
+      },
+      mods: Array.isArray(mods) ? mods : [],
+      created_at: snapshot.created_at,
+    };
+  }
+
+  async blobDownloadGrant(userId: number, slotId: string, snapshotId: string, body: any, actor: CloudSaveActor) {
+    this.assertEnabled();
+    const hashes = normalizeHashList(body?.sha256, this.number('maxManifestFiles', 5000));
+    await this.findSlot(userId, slotId);
+    const rows = await this.dataSource.query(
+      'SELECT format FROM game_save_snapshots WHERE id=? AND slot_id=? AND deleted_at IS NULL LIMIT 1',
+      [snapshotId, slotId],
+    );
+    if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
+    this.assertManifestFormat(rows[0]);
+    if (!hashes.length) return { downloads: [] };
+    const marks = hashes.map(() => '?').join(',');
+    const files = await this.dataSource.query(
+      `SELECT path,size_bytes,sha256 FROM game_save_snapshot_files WHERE snapshot_id=? AND sha256 IN (${marks})`,
+      [snapshotId, ...hashes],
+    );
+    const found = new Set(files.map((file: any) => String(file.sha256)));
+    const missing = hashes.filter((hash) => !found.has(hash));
+    if (missing.length) {
+      throw new ApiV1Exception('SAVE_BLOB_NOT_IN_SNAPSHOT', HttpStatus.NOT_FOUND, '部分文件不属于该快照。', false, missing.map((sha256) => ({ sha256 })));
+    }
+    await this.audit(this.dataSource.manager, userId, 'cloud_save.blob.download.request', {
+      slot_id: slotId, snapshot_id: snapshotId, file_count: files.length,
+    }, actor);
+    return {
+      downloads: files.map((file: any) => ({
+        path: file.path,
+        size: Number(file.size_bytes),
+        sha256: file.sha256,
+        download: {
+          method: 'GET',
+          url: `/api/v1/game-saves/${encodeURIComponent(slotId)}/snapshots/${encodeURIComponent(snapshotId)}/blobs/${file.sha256}/file`,
+          headers: {},
+          size: Number(file.size_bytes),
+          sha256: file.sha256,
+          // Same-origin Bearer URL; reusable while the snapshot and blob exist.
+          expires_at: null,
+          reusable: true,
+        },
+      })),
+    };
+  }
+
+  async openBlobDownload(userId: number, slotId: string, snapshotId: string, sha256: string, actor: CloudSaveActor) {
+    this.assertEnabled();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) this.fail('SAVE_INVALID_HASH', HttpStatus.BAD_REQUEST, 'SHA-256 格式无效。');
+    const rows = await this.dataSource.query(`SELECT f.path,f.size_bytes,f.sha256,b.object_key,b.storage_provider
+      FROM game_save_snapshot_files f
+      JOIN game_save_snapshots sn ON sn.id=f.snapshot_id
+      JOIN game_save_slots s ON s.id=sn.slot_id
+      JOIN game_save_blobs b ON b.id=f.blob_id
+      WHERE s.user_id=? AND s.id=? AND sn.id=? AND sn.deleted_at IS NULL AND s.deleted_at IS NULL AND f.sha256=? LIMIT 1`,
+      [userId, slotId, snapshotId, sha256]);
+    if (!rows.length) this.notFound('SAVE_BLOB_NOT_IN_SNAPSHOT', '该文件不属于此快照。');
+    const row = rows[0];
+    if (row.storage_provider !== this.storage.provider) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档存储服务暂不可用。', true);
+    const file = await this.storage.openObject(row.object_key).catch(() => null);
+    if (!file || file.size !== Number(row.size_bytes)) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档文件暂不可用。', true);
+    await this.audit(this.dataSource.manager, userId, 'cloud_save.blob.download', {
+      slot_id: slotId, snapshot_id: snapshotId, sha256, size_bytes: Number(row.size_bytes),
+    }, actor);
+    return {
+      stream: file.stream,
+      size: file.size,
+      file_name: String(row.path).split('/').pop() || 'file',
+      path: row.path,
+      sha256: row.sha256,
+      last_modified: file.last_modified,
+    };
   }
 
   async commitUpload(userId: number, uploadId: string, actor: CloudSaveActor, key?: string) {
@@ -326,20 +770,7 @@ export class GameSavesService {
       if (locked.conflict_resolution === 'force_replace_head' && (locked.confirm_current_snapshot_id || null) !== (current?.id || null)) {
         this.conflict(locked.base_snapshot_id || null, current?.id || null);
       }
-      if (createConflictCopy) {
-        const [{ count }] = await manager.query('SELECT COUNT(*) AS count FROM game_save_slots WHERE user_id=? AND deleted_at IS NULL', [userId]);
-        if (Number(count) >= this.number('maxSlots', 100)) this.fail('SAVE_SLOT_LIMIT_EXCEEDED', HttpStatus.CONFLICT, '已达到云存档数量上限，无法创建冲突副本。');
-        const copyId = randomUUID();
-        let copyName = `${slot.name.slice(0, 86)}（冲突副本）`;
-        let suffix = 2;
-        while ((await manager.query('SELECT id FROM game_save_slots WHERE user_id=? AND name=? AND deleted_at IS NULL LIMIT 1', [userId, copyName])).length) {
-          const tail = ` (${suffix++})`;
-          copyName = `${slot.name.slice(0, Math.max(1, 100 - tail.length - 6))}（冲突副本）${tail}`;
-        }
-        await manager.query('INSERT INTO game_save_slots (id,user_id,name) VALUES (?,?,?)', [copyId, userId, copyName]);
-        destination = { id: copyId, name: copyName, current_snapshot_id: null };
-        await this.audit(manager, userId, 'cloud_save.slot.create', { slot_id: copyId, conflict_copy_of: slot.id }, actor);
-      }
+      if (createConflictCopy) destination = await this.createConflictCopySlot(manager, userId, slot, actor);
       const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
       const [{ reserved_bytes }] = await manager.query(`SELECT COALESCE(SUM(size_bytes),0) AS reserved_bytes FROM (
         SELECT DISTINCT s.expected_sha256,s.expected_size_bytes AS size_bytes FROM game_save_upload_sessions s
@@ -377,10 +808,12 @@ export class GameSavesService {
     this.assertEnabled();
     const rows = await this.dataSource.query(`SELECT s.name AS slot_name,sn.*,b.object_key,b.storage_provider
       FROM game_save_slots s JOIN game_save_snapshots sn ON sn.slot_id=s.id
-      JOIN game_save_blobs b ON b.id=sn.blob_id
+      LEFT JOIN game_save_blobs b ON b.id=sn.blob_id
       WHERE s.id=? AND s.user_id=? AND s.deleted_at IS NULL AND sn.id=? AND sn.deleted_at IS NULL LIMIT 1`, [slotId,userId,snapshotId]);
     if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
     const row = rows[0];
+    if (row.format === 'manifest') this.fail('SAVE_SNAPSHOT_FORMAT_MISMATCH', HttpStatus.CONFLICT, '该快照为文件清单格式，请使用 manifest 与 blob 接口。');
+    if (!row.object_key) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档文件暂不可用。', true);
     if (row.storage_provider !== this.storage.provider) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档存储服务暂不可用。', true);
     const info = await this.storage.statObject(row.object_key).catch(() => null);
     if (!info?.exists || info.size_bytes !== Number(row.size_bytes)) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档文件暂不可用。', true);
@@ -406,10 +839,12 @@ export class GameSavesService {
     this.assertEnabled();
     const rows = await this.dataSource.query(`SELECT s.name AS slot_name,sn.*,b.object_key,b.storage_provider
       FROM game_save_slots s JOIN game_save_snapshots sn ON sn.slot_id=s.id
-      JOIN game_save_blobs b ON b.id=sn.blob_id
+      LEFT JOIN game_save_blobs b ON b.id=sn.blob_id
       WHERE s.id=? AND s.user_id=? AND s.deleted_at IS NULL AND sn.id=? AND sn.deleted_at IS NULL LIMIT 1`, [slotId, userId, snapshotId]);
     if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
     const row = rows[0];
+    if (row.format === 'manifest') this.fail('SAVE_SNAPSHOT_FORMAT_MISMATCH', HttpStatus.CONFLICT, '该快照为文件清单格式，请使用 manifest 与 blob 接口。');
+    if (!row.object_key) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档文件暂不可用。', true);
     if (row.storage_provider !== this.storage.provider) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档存储服务暂不可用。', true);
     const file = await this.storage.openObject(row.object_key).catch(() => null);
     if (!file || file.size !== Number(row.size_bytes)) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存档文件暂不可用。', true);
@@ -430,8 +865,36 @@ export class GameSavesService {
       const sourceRows = await manager.query('SELECT * FROM game_save_snapshots WHERE id=? AND slot_id=? AND deleted_at IS NULL LIMIT 1', [snapshotId, slotId]);
       if (!sourceRows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
       const source = sourceRows[0];
-      await this.addBlobRefById(manager, source.blob_id);
-      const snapshot = await this.insertSnapshot(manager, slot, { ...source, reason: 'restore', base_snapshot_id: slot.current_snapshot_id || null }, source.blob_id, actor);
+      let snapshot: any;
+      if (source.format === 'manifest') {
+        const files = await manager.query(
+          'SELECT path,size_bytes,sha256,blob_id FROM game_save_snapshot_files WHERE snapshot_id=? ORDER BY path ASC',
+          [snapshotId],
+        );
+        snapshot = await this.insertManifestSnapshot(manager, slot, {
+          sha256: source.sha256,
+          size_bytes: Number(source.size_bytes),
+          file_count: files.length,
+          metadata: {
+            game_version: source.game_version ?? null,
+            game_build: source.game_build ?? null,
+            map_name: source.map_name ?? null,
+            wave: source.wave ?? null,
+            playtime_seconds: source.playtime_seconds == null ? null : String(source.playtime_seconds),
+            mods_manifest_json: parseJson(source.mods_manifest_json),
+            mods_manifest_hash: source.mods_manifest_hash ?? null,
+          },
+          reason: 'restore',
+          base_snapshot_id: slot.current_snapshot_id || null,
+          created_by_client_id: actor.clientId || source.created_by_client_id || null,
+          device_id: actor.deviceId || source.device_id || null,
+        }, files.map((file: any) => ({
+          path: file.path, size: Number(file.size_bytes), sha256: file.sha256, blobId: file.blob_id,
+        })), actor);
+      } else {
+        await this.addBlobRefById(manager, source.blob_id);
+        snapshot = await this.insertSnapshot(manager, slot, { ...source, reason: 'restore', base_snapshot_id: slot.current_snapshot_id || null }, source.blob_id, actor);
+      }
       await manager.query('UPDATE game_save_slots SET current_snapshot_id=?,updated_at=NOW() WHERE id=?', [snapshot.id, slotId]);
       await this.audit(manager, userId, 'cloud_save.snapshot.restore', { slot_id: slotId, source_snapshot_id: snapshotId, snapshot_id: snapshot.id, revision: snapshot.revision }, actor);
       return this.shapeSnapshot(snapshot, slotId);
@@ -454,10 +917,16 @@ export class GameSavesService {
     return this.dataSource.transaction(async manager => {
       const slot = await this.lockSlot(manager, userId, slotId);
       if (slot.current_snapshot_id === snapshotId) this.fail('SAVE_CURRENT_SNAPSHOT_DELETE_FORBIDDEN', HttpStatus.CONFLICT, '当前快照不能单独删除，请先恢复其他版本或删除整个存档。');
-      const rows = await manager.query('SELECT blob_id FROM game_save_snapshots WHERE id=? AND slot_id=? AND deleted_at IS NULL FOR UPDATE', [snapshotId, slotId]);
+      const rows = await manager.query('SELECT blob_id,format FROM game_save_snapshots WHERE id=? AND slot_id=? AND deleted_at IS NULL FOR UPDATE', [snapshotId, slotId]);
       if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
       await manager.query('UPDATE game_save_snapshots SET deleted_at=NOW() WHERE id=?', [snapshotId]);
-      await this.releaseBlob(manager, rows[0].blob_id, 1);
+      if (rows[0].format === 'manifest') {
+        const fileBlobs = await manager.query('SELECT DISTINCT blob_id FROM game_save_snapshot_files WHERE snapshot_id=?', [snapshotId]);
+        for (const fileBlob of fileBlobs) await this.releaseBlob(manager, String(fileBlob.blob_id), 1);
+        await manager.query('DELETE FROM game_save_snapshot_files WHERE snapshot_id=?', [snapshotId]);
+      } else if (rows[0].blob_id) {
+        await this.releaseBlob(manager, rows[0].blob_id, 1);
+      }
       await this.audit(manager, userId, 'cloud_save.snapshot.delete', { slot_id: slotId, snapshot_id: snapshotId }, actor);
       return { id: snapshotId, deleted: true };
     });
@@ -482,8 +951,8 @@ export class GameSavesService {
     return this.shapeSnapshot(row, row.slot_id);
   }
 
-  async runMaintenance(): Promise<{ expiredUploads: number; orphanObjects: number; deletedBlobs: number; deletedSnapshots: number; expiredIdempotencyKeys: number }> {
-    if (!this.isStorageReady()) return { expiredUploads: 0, orphanObjects: 0, deletedBlobs: 0, deletedSnapshots: 0, expiredIdempotencyKeys: 0 };
+  async runMaintenance(): Promise<{ expiredUploads: number; expiredBlobUploads: number; orphanObjects: number; deletedBlobs: number; deletedSnapshots: number; expiredIdempotencyKeys: number }> {
+    if (!this.isStorageReady()) return { expiredUploads: 0, expiredBlobUploads: 0, orphanObjects: 0, deletedBlobs: 0, deletedSnapshots: 0, expiredIdempotencyKeys: 0 };
     const expired = await this.dataSource.query(`SELECT id,object_key,status FROM game_save_upload_sessions
       WHERE object_deleted_at IS NULL AND ((status IN ('pending','uploaded') AND expires_at < NOW())
         OR (status IN ('cancelled','expired','failed') AND created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR))) LIMIT 100`);
@@ -520,7 +989,13 @@ export class GameSavesService {
         await this.dataSource.transaction(async manager => {
           const rows = await manager.query('SELECT id,ref_count,gc_in_progress FROM game_save_blobs WHERE id=? FOR UPDATE', [blob.id]);
           if (!rows.length) return;
-          const refs = await manager.query('SELECT COUNT(*) AS count FROM game_save_snapshots WHERE blob_id=? AND deleted_at IS NULL', [blob.id]);
+          // Manifest snapshots reference a blob through file rows, so the
+          // whole-package column alone would let GC delete live file bytes.
+          const refs = await manager.query(`SELECT
+            (SELECT COUNT(*) FROM game_save_snapshots WHERE blob_id=? AND deleted_at IS NULL)
+            + (SELECT COUNT(DISTINCT f.snapshot_id) FROM game_save_snapshot_files f
+               JOIN game_save_snapshots s ON s.id=f.snapshot_id
+               WHERE f.blob_id=? AND s.deleted_at IS NULL) AS count`, [blob.id, blob.id]);
           if (Number(rows[0].ref_count) === 0 && Number(refs[0].count) === 0 && rows[0].gc_in_progress) {
             await manager.query('DELETE FROM game_save_blobs WHERE id=?', [blob.id]);
           } else await manager.query('UPDATE game_save_blobs SET gc_in_progress=0 WHERE id=?', [blob.id]);
@@ -530,6 +1005,7 @@ export class GameSavesService {
         await this.dataSource.query('UPDATE game_save_blobs SET gc_in_progress=0,pending_delete_at=DATE_ADD(NOW(), INTERVAL ? HOUR) WHERE id=? AND ref_count=0', [this.number('gcGraceHours', 24), blob.id]);
       }
     }
+    const expiredBlobUploads = await this.sweepBlobUploads();
     const deletedSnapshots = await this.applyRetention();
     // Idempotency rows only disappear when the exact same key is replayed, so a
     // busy account would otherwise accumulate response_json payloads forever.
@@ -537,7 +1013,35 @@ export class GameSavesService {
       'DELETE FROM game_save_idempotency WHERE expires_at < NOW() LIMIT 1000',
     );
     const expiredIdempotencyKeys = Number(purged?.affectedRows || 0);
-    return { expiredUploads, orphanObjects, deletedBlobs, deletedSnapshots, expiredIdempotencyKeys };
+    return { expiredUploads, expiredBlobUploads, orphanObjects, deletedBlobs, deletedSnapshots, expiredIdempotencyKeys };
+  }
+
+  /**
+   * Drop staging rows for standalone blob uploads.
+   *
+   * A `ready` row whose session expired was never referenced by a snapshot, so
+   * its object is safe to delete. `committed` objects belong to the blob table
+   * and must survive; only the staging row is removed after it ages out.
+   */
+  private async sweepBlobUploads(): Promise<number> {
+    const rows = await this.dataSource.query(`SELECT id,object_key,status FROM game_save_blob_uploads
+      WHERE object_deleted_at IS NULL AND (
+        (status IN ('pending','ready') AND expires_at < NOW())
+        OR (status IN ('committed','expired','failed') AND created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR))
+      ) LIMIT 100`);
+    let swept = 0;
+    for (const item of rows) {
+      if (item.status !== 'committed') {
+        // deleteObject tolerates ENOENT, so a previously failed cleanup is
+        // retried without special-casing.
+        try {
+          await this.storage.deleteObject(item.object_key);
+        } catch { continue; }
+      }
+      await this.dataSource.query('DELETE FROM game_save_blob_uploads WHERE id=?', [item.id]);
+      swept++;
+    }
+    return swept;
   }
 
   /**
@@ -561,7 +1065,7 @@ export class GameSavesService {
       removed += await this.dataSource.transaction(async manager => {
         const slotRows = await manager.query('SELECT id,user_id,current_snapshot_id FROM game_save_slots WHERE id=? AND deleted_at IS NULL FOR UPDATE', [candidate.id]);
         if (!slotRows.length) return 0;
-        const active = await manager.query(`SELECT id,blob_id,created_at FROM game_save_snapshots
+        const active = await manager.query(`SELECT id,blob_id,format,created_at FROM game_save_snapshots
           WHERE slot_id=? AND deleted_at IS NULL AND is_pinned=0 AND id<>COALESCE(?, '') ORDER BY revision DESC`, [candidate.id, slotRows[0].current_snapshot_id]);
         let rank = 0;
         let count = 0;
@@ -569,7 +1073,13 @@ export class GameSavesService {
           rank++;
           if (rank > maxHistory || new Date(snapshot.created_at).getTime() < cutoff.getTime()) {
             await manager.query('UPDATE game_save_snapshots SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL', [snapshot.id]);
-            await this.releaseBlob(manager, snapshot.blob_id, 1);
+            if (snapshot.format === 'manifest') {
+              const fileBlobs = await manager.query('SELECT DISTINCT blob_id FROM game_save_snapshot_files WHERE snapshot_id=?', [snapshot.id]);
+              for (const fileBlob of fileBlobs) await this.releaseBlob(manager, String(fileBlob.blob_id), 1);
+              await manager.query('DELETE FROM game_save_snapshot_files WHERE snapshot_id=?', [snapshot.id]);
+            } else if (snapshot.blob_id) {
+              await this.releaseBlob(manager, snapshot.blob_id, 1);
+            }
             count++;
           }
         }
@@ -646,6 +1156,111 @@ export class GameSavesService {
       reason: source.reason || 'manual', base_snapshot_id: source.base_snapshot_id || null, is_pinned: false, created_at: new Date() };
   }
 
+  /**
+   * Insert an immutable manifest snapshot, its file rows and its blob
+   * references. Callers must already hold the user and slot locks.
+   */
+  private async insertManifestSnapshot(
+    manager: EntityManager,
+    slot: any,
+    source: {
+      sha256: string;
+      size_bytes: number;
+      file_count: number;
+      metadata: NormalizedSaveMetadata;
+      reason: string;
+      base_snapshot_id: string | null;
+      created_by_client_id: string | null;
+      device_id: string | null;
+    },
+    files: Array<{ path: string; size: number; sha256: string; blobId: string }>,
+    _actor: CloudSaveActor,
+  ) {
+    const [{ revision }] = await manager.query('SELECT COALESCE(MAX(revision),0)+1 AS revision FROM game_save_snapshots WHERE slot_id=? FOR UPDATE', [slot.id]);
+    const id = randomUUID();
+    const metadata = source.metadata;
+    await manager.query(`INSERT INTO game_save_snapshots
+      (id,slot_id,revision,blob_id,format,sha256,size_bytes,manifest_file_count,game_version,game_build,map_name,wave,playtime_seconds,
+       mods_manifest_json,mods_manifest_hash,created_by_client_id,device_id,reason,base_snapshot_id,is_pinned)
+      VALUES (?,?,?,NULL,'manifest',?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`, [
+      id, slot.id, Number(revision), source.sha256, String(source.size_bytes), files.length,
+      metadata.game_version, metadata.game_build, metadata.map_name, metadata.wave, metadata.playtime_seconds,
+      metadata.mods_manifest_json ? JSON.stringify(metadata.mods_manifest_json) : null, metadata.mods_manifest_hash,
+      source.created_by_client_id, source.device_id, source.reason, source.base_snapshot_id,
+    ]);
+    for (let offset = 0; offset < files.length; offset += 500) {
+      const chunk = files.slice(offset, offset + 500);
+      const values = chunk.map(() => '(?,?,?,?,?,?)').join(',');
+      const parameters: unknown[] = [];
+      for (const file of chunk) parameters.push(randomUUID(), id, file.path, file.blobId, String(file.size), file.sha256);
+      await manager.query(`INSERT INTO game_save_snapshot_files
+        (id,snapshot_id,path,blob_id,size_bytes,sha256) VALUES ${values}`, parameters);
+    }
+    // One reference per distinct blob per snapshot, regardless of how many
+    // paths share that content.
+    for (const blobId of [...new Set(files.map((file) => file.blobId))]) {
+      const rows = await manager.query('SELECT id,gc_in_progress FROM game_save_blobs WHERE id=? FOR UPDATE', [blobId]);
+      if (!rows.length) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '快照文件记录暂不可用。', true);
+      if (rows[0].gc_in_progress) this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '存储清理正在处理此内容，请稍后重试。', true);
+      await manager.query('UPDATE game_save_blobs SET ref_count=ref_count+1,pending_delete_at=NULL,last_referenced_at=NOW() WHERE id=?', [blobId]);
+    }
+    return {
+      id, slot_id: slot.id, revision: Number(revision), format: 'manifest' as const,
+      sha256: source.sha256, size_bytes: String(source.size_bytes), manifest_file_count: files.length,
+      game_version: metadata.game_version, game_build: metadata.game_build, map_name: metadata.map_name,
+      wave: metadata.wave, playtime_seconds: metadata.playtime_seconds,
+      mods_manifest_json: metadata.mods_manifest_json, mods_manifest_hash: metadata.mods_manifest_hash,
+      created_by_client_id: source.created_by_client_id, device_id: source.device_id,
+      reason: source.reason, base_snapshot_id: source.base_snapshot_id, is_pinned: false, created_at: new Date(),
+    };
+  }
+
+  /** Create the conflict-copy slot used by both upload and manifest commits. */
+  private async createConflictCopySlot(manager: EntityManager, userId: number, slot: any, actor: CloudSaveActor) {
+    const [{ count }] = await manager.query('SELECT COUNT(*) AS count FROM game_save_slots WHERE user_id=? AND deleted_at IS NULL', [userId]);
+    if (Number(count) >= this.number('maxSlots', 100)) this.fail('SAVE_SLOT_LIMIT_EXCEEDED', HttpStatus.CONFLICT, '已达到云存档数量上限，无法创建冲突副本。');
+    const copyId = randomUUID();
+    let copyName = `${slot.name.slice(0, 86)}（冲突副本）`;
+    let suffix = 2;
+    while ((await manager.query('SELECT id FROM game_save_slots WHERE user_id=? AND name=? AND deleted_at IS NULL LIMIT 1', [userId, copyName])).length) {
+      const tail = ` (${suffix++})`;
+      copyName = `${slot.name.slice(0, Math.max(1, 100 - tail.length - 6))}（冲突副本）${tail}`;
+    }
+    await manager.query('INSERT INTO game_save_slots (id,user_id,name) VALUES (?,?,?)', [copyId, userId, copyName]);
+    await this.audit(manager, userId, 'cloud_save.slot.create', { slot_id: copyId, conflict_copy_of: slot.id }, actor);
+    return { id: copyId, name: copyName, current_snapshot_id: null };
+  }
+
+  /**
+   * Bytes reserved by standalone blob sessions that are not yet referenced by
+   * any snapshot. `exclude` lets the caller drop the blobs it is about to
+   * commit, so they are not double-counted.
+   */
+  private async reservedBlobBytes(manager: EntityManager, userId: number, exclude: Array<{ sha256: string; size: number }>): Promise<number> {
+    const rows = await manager.query(
+      "SELECT DISTINCT sha256,size_bytes FROM game_save_blob_uploads WHERE user_id=? AND status IN ('pending','ready') AND expires_at>NOW()",
+      [userId],
+    );
+    const excluded = new Set(exclude.map((pair) => `${pair.sha256}:${pair.size}`));
+    let total = 0;
+    for (const row of rows) {
+      if (excluded.has(`${row.sha256}:${row.size_bytes}`)) continue;
+      const used = await manager.query(
+        'SELECT id FROM game_save_blobs WHERE user_id=? AND sha256=? AND size_bytes=? AND ref_count>0 LIMIT 1',
+        [userId, row.sha256, row.size_bytes],
+      );
+      if (used.length) continue;
+      total += Number(row.size_bytes);
+    }
+    return total;
+  }
+
+  private assertManifestFormat(snapshot: any): void {
+    if (snapshot.format !== 'manifest') {
+      this.fail('SAVE_SNAPSHOT_FORMAT_MISMATCH', HttpStatus.CONFLICT, '该快照为整包格式，请使用整包下载接口。');
+    }
+  }
+
   private async findSlot(userId: number, slotId: string) {
       const rows = await this.dataSource.query('SELECT * FROM game_save_slots WHERE id=? AND user_id=? AND deleted_at IS NULL LIMIT 1', [slotId, userId]);
     if (!rows.length) this.notFound('SAVE_NOT_FOUND', '云存档不存在。');
@@ -679,7 +1294,9 @@ export class GameSavesService {
 
   private shapeSlot(row: any) {
     const current = row.snapshot_id ? {
-      id: row.snapshot_id, revision: Number(row.revision), sha256: row.sha256, size: Number(row.size_bytes),
+      id: row.snapshot_id, revision: Number(row.revision), format: row.snapshot_format || 'zip',
+      sha256: row.sha256, size: Number(row.size_bytes),
+      file_count: row.manifest_file_count == null ? null : Number(row.manifest_file_count),
       game: { version: row.game_version ?? null, build: row.game_build ?? null },
       save: { map_name: row.map_name ?? null, wave: row.wave ?? null, playtime_seconds: row.playtime_seconds == null ? null : Number(row.playtime_seconds) },
       created_at: row.snapshot_created_at,
@@ -689,7 +1306,9 @@ export class GameSavesService {
 
   private shapeHistory(row: any, _slotName: string) {
     const mods = parseJson(row.mods_manifest_json);
-    return { id: row.id, revision: Number(row.revision), reason: row.reason, size: Number(row.size_bytes), sha256: row.sha256,
+    return { id: row.id, revision: Number(row.revision), format: row.format || 'zip', reason: row.reason,
+      size: Number(row.size_bytes), sha256: row.sha256,
+      file_count: row.manifest_file_count == null ? null : Number(row.manifest_file_count),
       game: { version: row.game_version ?? null, build: row.game_build ?? null },
       save: { map_name: row.map_name ?? null, wave: row.wave ?? null, playtime_seconds: row.playtime_seconds == null ? null : Number(row.playtime_seconds) },
       mods: { count: Array.isArray(mods) ? mods.length : 0, manifest_hash: row.mods_manifest_hash ?? null },
@@ -698,7 +1317,9 @@ export class GameSavesService {
   }
 
   private shapeSnapshot(row: any, slotId: string) {
-    return { id: row.id, slot_id: slotId, revision: Number(row.revision), sha256: row.sha256, size: Number(row.size_bytes),
+    return { id: row.id, slot_id: slotId, revision: Number(row.revision), format: row.format || 'zip',
+      sha256: row.sha256, size: Number(row.size_bytes),
+      file_count: row.manifest_file_count == null ? null : Number(row.manifest_file_count),
       game: { version: row.game_version ?? null, build: row.game_build ?? null },
       save: { map_name: row.map_name ?? null, wave: row.wave ?? null, playtime_seconds: row.playtime_seconds == null ? null : Number(row.playtime_seconds) },
       reason: row.reason, created_at: row.created_at };

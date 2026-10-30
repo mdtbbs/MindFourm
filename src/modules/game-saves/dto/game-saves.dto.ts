@@ -67,6 +67,66 @@ export class CreateGameSaveUploadDto {
   @IsOptional() @IsString() @MaxLength(128) device_id?: string;
 }
 
+export class GameSaveManifestFileDto {
+  @ApiProperty({ maxLength: 512, example: 'saves/0.msav', description: '数据目录内的相对路径；禁止绝对路径、..、反斜杠、冒号与重复路径。' })
+  @IsString() @MaxLength(512) path: string;
+  @ApiProperty({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER, example: 4194304, description: '文件字节数。' })
+  @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) size: number;
+  @ApiProperty({ pattern: '^[a-f0-9]{64}$', example: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', description: '文件内容 SHA-256 小写十六进制值。' })
+  @Matches(/^[a-f0-9]{64}$/) sha256: string;
+}
+
+export class GameSaveManifestDto {
+  @ApiPropertyOptional({ example: 'copper-save-manifest-v1', maxLength: 64, description: '清单格式；当前仅支持 copper-save-manifest-v1。' })
+  @IsOptional() @IsString() @MaxLength(64) format?: string;
+  @ApiProperty({ type: () => [GameSaveManifestFileDto], maxItems: 5000, description: '文件清单，最多 5000 项。' })
+  @IsArray() @ArrayMaxSize(5000) @ValidateNested({ each: true }) @Type(() => GameSaveManifestFileDto) files: GameSaveManifestFileDto[];
+  @ApiPropertyOptional({ type: () => GameSaveGameMetadataDto, description: '游戏版本信息；也可放在请求体顶层。' })
+  @IsOptional() @ValidateNested() @Type(() => GameSaveGameMetadataDto) game?: GameSaveGameMetadataDto;
+  @ApiPropertyOptional({ type: () => GameSaveDisplayMetadataDto, description: '游戏内存档显示信息；也可放在请求体顶层。' })
+  @IsOptional() @ValidateNested() @Type(() => GameSaveDisplayMetadataDto) save?: GameSaveDisplayMetadataDto;
+  @ApiPropertyOptional({ type: () => [GameSaveModDto], maxItems: 100, description: '该存档使用的 Mod 列表；也可放在请求体顶层。' })
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => GameSaveModDto) mods?: GameSaveModDto[];
+}
+
+export class CreateGameSaveManifestSnapshotDto {
+  @ApiProperty({ type: () => GameSaveManifestDto, description: '本次快照的完整文件清单（含未变化文件）。' })
+  @ValidateNested() @Type(() => GameSaveManifestDto) manifest: GameSaveManifestDto;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '基于此快照创建新版本；首次上传时省略。' })
+  @IsOptional() @IsUUID('4') base_snapshot_id?: string | null;
+  @ApiPropertyOptional({ enum: [...SAVE_REASONS], example: 'manual', description: '保存原因。' })
+  @IsOptional() @IsIn(SAVE_REASONS) reason?: typeof SAVE_REASONS[number];
+  @ApiPropertyOptional({ enum: ['normal', 'create_conflict_copy', 'force_replace_head'], example: 'normal', description: '发生并发冲突时的处理策略。' })
+  @IsOptional() @IsIn(['normal', 'create_conflict_copy', 'force_replace_head']) conflict_resolution?: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '确认当前最新快照 ID；用于避免覆盖期间发生变化。' })
+  @IsOptional() @IsUUID('4') confirm_current_snapshot_id?: string | null;
+  @ApiPropertyOptional({ type: () => GameSaveGameMetadataDto, description: '游戏版本信息。' })
+  @IsOptional() @ValidateNested() @Type(() => GameSaveGameMetadataDto) game?: GameSaveGameMetadataDto;
+  @ApiPropertyOptional({ type: () => GameSaveDisplayMetadataDto, description: '游戏内存档显示信息。' })
+  @IsOptional() @ValidateNested() @Type(() => GameSaveDisplayMetadataDto) save?: GameSaveDisplayMetadataDto;
+  @ApiPropertyOptional({ type: () => [GameSaveModDto], maxItems: 100, description: '该存档使用的 Mod 列表，最多 100 项。' })
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => GameSaveModDto) mods?: GameSaveModDto[];
+  @ApiPropertyOptional({ maxLength: 128, example: 'desktop-main', description: '客户端设备标识。' })
+  @IsOptional() @IsString() @MaxLength(128) device_id?: string;
+}
+
+export class CheckGameSaveBlobsDto {
+  @ApiProperty({ type: [String], maxItems: 5000, example: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], description: '待查询的 SHA-256 列表；已存在则无需再上传。' })
+  @IsArray() @ArrayMaxSize(5000) @Matches(/^[a-f0-9]{64}$/, { each: true }) sha256: string[];
+}
+
+export class CreateGameSaveBlobUploadDto {
+  @ApiProperty({ pattern: '^[a-f0-9]{64}$', example: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', description: '单个文件内容的 SHA-256。' })
+  @Matches(/^[a-f0-9]{64}$/) sha256: string;
+  @ApiProperty({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER, example: 4194304, description: '单个文件字节数。' })
+  @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) size: number;
+}
+
+export class BlobDownloadGrantDto {
+  @ApiProperty({ type: [String], maxItems: 5000, example: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], description: '要下载的 SHA-256 列表；必须属于该快照清单。' })
+  @IsArray() @ArrayMaxSize(5000) @Matches(/^[a-f0-9]{64}$/, { each: true }) sha256: string[];
+}
+
 export class RestoreGameSaveDto {
   @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '确认当前快照 ID；若最新版本已变化，服务端会拒绝覆盖。' })
   @IsOptional() @IsUUID('4') confirm_current_snapshot_id?: string | null;

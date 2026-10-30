@@ -100,6 +100,11 @@ export const appConfig = () => ({
     uploadSessionMinutes: parsePositiveInt(process.env.CLOUD_SAVES_UPLOAD_SESSION_MINUTES, 10),
     maxMods: parsePositiveInt(process.env.CLOUD_SAVES_MAX_MODS, 100),
     maxManifestBytes: parsePositiveInt(process.env.CLOUD_SAVES_MAX_MANIFEST_BYTES, 16384),
+    // File-level delta manifests are much larger than the mods list; keep the
+    // two limits separate so tuning one cannot silently cap the other.
+    fileManifestMaxBytes: parsePositiveInt(process.env.CLOUD_SAVES_FILE_MANIFEST_MAX_BYTES, 1048576),
+    maxManifestFiles: parsePositiveInt(process.env.CLOUD_SAVES_MAX_MANIFEST_FILES, 5000),
+    blobUploadMinutes: parsePositiveInt(process.env.CLOUD_SAVES_BLOB_UPLOAD_MINUTES, 10),
     storagePath: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
   },
   forge: {

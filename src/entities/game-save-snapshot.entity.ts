@@ -10,9 +10,15 @@ export class GameSaveSnapshot {
   @PrimaryColumn({ type: 'char', length: 36 }) id: string;
   @Column({ type: 'char', length: 36 }) slot_id: string;
   @Column({ type: 'int', unsigned: true }) revision: number;
-  @Column({ type: 'char', length: 36 }) blob_id: string;
+  /** Whole-package blob for zip snapshots; null for manifest snapshots. */
+  @Column({ type: 'char', length: 36, nullable: true }) blob_id: string | null;
+  /** zip = immutable whole package; manifest = content-addressed file list. */
+  @Column({ type: 'enum', enum: ['zip', 'manifest'], default: 'zip' }) format: 'zip' | 'manifest';
+  /** For manifest snapshots: sha256 of the canonical manifest, not of a zip. */
   @Column({ type: 'char', length: 64 }) sha256: string;
+  /** For manifest snapshots: logical total of all file sizes. */
   @Column({ type: 'bigint', unsigned: true }) size_bytes: string;
+  @Column({ type: 'int', unsigned: true, nullable: true }) manifest_file_count: number | null;
   @Column({ type: 'varchar', length: 32, nullable: true }) game_version: string | null;
   @Column({ type: 'int', unsigned: true, nullable: true }) game_build: number | null;
   @Column({ type: 'varchar', length: 160, nullable: true }) map_name: string | null;

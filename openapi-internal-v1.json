@@ -333,6 +333,75 @@
             "MindAuthBearer": []
           }
         ]
+      },
+      "post": {
+        "operationId": "GameSavesController_createManifestSnapshot",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "用文件清单创建快照",
+        "description": "校验 base 与全部 blob 引用后，原子创建不可变 manifest 快照；未变化的文件由服务端按 sha256 复用，不重复占用配额。",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "按账号重放同一 manifest 快照请求，保留 24 小时。",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGameSaveManifestSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
       }
     },
     "/v1/game-saves/{slotId}/snapshots/{snapshotId}/download": {
@@ -602,6 +671,314 @@
           },
           {
             "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/blobs/check": {
+      "post": {
+        "operationId": "GameSavesController_checkBlobs",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查询差量文件是否已存在",
+        "description": "按 SHA-256 查询当前账号已持有或已暂存的文件内容，客户端只需上传 missing 列表。结果仅供客户端预判，创建快照时仍会逐项校验。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckGameSaveBlobsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/blobs": {
+      "post": {
+        "operationId": "GameSavesController_createBlobUpload",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建差量文件上传会话",
+        "description": "为单个缺失文件创建上传会话；账号已持有相同内容时直接返回 no_upload_required，无需重复上传。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGameSaveBlobUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/blobs/uploads/{uploadId}/file": {
+      "put": {
+        "operationId": "GameSavesController_uploadBlobFile",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "上传差量文件内容",
+        "description": "将原始文件字节写入论坛本地持久化目录；服务端校验大小与 SHA-256，成功后该内容可被 manifest 快照引用。",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/{slotId}/snapshots/{snapshotId}/manifest": {
+      "get": {
+        "operationId": "GameSavesController_manifest",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "读取快照文件清单",
+        "description": "仅 manifest 快照可用；返回 path / size / sha256 列表与存档元数据。整包快照请使用整包下载接口。",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/{slotId}/snapshots/{snapshotId}/blobs/download": {
+      "post": {
+        "operationId": "GameSavesController_blobDownloads",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "获取差量文件下载地址",
+        "description": "为清单快照中指定的 SHA-256 返回同源 Bearer 下载地址；客户端只需拉取本机缺失的文件。",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlobDownloadGrantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 云存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-saves/{slotId}/snapshots/{snapshotId}/blobs/{sha256}/file": {
+      "get": {
+        "operationId": "GameSavesController_blobFile",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 300,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "下载单个存档文件",
+        "description": "仅返回该 manifest 快照清单内、且归属当前账号的文件内容；ETag 为文件 SHA-256。",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sha256",
             "required": true,
             "in": "path",
             "schema": {
@@ -25901,6 +26278,76 @@
           "pinned"
         ]
       },
+      "CheckGameSaveBlobsDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "待查询的 SHA-256 列表；已存在则无需再上传。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      },
+      "CreateGameSaveBlobUploadDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "description": "单个文件内容的 SHA-256。"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "example": 4194304,
+            "description": "单个文件字节数。"
+          }
+        },
+        "required": [
+          "sha256",
+          "size"
+        ]
+      },
+      "GameSaveManifestFileDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 512,
+            "example": "saves/0.msav",
+            "description": "数据目录内的相对路径；禁止绝对路径、..、反斜杠、冒号与重复路径。"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "example": 4194304,
+            "description": "文件字节数。"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "description": "文件内容 SHA-256 小写十六进制值。"
+          }
+        },
+        "required": [
+          "path",
+          "size",
+          "sha256"
+        ]
+      },
       "GameSaveGameMetadataDto": {
         "type": "object",
         "properties": {
@@ -25970,6 +26417,153 @@
             "description": "Mod 文件 SHA-256 小写十六进制值。"
           }
         }
+      },
+      "GameSaveManifestDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "example": "copper-save-manifest-v1",
+            "maxLength": 64,
+            "description": "清单格式；当前仅支持 copper-save-manifest-v1。"
+          },
+          "files": {
+            "maxItems": 5000,
+            "description": "文件清单，最多 5000 项。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveManifestFileDto"
+            }
+          },
+          "game": {
+            "description": "游戏版本信息；也可放在请求体顶层。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveGameMetadataDto"
+              }
+            ]
+          },
+          "save": {
+            "description": "游戏内存档显示信息；也可放在请求体顶层。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveDisplayMetadataDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "该存档使用的 Mod 列表；也可放在请求体顶层。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          }
+        },
+        "required": [
+          "files"
+        ]
+      },
+      "CreateGameSaveManifestSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "manifest": {
+            "description": "本次快照的完整文件清单（含未变化文件）。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveManifestDto"
+              }
+            ]
+          },
+          "base_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "基于此快照创建新版本；首次上传时省略。"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "before_launch",
+              "after_exit",
+              "periodic",
+              "restore",
+              "conflict",
+              "import"
+            ],
+            "example": "manual",
+            "description": "保存原因。"
+          },
+          "conflict_resolution": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "create_conflict_copy",
+              "force_replace_head"
+            ],
+            "example": "normal",
+            "description": "发生并发冲突时的处理策略。"
+          },
+          "confirm_current_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "确认当前最新快照 ID；用于避免覆盖期间发生变化。"
+          },
+          "game": {
+            "description": "游戏版本信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveGameMetadataDto"
+              }
+            ]
+          },
+          "save": {
+            "description": "游戏内存档显示信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveDisplayMetadataDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "该存档使用的 Mod 列表，最多 100 项。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          },
+          "device_id": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "desktop-main",
+            "description": "客户端设备标识。"
+          }
+        },
+        "required": [
+          "manifest"
+        ]
+      },
+      "BlobDownloadGrantDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "要下载的 SHA-256 列表；必须属于该快照清单。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
+        ]
       },
       "CreateGameSaveUploadDto": {
         "type": "object",

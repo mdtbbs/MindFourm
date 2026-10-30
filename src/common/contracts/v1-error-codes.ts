@@ -354,6 +354,11 @@ const CLOUD_SAVE_ERRORS: ReadonlyArray<readonly [string, number, boolean, string
   ['SAVE_CURRENT_SNAPSHOT_DELETE_FORBIDDEN', 409, false, '当前快照不能单独删除', 'The current Snapshot must be replaced or its whole Slot deleted first.'],
   ['SAVE_INVALID_HASH', 400, false, 'SHA-256 格式无效', 'The submitted SHA-256 must be 64 lowercase hexadecimal characters.'],
   ['SAVE_INVALID_METADATA', 400, false, '存档元数据无效', 'The submitted save metadata failed validation or exceeded configured bounds.'],
+  ['SAVE_MANIFEST_INVALID', 400, false, '存档清单无效', 'The manifest is malformed, contains an unsafe path, or repeats a path.'],
+  ['SAVE_MANIFEST_LIMIT_EXCEEDED', 413, false, '存档清单超出限制', 'The manifest exceeds the configured file count or serialized size limit.'],
+  ['SAVE_BLOB_MISSING', 409, false, '缺少存档文件', 'One or more manifest files have no uploaded blob owned by the caller.'],
+  ['SAVE_BLOB_NOT_IN_SNAPSHOT', 404, false, '快照不包含该文件', 'The requested blob is not part of this manifest snapshot.'],
+  ['SAVE_SNAPSHOT_FORMAT_MISMATCH', 409, false, '快照格式不匹配', 'The Snapshot format does not support the requested operation; use the whole-package or manifest endpoint instead.'],
   ['SAVE_STORAGE_UNAVAILABLE', 503, true, '云存档存储暂不可用', 'The configured local save storage is unavailable or not ready.'],
 ];
 

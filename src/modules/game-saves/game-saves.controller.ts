@@ -5,7 +5,11 @@ import { OAuthProtected } from '@common/decorators/oauth-protected.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
 import { CloudSaveActor, GameSavesService } from './game-saves.service';
-import { CreateGameSaveSlotDto, CreateGameSaveUploadDto, GameSaveListQueryDto, PatchGameSaveSlotDto, PatchGameSaveSnapshotDto, RestoreGameSaveDto } from './dto/game-saves.dto';
+import {
+  BlobDownloadGrantDto, CheckGameSaveBlobsDto, CreateGameSaveBlobUploadDto, CreateGameSaveManifestSnapshotDto,
+  CreateGameSaveSlotDto, CreateGameSaveUploadDto, GameSaveListQueryDto, PatchGameSaveSlotDto,
+  PatchGameSaveSnapshotDto, RestoreGameSaveDto,
+} from './dto/game-saves.dto';
 import { getClientIp } from '@common/utils/client-context.util';
 import { CloudSaveNoStoreInterceptor } from './cloud-save-no-store.interceptor';
 
@@ -125,6 +129,82 @@ export class GameSavesController {
   @ApiOperation({ summary: '删除历史快照', description: '当前 Snapshot 不能单独删除；对象在引用数归零并经过宽限期后回收。' })
   deleteSnapshot(@Req() req: any, @Param('slotId') slotId: string, @Param('snapshotId') snapshotId: string) {
     return this.saves.deleteSnapshot(req.user.id, slotId, snapshotId, this.actor(req));
+  }
+
+  @Post('blobs/check')
+  @OAuthProtected('game_content.saves.read')
+  @RateLimit({ max: 120, window: 60 })
+  @ApiOperation({ summary: '查询差量文件是否已存在', description: '按 SHA-256 查询当前账号已持有或已暂存的文件内容，客户端只需上传 missing 列表。结果仅供客户端预判，创建快照时仍会逐项校验。' })
+  checkBlobs(@Req() req: any, @Body() body: CheckGameSaveBlobsDto) {
+    return this.saves.checkBlobs(req.user.id, body);
+  }
+
+  @Post('blobs')
+  @OAuthProtected('game_content.saves.write')
+  @RateLimit({ max: 120, window: 60 })
+  @ApiOperation({ summary: '创建差量文件上传会话', description: '为单个缺失文件创建上传会话；账号已持有相同内容时直接返回 no_upload_required，无需重复上传。' })
+  createBlobUpload(@Req() req: any, @Body() body: CreateGameSaveBlobUploadDto) {
+    return this.saves.createBlobUpload(req.user.id, body, this.actor(req));
+  }
+
+  @Put('blobs/uploads/:uploadId/file')
+  @OAuthProtected('game_content.saves.write')
+  @RateLimit({ max: 60, window: 600 })
+  @ApiConsumes('application/octet-stream')
+  @ApiOperation({ summary: '上传差量文件内容', description: '将原始文件字节写入论坛本地持久化目录；服务端校验大小与 SHA-256，成功后该内容可被 manifest 快照引用。' })
+  uploadBlobFile(@Req() req: any, @Param('uploadId') uploadId: string) {
+    return this.saves.receiveBlobUpload(req.user.id, uploadId, req, this.actor(req));
+  }
+
+  @Post(':slotId/snapshots')
+  @OAuthProtected('game_content.saves.write')
+  @RateLimit({ max: 20, window: 60 })
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: '按账号重放同一 manifest 快照请求，保留 24 小时。' })
+  @ApiOperation({ summary: '用文件清单创建快照', description: '校验 base 与全部 blob 引用后，原子创建不可变 manifest 快照；未变化的文件由服务端按 sha256 复用，不重复占用配额。' })
+  createManifestSnapshot(@Req() req: any, @Param('slotId') slotId: string,
+    @Body() body: CreateGameSaveManifestSnapshotDto, @Headers('idempotency-key') key?: string) {
+    return this.saves.createManifestSnapshot(req.user.id, slotId, body, this.actor(req, body.device_id), key);
+  }
+
+  @Get(':slotId/snapshots/:snapshotId/manifest')
+  @OAuthProtected('game_content.saves.read')
+  @RateLimit({ max: 120, window: 60 })
+  @ApiOperation({ summary: '读取快照文件清单', description: '仅 manifest 快照可用；返回 path / size / sha256 列表与存档元数据。整包快照请使用整包下载接口。' })
+  manifest(@Req() req: any, @Param('slotId') slotId: string, @Param('snapshotId') snapshotId: string) {
+    return this.saves.getManifest(req.user.id, slotId, snapshotId);
+  }
+
+  @Post(':slotId/snapshots/:snapshotId/blobs/download')
+  @OAuthProtected('game_content.saves.read')
+  @RateLimit({ max: 120, window: 60 })
+  @ApiOperation({ summary: '获取差量文件下载地址', description: '为清单快照中指定的 SHA-256 返回同源 Bearer 下载地址；客户端只需拉取本机缺失的文件。' })
+  blobDownloads(@Req() req: any, @Param('slotId') slotId: string, @Param('snapshotId') snapshotId: string,
+    @Body() body: BlobDownloadGrantDto) {
+    return this.saves.blobDownloadGrant(req.user.id, slotId, snapshotId, body, this.actor(req));
+  }
+
+  @Get(':slotId/snapshots/:snapshotId/blobs/:sha256/file')
+  @OAuthProtected('game_content.saves.read')
+  @RateLimit({ max: 120, window: 300 })
+  @ApiProduces('application/octet-stream')
+  @ApiOperation({ summary: '下载单个存档文件', description: '仅返回该 manifest 快照清单内、且归属当前账号的文件内容；ETag 为文件 SHA-256。' })
+  async blobFile(@Req() req: any, @Param('slotId') slotId: string, @Param('snapshotId') snapshotId: string,
+    @Param('sha256') sha256: string, @Res() res: any) {
+    const file = await this.saves.openBlobDownload(req.user.id, slotId, snapshotId, sha256, this.actor(req));
+    const safeName = file.file_name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+    res.status(200);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.size));
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('ETag', `"sha256-${file.sha256}"`);
+    if (file.last_modified) res.setHeader('Last-Modified', file.last_modified.toUTCString());
+    file.stream.on('error', () => {
+      if (res.headersSent) res.destroy();
+      else res.status(500).end();
+    });
+    file.stream.pipe(res);
   }
 
   @Post(':slotId/uploads')

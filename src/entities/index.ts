@@ -152,7 +152,9 @@ import { MultiplayerRelayAllocation } from './multiplayer-relay-allocation.entit
 import { MultiplayerAuditLog } from './multiplayer-audit-log.entity';
 import { GameSaveSlot } from './game-save-slot.entity';
 import { GameSaveSnapshot } from './game-save-snapshot.entity';
+import { GameSaveSnapshotFile } from './game-save-snapshot-file.entity';
 import { GameSaveBlob } from './game-save-blob.entity';
+import { GameSaveBlobUpload } from './game-save-blob-upload.entity';
 import { GameSaveUploadSession } from './game-save-upload-session.entity';
 import { GameSaveIdempotency } from './game-save-idempotency.entity';
 import { BlobObject } from './blob-object.entity';
@@ -325,7 +327,9 @@ export const mdtbbsEntities = [
   DeveloperFeedEntry,
   GameSaveSlot,
   GameSaveSnapshot,
+  GameSaveSnapshotFile,
   GameSaveBlob,
+  GameSaveBlobUpload,
   GameSaveUploadSession,
   GameSaveIdempotency,
 ] as const;
@@ -334,7 +338,8 @@ export const mdtbbsEntities = [
 export const entities = [...coreEntities, ...mdtbbsEntities];
 
 export {
-  GameSaveSlot, GameSaveSnapshot, GameSaveBlob, GameSaveUploadSession, GameSaveIdempotency,
+  GameSaveSlot, GameSaveSnapshot, GameSaveSnapshotFile, GameSaveBlob, GameSaveBlobUpload,
+  GameSaveUploadSession, GameSaveIdempotency,
   BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,

@@ -1,5 +1,21 @@
 # 公开 API 更新记录
 
+## 2026-10-30 — 云存档文件级差量上传
+
+### Added
+
+- `POST /api/v1/game-saves/blobs/check`：按 SHA-256 批量查询本账号已持有或已暂存的文件内容，返回 `exists` / `missing`，供客户端只上传缺失内容。
+- `POST /api/v1/game-saves/blobs` 与 `PUT /api/v1/game-saves/blobs/uploads/{uploadId}/file`：单个文件内容的上传会话与字节写入；账号已持有相同 `sha256 + size` 时返回 `no_upload_required`，不产生重复对象。
+- `POST /api/v1/game-saves/{slotId}/snapshots`：用 `base_snapshot_id` + `manifest`（最多 5000 项，单文件 ≤ 50 MiB）原子创建不可变 manifest 快照；所有引用文件必须已由本账号持有，缺失返回 `SAVE_BLOB_MISSING`，冲突检测与整包上传一致。
+- `GET /api/v1/game-saves/{slotId}/snapshots/{snapshotId}/manifest`、`POST .../blobs/download` 与 `GET .../blobs/{sha256}/file`：读取清单、获取缺失文件下载地址并按文件下载；地址为同源 Bearer 路径、可复用。
+- 快照对象、历史与槽位详情新增 `format`（`zip` / `manifest`）与 `file_count` 字段；manifest 快照的 `size` 为逻辑文件总大小，`sha256` 为清单规范化后的摘要。
+- `GET /api/v1/game-saves/quota` 新增 `logical_bytes`（所有存活快照的逻辑大小之和）、`formats`（`["zip","manifest"]`）与 `manifest_limits`（`max_files` / `max_manifest_bytes`）；`used_bytes` 仍为账号内唯一 blob 字节口径。
+
+### Clarified
+
+- 配额仍按账号内唯一 blob 字节计费：同一内容被多个快照引用只计一次；独立 blob 上传在提交前预留配额，过期未使用的内容由维护任务回收。
+- 整包快照（`format = "zip"`）的上传、下载、恢复与保留策略完全不变；整包下载接口对 manifest 快照返回 `SAVE_SNAPSHOT_FORMAT_MISMATCH` (409)，客户端按 `format` 选择接口。
+
 ## 2026-10-30 — 房主查询加入申请
 
 ### Added
