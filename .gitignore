@@ -21,6 +21,7 @@ uploads/attachments/
 uploads/resources/
 uploads/previews/
 uploads/avatars/
+uploads/avatar-cache/
 !uploads/avatars/.gitkeep
 
 # Test artifacts

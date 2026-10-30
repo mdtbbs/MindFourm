@@ -7,7 +7,7 @@ import { MultiplayerOAuthProtected } from './multiplayer-oauth-protected.decorat
 import { MultiplayerService } from './multiplayer.service';
 import {
   CreateCandidateDto, CreateJoinIntentDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto,
-  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListMultiplayerInvitesDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
+  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListJoinRequestsDto, ListMultiplayerInvitesDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
   RelayAgentRegisterDto, RelayAllocationAckDto, RelayAllocationRevokeDto, SetDefaultMultiplayerClientDto,
 } from './dto/multiplayer.dto';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
@@ -40,6 +40,28 @@ const MULTIPLAYER_SESSION_LIST_SCHEMA: any = {
       joinable: { type: 'boolean', description: '当前调用者能否直接加入。' },
       blocked_reason: { type: 'string', nullable: true, description: '不能直接加入时的稳定原因码。' },
       can_request_join: { type: 'boolean', description: '是否可改为请求房主批准。' },
+    } } },
+    meta: { type: 'object', required: ['request_id', 'pagination'], properties: {
+      request_id: { type: 'string', example: 'req_...' },
+      pagination: { type: 'object', required: ['page', 'limit', 'total', 'total_pages', 'has_more'], properties: {
+        page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' },
+        total_pages: { type: 'integer' }, has_more: { type: 'boolean' },
+      } },
+    } },
+  },
+};
+
+const MULTIPLAYER_JOIN_REQUEST_LIST_SCHEMA: any = {
+  type: 'object', required: ['data', 'meta'], properties: {
+    data: { type: 'array', items: { type: 'object', required: ['id', 'user', 'created_at', 'expires_at'], properties: {
+      id: { type: 'string', example: 'jrq_AbCdEf0123456789_-wxyz', description: '传给 approve / reject 的加入请求 ID。' },
+      created_at: { type: 'string', format: 'date-time', description: '申请创建时间。' },
+      expires_at: { type: 'string', format: 'date-time', description: '申请有效期截止时间；过期后不可再批准。' },
+      user: { type: 'object', nullable: true, required: ['id', 'username', 'avatar_url'], properties: {
+        id: { type: 'integer', example: 123 },
+        username: { type: 'string', example: 'builder' },
+        avatar_url: { type: 'string', nullable: true },
+      }, description: '申请者公开资料；账号被删除时该会话行随外键级联删除，正常返回不会为 null。' },
     } } },
     meta: { type: 'object', required: ['request_id', 'pagination'], properties: {
       request_id: { type: 'string', example: 'req_...' },
@@ -192,6 +214,14 @@ export class MultiplayerV1Controller {
   @MultiplayerOAuthProtected('multiplayer.read')
   @Get('join-requests')
   listJoinRequests(@Req() request: any) { return this.multiplayer.listJoinRequests(request.user.id); }
+
+  @ApiTags('加入请求')
+  @MultiplayerOAuthProtected('multiplayer.read')
+  @Get('sessions/:id/join-requests')
+  @ApiOkResponse({ description: '仅会话房主可读；data 是该会话的待处理加入申请数组（5 分钟有效），分页摘要位于 meta.pagination。', schema: MULTIPLAYER_JOIN_REQUEST_LIST_SCHEMA })
+  listSessionJoinRequests(@Param('id') id: string, @Query() query: ListJoinRequestsDto, @Req() request: any) {
+    return this.multiplayer.listSessionJoinRequests(request.user.id, id, query);
+  }
 
   @ApiTags('加入请求')
   @MultiplayerOAuthProtected('multiplayer.write')

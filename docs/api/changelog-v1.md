@@ -1,5 +1,15 @@
 # 公开 API 更新记录
 
+## 2026-10-30 — 房主查询加入申请
+
+### Added
+
+- `GET /api/v1/multiplayer/sessions/{id}/join-requests?page=1&limit=50`：新增 `multiplayer.read` 的待处理加入申请列表，仅会话房主可读。`data` 按创建时间倒序返回仍有效的 `pending` 申请，每项含 `id`、`created_at`、`expires_at` 与公开申请者 `user`（`id`、`username`、`avatar_url`），分页摘要位于 `meta.pagination`（`page` 从 1 起，`limit` 最大 50）。房主用列表中的 `id` 调用既有 `join-requests/{id}/approve` 或 `.../reject`。非房主返回 403 `SESSION_PERMISSION_DENIED`，会话不存在或已不再活跃返回 404 `SESSION_NOT_FOUND` / `SESSION_EXPIRED` / `SESSION_CLOSED`。
+
+### Clarified
+
+- `multiplayer.join_request.created` 事件后的快照读取指向上述按会话接口。批准/拒绝后的通知路径不变：`multiplayer.join_request.approved` 仍发给申请者的原 OAuth 客户端并携带可直接消费的 `intent_id`；`multiplayer.join_request.rejected` 通知申请者。
+
 ## 2026-10-26 — Multiplayer API consistency
 
 ### Added

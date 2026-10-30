@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { MultiplayerV1Controller } from './multiplayer-v1.controller';
-import { CreateMultiplayerSessionDto, JoinMultiplayerSessionDto } from './dto/multiplayer.dto';
+import { CreateMultiplayerSessionDto, JoinMultiplayerSessionDto, ListJoinRequestsDto } from './dto/multiplayer.dto';
 
 /**
  * Issue #96 requires the docs to promise that `client_id` is server-derived.
@@ -45,6 +45,23 @@ describe('MultiplayerV1Controller client identity', () => {
 
     expect(multiplayer.createJoinRequest).toHaveBeenCalledWith(7, 'ses_AbCdEf0123456789_-wxyz', 'approved-app');
     expect(multiplayer.consumeJoinIntent).toHaveBeenCalledWith(7, 'approved-app', 'jnt_AbCdEf0123456789_-wxyz', undefined);
+  });
+
+  it('lists per-session join requests for the authenticated owner', async () => {
+    const { multiplayer, controller } = build();
+    multiplayer.listSessionJoinRequests = jest.fn().mockResolvedValue([]);
+
+    await controller.listSessionJoinRequests('ses_AbCdEf0123456789_-wxyz', { page: 2, limit: 10 }, { user: { id: 7 } });
+
+    expect(multiplayer.listSessionJoinRequests).toHaveBeenCalledWith(7, 'ses_AbCdEf0123456789_-wxyz', { page: 2, limit: 10 });
+  });
+
+  it('validates per-session join request pagination bounds', async () => {
+    const options = { whitelist: true, forbidNonWhitelisted: true };
+
+    expect(await validate(plainToInstance(ListJoinRequestsDto, { page: 1, limit: 50 }, { enableImplicitConversion: true }), options)).toHaveLength(0);
+    expect(await validate(plainToInstance(ListJoinRequestsDto, { page: 0 }, { enableImplicitConversion: true }), options)).not.toHaveLength(0);
+    expect(await validate(plainToInstance(ListJoinRequestsDto, { limit: 51 }, { enableImplicitConversion: true }), options)).not.toHaveLength(0);
   });
 
   it.each([

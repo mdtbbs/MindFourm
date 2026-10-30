@@ -886,6 +886,51 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Pending join requests of one session, for its owner only.
+   *
+   * The global owner list above is a first-party convenience; third-party
+   * clients discover sessions by id, so they need the same snapshot scoped to
+   * a single session. Only pending, unexpired rows are returned: an expired
+   * request can no longer be approved, and rejected/expired history stays out
+   * of the owner's actionable queue.
+   */
+  async listSessionJoinRequests(ownerId: number, sessionId: string, options: { page?: number; limit?: number } = {}) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    await this.requireEnabled('multiplayer_invites_v1');
+    const session = await this.findActiveSession(sessionId);
+    if (session.owner_user_id !== ownerId) fail(403, 'SESSION_PERMISSION_DENIED');
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Math.floor(options.limit ?? 50)));
+    const [rows, total] = await this.joinRequests.createQueryBuilder('join_request')
+      .leftJoinAndSelect('join_request.requester', 'requester')
+      .select([
+        'join_request.id', 'join_request.expires_at', 'join_request.created_at',
+        'requester.id', 'requester.username', 'requester.avatar_url',
+      ])
+      .where('join_request.session_id = :sessionId', { sessionId })
+      .andWhere('join_request.target_user_id = :ownerId', { ownerId })
+      .andWhere("join_request.status = 'pending'")
+      .andWhere('join_request.expires_at > :now', { now: new Date() })
+      .orderBy('join_request.created_at', 'DESC')
+      // created_at is second-precision DATETIME; the id tiebreaker keeps
+      // OFFSET pagination stable when several requests share the same second.
+      .addOrderBy('join_request.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    return withPagination(rows.map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      user: row.requester ? {
+        id: row.requester.id,
+        username: row.requester.username,
+        avatar_url: row.requester.avatar_url,
+      } : null,
+    })), page, limit, total);
+  }
+
   async acceptInvite(userId: number, inviteId: string) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');

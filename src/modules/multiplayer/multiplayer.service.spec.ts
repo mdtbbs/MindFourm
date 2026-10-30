@@ -34,6 +34,67 @@ describe('MultiplayerService control-plane guards', () => {
     expect(JSON.stringify(result)).not.toContain('private@example.test');
   });
 
+  it('lists only the session owner pending join requests and hides private user fields', async () => {
+    const now = new Date();
+    const row = {
+      id: 'jrq_1', expires_at: new Date(now.getTime() + 60_000), created_at: now,
+      requester: { id: 8, username: 'player', avatar_url: '/avatar.png', email: 'private@example.test' },
+    };
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[row], 1]),
+    };
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.findActiveSession = jest.fn().mockResolvedValue({ id: 'ses_12345678901234567890', owner_user_id: 7 });
+    service.joinRequests = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    const result = await service.listSessionJoinRequests(7, 'ses_12345678901234567890', { page: 2, limit: 10 });
+
+    expect(qb.where).toHaveBeenCalledWith('join_request.session_id = :sessionId', { sessionId: 'ses_12345678901234567890' });
+    expect(qb.andWhere).toHaveBeenNthCalledWith(1, 'join_request.target_user_id = :ownerId', { ownerId: 7 });
+    expect(qb.andWhere).toHaveBeenNthCalledWith(2, "join_request.status = 'pending'");
+    expect(qb.andWhere).toHaveBeenNthCalledWith(3, 'join_request.expires_at > :now', expect.objectContaining({ now: expect.any(Date) }));
+    expect(qb.skip).toHaveBeenCalledWith(10);
+    expect(qb.take).toHaveBeenCalledWith(10);
+    expect(result).toEqual([{
+      id: 'jrq_1', expires_at: row.expires_at, created_at: now,
+      user: { id: 8, username: 'player', avatar_url: '/avatar.png' },
+    }]);
+    expect((result as any).__v1Pagination).toEqual({ page: 2, limit: 10, total: 1, total_pages: 1, has_more: false });
+    expect(JSON.stringify(result)).not.toContain('private@example.test');
+  });
+
+  it('clamps per-session join request pagination to a bounded page size', async () => {
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.findActiveSession = jest.fn().mockResolvedValue({ id: 'ses_12345678901234567890', owner_user_id: 7 });
+    service.joinRequests = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    await service.listSessionJoinRequests(7, 'ses_12345678901234567890', { page: 0, limit: 100 });
+
+    expect(qb.skip).toHaveBeenCalledWith(0);
+    expect(qb.take).toHaveBeenCalledWith(50);
+  });
+
+  it('rejects per-session join request listing for anyone but the owner', async () => {
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.findActiveSession = jest.fn().mockResolvedValue({ id: 'ses_12345678901234567890', owner_user_id: 7 });
+    service.joinRequests = { createQueryBuilder: jest.fn() };
+
+    await expect(service.listSessionJoinRequests(8, 'ses_12345678901234567890')).rejects.toMatchObject({ status: 403 });
+    expect(service.joinRequests.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
   it('binds one-time Join Intents to the owner and consumes them atomically', async () => {
     const service = Object.create(MultiplayerService.prototype) as any;
     const payload = JSON.stringify({ user_id: 7, session_id: 'ses_12345678901234567890', approved_join: true });

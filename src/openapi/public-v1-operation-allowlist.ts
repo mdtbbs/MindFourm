@@ -196,6 +196,7 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'POST /v1/multiplayer/invites/{id}/accept',
   'POST /v1/multiplayer/invites/{id}/decline',
   'POST /v1/multiplayer/invites/{id}/revoke',
+  'GET /v1/multiplayer/sessions/{id}/join-requests',
   'POST /v1/multiplayer/sessions/{id}/join-requests',
   'POST /v1/multiplayer/join-requests/{id}/approve',
   'POST /v1/multiplayer/join-requests/{id}/reject',

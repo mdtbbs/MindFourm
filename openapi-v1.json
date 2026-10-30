@@ -20794,6 +20794,186 @@
       }
     },
     "/v1/multiplayer/sessions/{id}/join-requests": {
+      "get": {
+        "operationId": "MultiplayerV1Controller_listSessionJoinRequests",
+        "x-required-scopes": [
+          "multiplayer.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始。",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页加入申请数，最大 50。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "example": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "仅会话房主可读；data 是该会话的待处理加入申请数组（5 分钟有效），分页摘要位于 meta.pagination。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "user",
+                          "created_at",
+                          "expires_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "jrq_AbCdEf0123456789_-wxyz",
+                            "description": "传给 approve / reject 的加入请求 ID。"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "申请创建时间。"
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "申请有效期截止时间；过期后不可再批准。"
+                          },
+                          "user": {
+                            "type": "object",
+                            "nullable": true,
+                            "required": [
+                              "id",
+                              "username",
+                              "avatar_url"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "integer",
+                                "example": 123
+                              },
+                              "username": {
+                                "type": "string",
+                                "example": "builder"
+                              },
+                              "avatar_url": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "description": "申请者公开资料；账号被删除时该会话行随外键级联删除，正常返回不会为 null。"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "request_id",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "request_id": {
+                          "type": "string",
+                          "example": "req_..."
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "total_pages",
+                            "has_more"
+                          ],
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "total_pages": {
+                              "type": "integer"
+                            },
+                            "has_more": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "联机会话",
+          "加入请求"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      },
       "post": {
         "operationId": "MultiplayerV1Controller_requestJoin",
         "x-rate-limit": {

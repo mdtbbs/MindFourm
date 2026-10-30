@@ -95,6 +95,7 @@ Content-Type: application/json
 | 加入请求 | 申请者 `POST /sessions/{id}/join-requests` | 5 分钟 | 房主批准后返回绑定申请者客户端的 `join_intent`，10 分钟有效 |
 | 加入意图 | 邀请接受、房主批准、或直接 `POST /sessions/{id}/join-intents` | 首次使用 60 秒 | 绑定用户；首次成功使用时绑定客户端；相同用户与客户端在 10 分钟恢复窗口内重放返回相同结果 |
 
+- 房主用 `GET /multiplayer/sessions/{id}/join-requests` 读取该会话的待处理申请（仅房主，返回未过期的 `pending` 记录），再用其中的 `id` 调用 `POST /multiplayer/join-requests/{id}/approve` 或 `.../reject`；实时 `multiplayer.join_request.created` 只是变更通知，收到后应重新拉取该列表。
 - 加入意图是单次消费凭据：不要重放；只有当客户端成功消费并保存事件游标后，才向服务端发送批准事件的确认。
 - `POST /multiplayer/join-intents/{id}/consume` 恢复窗口内重试是安全的（幂等返回同一对端与稳定恢复令牌）；跨客户端使用返回 `JOIN_INTENT_CLIENT_MISMATCH`。
 - 不公开会话加入码只作为短期邀请信息分享，不承诺长期有效。

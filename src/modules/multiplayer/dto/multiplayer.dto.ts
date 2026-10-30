@@ -73,6 +73,16 @@ export class ListMultiplayerInvitesDto {
   limit?: number;
 }
 
+export class ListJoinRequestsDto {
+  @ApiPropertyOptional({ minimum: 1, example: 1, description: '页码，从 1 开始。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, example: 50, description: '每页加入申请数，最大 50。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50)
+  limit?: number;
+}
+
 export class JoinMultiplayerSessionDto {
   @ApiPropertyOptional({ example: 'invite_opaque_id', maxLength: 128, description: '有效邀请 ID。' })
   @IsOptional() @IsString() @MaxLength(128)

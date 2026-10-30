@@ -69,6 +69,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | GET | `/api/v1/multiplayer/invites?page=1&limit=50` | `multiplayer.read` | 分页列出收到的待处理邀请 |
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 处理邀请；接受返回加入意图 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入 `join_policy=request` 的会话 |
+| GET | `/api/v1/multiplayer/sessions/{id}/join-requests?page=1&limit=50` | `multiplayer.read` | 房主分页读取该会话的待处理加入申请（仅房主；5 分钟有效，过期不可批准） |
 | POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 房主批准/拒绝；批准返回 10 分钟有效、绑定申请者 OAuth 客户端的加入意图 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户的加入意图；不预绑定 OAuth 客户端；可传房间码 `join_code` |
 | POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | 启动器使用加入意图并成为会话对端；同一用户和首次使用的客户端可在 10 分钟内恢复相同对端与恢复令牌 |
@@ -341,6 +342,14 @@ Content-Type: application/json
 
 若 `require_approval = true`，客户端先创建加入请求（`join_policy = invite_only` 不提供请求路径）。请求有效期为 5 分钟；房主批准后，申请者会收到绑定当前 OAuth 客户端的加入意图。申请者使用该意图后即可加入会话；重复使用会在恢复窗口内返回相同结果。处理批准事件时，客户端应先成功使用意图并保存本地事件游标，再发送确认消息；启动器跳转前应由用户确认。
 
+房主读取待处理申请快照：`GET /api/v1/multiplayer/sessions/{id}/join-requests?page=1&limit=50`。只有该会话房主可调用；非房主返回 403 `SESSION_PERMISSION_DENIED`，会话不存在或已不再活跃返回 404 `SESSION_NOT_FOUND` / `SESSION_EXPIRED` / `SESSION_CLOSED`。`page` 从 1 起，`limit` 最大 50。响应 `data` 是数组，分页摘要位于 `meta.pagination`，只包含仍有效的 `pending` 申请（按创建时间倒序）：
+
+```json
+[{"id":"jrq_AbCdEf0123456789_-wxyz","created_at":"2026-10-27T12:00:00.000Z","expires_at":"2026-10-27T12:05:00.000Z","user":{"id":123,"username":"builder","avatar_url":"/uploads/avatars/xxx.png"}}]
+```
+
+用数组中的 `id` 调用 `POST /api/v1/multiplayer/join-requests/{id}/approve` 或 `.../reject`。`multiplayer.join_request.created` / `.../rejected` 实时事件只是变更通知；客户端应以事件中的 `session_id` 重新读取本接口获得权威快照，再更新界面。
+
 可通过房间码创建直接加入意图；服务端在签发意图时已按 `join_policy` 完成鉴权。意图绑定当前论坛用户，须在 60 秒内首次使用；相同用户和 OAuth 客户端可在 10 分钟恢复窗口内重新取得成功结果。
 
 直接创建、接受邀请和房主批准的意图都有明确的有效期与消费身份约束。消费失败时按稳定错误码处理；已经消费的意图不会重新授予加入权限。
@@ -457,7 +466,7 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 | `presence.updated`、`activity.updated` | `{"user_id":123,"status":"online"}`；不会附带完整活动对象 | `GET /api/v1/social/friends/presence` |
 | `multiplayer.invite.created` | `{"invite_id":"inv_…","session_id":"ses_…","sender_user_id":123}` | `GET /api/v1/multiplayer/invites` |
 | `multiplayer.invite.accepted`、`multiplayer.invite.revoked` | `{"invite_id":"inv_…","session_id":"ses_…"}` | 按需读取邀请或会话快照 |
-| `multiplayer.join_request.created` | `{"join_request_id":"jrq_…","session_id":"ses_…","requester_user_id":123}` | `GET /api/v1/multiplayer/join-requests` |
+| `multiplayer.join_request.created` | `{"join_request_id":"jrq_…","session_id":"ses_…","requester_user_id":123}` | `GET /api/v1/multiplayer/sessions/{session_id}/join-requests` |
 | `multiplayer.join_request.approved` | `{"join_request_id":"jrq_…","session_id":"ses_…","intent_id":"jnt_…"}` | 直接消费 `intent_id`；不需要重新查意图 |
 | `multiplayer.join_request.rejected` | `{"join_request_id":"jrq_…","session_id":"ses_…"}` | 重新读取对应会话或请求状态 |
 | `session.updated`（房主用户流） | `{"session_id":"ses_…","status":"active"}` | `GET /api/v1/multiplayer/sessions/{id}` |
