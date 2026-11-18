@@ -3,7 +3,9 @@
 审计开始时间: 2026-10-04  
 审计完成时间: 2026-10-05  
 最终版本: v3.0 (Normalized)  
-状态: ✅ 完成
+状态: ✅ 完成（历史审计快照）
+
+> **后续演进状态（2026-11 更新）**：下方记录反映 `2026-10-05` 审计时的仓库快照。此后部分已列出的改进项已经落地，例如：后端 lint（`npm run lint:backend`）与 typecheck（`npm run typecheck:backend`）已接入 `.github/workflows/ci.yml`；Playwright E2E 已接入 `.github/workflows/e2e.yml`；Resource Pack 套件已提供实体与迁移；`ws`、`nodemailer`、`handlebars` 已按安全通告升级。当前工程约束与已知产品缺口以 [`CLAUDE.md`](CLAUDE.md) 和 [`docs/README.md`](docs/README.md) 为准。
 
 ## 审查清单
 

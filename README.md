@@ -91,10 +91,13 @@ CI workflow 配置了后端构建和 Jest、Public V1 OpenAPI 检查、前端 li
 常用本地命令：
 
 ```bash
+npm run lint:backend
+npm run typecheck:backend
 npm run build:backend
 npm test -- --runInBand
 npm run openapi:check
 npm run test:api-changelog
+npm run check:docs-links
 ```
 
 前端：
@@ -115,4 +118,5 @@ npm run build
 - [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 契约与行为。
 - [`docs/platform-2.7.0.md`](docs/platform-2.7.0.md)：2.7.0 收口范围和已知限制。
 - [`docs/resource-storage-reconciliation.md`](docs/resource-storage-reconciliation.md)：RES 对账与安全修复。
+- [`docs/bare-metal-deployment.md`](docs/bare-metal-deployment.md)：裸机部署（PM2 + Nginx，无 Docker）流程。
 - [`docs/production-deployment.md`](docs/production-deployment.md)：生产部署清单。
