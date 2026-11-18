@@ -24,11 +24,11 @@ export default function HomeSearchLauncher({ placeholder, label, shortcutLabel }
     setEnhanced(true);
   }, []);
 
-  const shared = 'relative flex min-h-11 w-full items-center border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-left text-sm text-[var(--text-muted)] hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]';
+  const shared = 'relative flex min-h-11 w-full items-center border border-[var(--border)] bg-[var(--bg-card)] px-3 text-left text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]';
   const content = <>
     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
     <span className="min-w-0 flex-1 truncate pl-7">{placeholder}</span>
-    <kbd className="ml-2 hidden shrink-0 items-center gap-1 border border-[var(--border)] bg-[var(--bg-card)] px-1.5 py-1 text-[10px] text-[var(--text-muted)] xl:inline-flex">{shortcutLabel}</kbd>
+    <kbd className="ml-2 hidden shrink-0 items-center gap-1 border border-[var(--border)] bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)] xl:inline-flex">{shortcutLabel}</kbd>
   </>;
 
   const open = () => {
