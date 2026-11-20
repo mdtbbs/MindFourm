@@ -21262,6 +21262,1918 @@
         ]
       }
     },
+    "/v1/squads": {
+      "get": {
+        "operationId": "SquadsController_list",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出我的小队",
+        "description": "返回当前账号以活跃成员身份加入的小队，包含角色、成员数与存档槽数量。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_create",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建小队",
+        "description": "创建者成为队长，共享存档空间从创建者的个人云存档配额中统一扣除。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/invitations": {
+      "get": {
+        "operationId": "SquadsController_invitations",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出收到的小队邀请",
+        "description": "返回待接受的小队邀请；用 accept / decline 处理。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}": {
+      "get": {
+        "operationId": "SquadsController_get",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看小队详情",
+        "description": "返回成员、共享存档槽、当前租约持有者与待确认的队长转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "description": "小队 UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "SquadsController_rename",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "重命名小队",
+        "description": "队长或管理员可修改小队名称。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_remove",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除小队",
+        "description": "只有队长可删除；共享存档槽与快照软删除，blob 引用释放并进入延迟回收。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members": {
+      "get": {
+        "operationId": "SquadsController_members",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出小队成员",
+        "description": "活跃成员与待接受邀请的成员及其角色。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_invite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "邀请好友加入小队",
+        "description": "只有好友可以被邀请；被邀请人通过 accept / decline 处理。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteSquadMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/accept": {
+      "post": {
+        "operationId": "SquadsController_acceptInvite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "接受小队邀请",
+        "description": "接受后成为活跃成员；小队满员时返回 SQUAD_MEMBER_LIMIT_EXCEEDED。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/decline": {
+      "post": {
+        "operationId": "SquadsController_declineInvite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "拒绝小队邀请",
+        "description": "拒绝后邀请失效，可由队长或管理员重新邀请。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/{userId}": {
+      "patch": {
+        "operationId": "SquadsController_setRole",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "设置成员角色",
+        "description": "只有队长可以把成员设为管理员或降为普通成员；队长角色只能通过两步转让切换。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_removeMember",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "退出或移除小队成员",
+        "description": "成员可退出自己；队长/管理员可移除成员。队长必须先完成转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer": {
+      "post": {
+        "operationId": "SquadsController_createTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "发起队长转让",
+        "description": "现任队长指定一名活跃成员，创建 24 小时内有效的待确认转让；同一小队至多一条。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadOwnershipTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/accept": {
+      "post": {
+        "operationId": "SquadsController_acceptTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "接受队长转让",
+        "description": "事务内按 ORDER BY id ASC 锁定新旧队长，校验新队长剩余配额后原子切换 owner 与 billing_user_id。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/decline": {
+      "post": {
+        "operationId": "SquadsController_declineTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "拒绝队长转让",
+        "description": "只有被指定的新队长可以拒绝。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/cancel": {
+      "post": {
+        "operationId": "SquadsController_cancelTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "取消队长转让",
+        "description": "只有现任队长可以取消待确认的转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots": {
+      "get": {
+        "operationId": "SquadsController_slots",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出共享存档槽",
+        "description": "返回槽位、当前主链 head 与租约持有者摘要。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_createSlot",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建共享存档槽",
+        "description": "任意活跃成员可创建；数量受小队 max_slots 限制。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}": {
+      "get": {
+        "operationId": "SquadsController_getSlot",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看共享存档槽",
+        "description": "返回槽位、主链 head、当前租约和置顶数量。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "SquadsController_renameSlot",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "重命名共享存档槽",
+        "description": "任意活跃成员可重命名槽位。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_deleteSlot",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除共享存档槽",
+        "description": "队长或管理员可删除；快照软删除、blob 引用释放并回收配额。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease": {
+      "get": {
+        "operationId": "SquadsController_leaseStatus",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看写租约状态",
+        "description": "返回当前有效租约（holder、fencing_token、到期时间）以及调用者是否持有。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_releaseLease",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "释放写租约",
+        "description": "仅当前持有者可释放；可选 fencing_token 防止误释放已被接管的租约。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease/acquire": {
+      "post": {
+        "operationId": "SquadsController_acquireLease",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "获取写租约",
+        "description": "自然到期（150 秒）后任意活跃成员可接力；未到期时返回 409 SQUAD_SAVE_LEASE_HELD，owner/admin 可 force_takeover 强制接管。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease/renew": {
+      "post": {
+        "operationId": "SquadsController_renewLease",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "续期写租约",
+        "description": "当前持有者用 fencing_token 续期；接通 90 秒心跳节奏，租约每次延长 150 秒。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots": {
+      "get": {
+        "operationId": "SquadsController_snapshots",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看快照链",
+        "description": "按 revision 从新到旧返回主链与 conflict 救援分支，标注 head、pinned 与保留层级。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_commitSnapshot",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "提交共享存档快照",
+        "description": "持有当前 fencing_token 才能推进主链；过期 token 返回 409 SQUAD_SAVE_LEASE_STALE，可用 mode=conflict_rescue 保存为 conflict 分支。提交成功后同步执行 GFS 裁剪。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/manifest": {
+      "get": {
+        "operationId": "SquadsController_manifest",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "读取快照文件清单",
+        "description": "返回 path / size / sha256 与游戏、Mod 元数据。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/restore": {
+      "post": {
+        "operationId": "SquadsController_restore",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "恢复历史或冲突分支",
+        "description": "创建新的主链 revision，不删除原快照；必须持有当前 fencing_token 并确认 head。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}": {
+      "patch": {
+        "operationId": "SquadsController_pin",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "置顶或取消置顶快照",
+        "description": "置顶快照不参与 GFS 自动裁剪；每个存档槽最多置顶 10 个。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_deleteSnapshot",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除历史或冲突快照",
+        "description": "队长或管理员可删除非 head 快照；引用归零的 blob 进入延迟回收。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/blobs/check": {
+      "post": {
+        "operationId": "SquadsController_checkBlobs",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查询小队已持有的文件",
+        "description": "严格限定当前小队的 squad_save_blobs 与暂存表，绝不会触达创建者个人 game_save_blobs。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckSquadSaveBlobsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/blobs": {
+      "post": {
+        "operationId": "SquadsController_createBlobUpload",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建小队文件上传会话",
+        "description": "需要持有当前写租约；配额从创建者个人云存档额度统一扣除，不足返回 409 SQUAD_OWNER_QUOTA_EXCEEDED。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadSaveBlobUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/blobs/uploads/{uploadId}/file": {
+      "put": {
+        "operationId": "SquadsController_uploadBlobFile",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "上传小队文件字节",
+        "description": "服务端校验大小与 SHA-256；只有创建该会话的成员可以写入。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/download": {
+      "post": {
+        "operationId": "SquadsController_blobDownloads",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "获取快照文件下载地址",
+        "description": "为清单中指定 SHA-256 返回同源 Bearer 下载地址；客户端只需拉取本机缺失的文件。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SquadSaveBlobDownloadGrantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/{sha256}/file": {
+      "get": {
+        "operationId": "SquadsController_blobFile",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 300,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "下载单个小队存档文件",
+        "description": "只返回该快照清单内、且属于当前小队的文件内容；ETag 为文件 SHA-256。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sha256",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/threads": {
       "get": {
         "operationId": "ThreadsV1Controller_listThreads",
@@ -34434,6 +36346,38 @@
           "mod_id"
         ]
       },
+      "SquadSaveRefDto": {
+        "type": "object",
+        "properties": {
+          "squad_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "小队 UUID。"
+          },
+          "slot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "共享存档槽 UUID。"
+          },
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "调用者持有的写租约 fencing_token。"
+          },
+          "lanlink_room_code": {
+            "type": "string",
+            "example": "A1B2C3D4E5",
+            "maxLength": 16,
+            "description": "可选的 LanLink 房间码；供其他成员在 409 SQUAD_SAVE_LEASE_HELD 时一键加入。"
+          }
+        },
+        "required": [
+          "squad_id",
+          "slot_id",
+          "fencing_token"
+        ]
+      },
       "CreateMultiplayerSessionDto": {
         "type": "object",
         "properties": {
@@ -34502,6 +36446,14 @@
             "items": {
               "$ref": "#/components/schemas/SessionModDto"
             }
+          },
+          "squad_save_ref": {
+            "description": "小队共享存档接力：调用者必须是该槽位当前租约持有者；成功后回填 active_session_id。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SquadSaveRefDto"
+              }
+            ]
           }
         },
         "required": [
@@ -34813,6 +36765,331 @@
         },
         "required": [
           "allocation_id"
+        ]
+      },
+      "CreateSquadDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "周末联机小队",
+            "maxLength": 80,
+            "description": "小队名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PatchSquadDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "新小队名",
+            "maxLength": 80,
+            "description": "新的小队名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "InviteSquadMemberDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "number",
+            "example": 123,
+            "minimum": 1,
+            "description": "被邀请好友的用户 ID；仅限已是好友的账号。"
+          }
+        },
+        "required": [
+          "user_id"
+        ]
+      },
+      "PatchSquadMemberDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "example": "admin",
+            "description": "成员角色；队长由两步转让单独切换。"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "CreateSquadOwnershipTransferDto": {
+        "type": "object",
+        "properties": {
+          "target_user_id": {
+            "type": "number",
+            "example": 123,
+            "minimum": 1,
+            "description": "目标小队成员的用户 ID。"
+          }
+        },
+        "required": [
+          "target_user_id"
+        ]
+      },
+      "CreateSquadSlotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "主世界",
+            "maxLength": 100,
+            "description": "共享存档槽名称。"
+          },
+          "game_version": {
+            "type": "string",
+            "example": "v160.7",
+            "maxLength": 64,
+            "description": "存档依赖的游戏版本。"
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "存档依赖的 Mod 摘要；接力开房前用于唤起模组同步。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PatchSquadSlotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "新槽位名",
+            "maxLength": 100,
+            "description": "新的存档槽名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "AcquireSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "force_takeover": {
+            "type": "boolean",
+            "example": false,
+            "description": "目标槽位被未过期的其他房主持有时，owner/admin 可确认强制接管。"
+          }
+        }
+      },
+      "RenewSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "当前持有的 fencing_token；不匹配说明租约已被他人接管。"
+          }
+        },
+        "required": [
+          "fencing_token"
+        ]
+      },
+      "ReleaseSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "可选 fencing_token；提供时必须是当前值，否则拒绝释放。"
+          }
+        }
+      },
+      "CommitSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "租约 fencing_token；只有当前持有者才能推进主链。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "conflict_rescue"
+            ],
+            "example": "normal",
+            "description": "conflict_rescue 将旧房主的过期提交保存为 conflict 分支，不推进主链。"
+          },
+          "base_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "本次提交基于的主链快照；与当前 head 不一致时返回 SQUAD_SAVE_CONFLICT。"
+          },
+          "manifest": {
+            "description": "本次快照的完整文件清单。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveManifestDto"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "before_launch",
+              "after_exit",
+              "periodic",
+              "restore",
+              "conflict",
+              "import"
+            ],
+            "example": "manual",
+            "description": "保存原因。"
+          },
+          "game": {
+            "description": "游戏版本信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveGameMetadataDto"
+              }
+            ]
+          },
+          "save": {
+            "description": "游戏内存档显示信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveDisplayMetadataDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "该存档使用的 Mod 列表。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          },
+          "device_id": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "desktop-main",
+            "description": "客户端设备标识。"
+          }
+        },
+        "required": [
+          "fencing_token",
+          "manifest"
+        ]
+      },
+      "RestoreSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "当前租约 fencing_token；恢复会创建新的主链快照。"
+          },
+          "confirm_head_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "确认当前 head；变化时拒绝恢复，避免覆盖他人新存档。"
+          }
+        },
+        "required": [
+          "fencing_token"
+        ]
+      },
+      "PatchSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "pinned": {
+            "type": "boolean",
+            "example": true,
+            "description": "置顶后该快照不参与 GFS 自动裁剪；每个槽最多 10 个。"
+          }
+        },
+        "required": [
+          "pinned"
+        ]
+      },
+      "CheckSquadSaveBlobsDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "待查询的 SHA-256；查询范围严格限定在当前小队。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      },
+      "CreateSquadSaveBlobUploadDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "description": "单个文件内容的 SHA-256。"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "example": 4194304,
+            "description": "单个文件字节数。"
+          }
+        },
+        "required": [
+          "sha256",
+          "size"
+        ]
+      },
+      "SquadSaveBlobDownloadGrantDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "要下载的 SHA-256；必须属于该快照清单。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
         ]
       },
       "CreatePostDto": {
