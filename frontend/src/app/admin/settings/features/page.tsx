@@ -6,7 +6,7 @@ import Alert from '@/components/ui/alert';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
-import { Activity, Gamepad2, Network, Radio, Server, Shield, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
+import { Activity, Download, Gamepad2, Network, Radio, Server, Shield, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
 
 interface FeatureItem {
   key: string;
@@ -100,6 +100,14 @@ const features: FeatureItem[] = [
     icon: Shield,
     routes: ['MindAuth Developer Applications'],
     defaultEnabled: false,
+  },
+  {
+    key: 'feature_multiplayer_mod_sync_enabled',
+    label: '模组房同步计划',
+    description: '允许建房上报 Mod 或 Pack，并向客人计算同步计划、批量签发可校验文件的下载授权。',
+    icon: Download,
+    routes: ['/api/v1/multiplayer/sessions/{id}/mod-sync-plan'],
+    defaultEnabled: true,
   },
 ];
 

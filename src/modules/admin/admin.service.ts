@@ -14,6 +14,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventsService } from '../events/events.service';
 import { PostActivityService } from '../posts/post-activity.service';
+import { TimelapseRefsService } from '../timelapses/timelapse-refs.service';
 import { postDetailCacheKey } from '@common/utils/post-cache.util';
 
 @Injectable()
@@ -50,6 +51,7 @@ export class AdminService {
     private redisService: RedisService,
     private postActivityService: PostActivityService,
     @Optional() private events?: EventsService,
+    @Optional() private timelapseRefs?: TimelapseRefsService,
   ) {}
 
   private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
@@ -172,6 +174,7 @@ export class AdminService {
     return this.dataSource.transaction(async (manager) => {
       for (const postId of postIds) {
         await manager.softDelete(Post, postId);
+        await this.timelapseRefs?.removePostRefs(manager, postId);
       }
     });
   }
@@ -428,6 +431,7 @@ export class AdminService {
         if (!post) throw new NotFoundException('Post not found');
         if (post.status === 'published') return;
         await manager.update(Post, id, { status: 'published' });
+        await this.timelapseRefs?.syncPostRefs(manager, id, post.content_json, 'published');
         await this.events!.publish({ eventKey: 'ForumPostPublished', aggregateType: 'Post', aggregateId: id,
           payload: { post_id: id },
         }, manager);
@@ -437,7 +441,10 @@ export class AdminService {
     }
     const post = await this.postRepository.findOne({ where: { id } });
     if (!post) throw new NotFoundException('Post not found');
-    await this.postRepository.update(id, { status: 'published' });
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Post, id, { status: 'published' });
+      await this.timelapseRefs?.syncPostRefs(manager, id, post.content_json, 'published');
+    });
     await this.invalidatePostCache(id);
     if (post.status !== 'published') await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id).catch(error => console.warn('Approved post points failed after commit:', error.message));
   }
@@ -451,7 +458,10 @@ export class AdminService {
     // is retained forever. `rejectReply` already does this.
     const updateData: any = { status: 'deleted', deleted_at: new Date() };
     if (reason) updateData.reject_reason = reason;
-    await this.postRepository.update(id, updateData);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Post, id, updateData);
+      await this.timelapseRefs?.removePostRefs(manager, id);
+    });
     await this.invalidatePostCache(id);
   }
 

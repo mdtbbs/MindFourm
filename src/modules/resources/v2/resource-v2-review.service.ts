@@ -11,6 +11,8 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { ResourceSubscriptionsService } from '../resource-subscriptions.service';
 import { PUBLIC_RESOURCE_STATUSES, type ResourceStatus } from '@common/utils/constants';
 import { MAX_RESOURCE_SIZE } from '../resource-upload.constants';
+import { SchematicLogicIndexService } from '../schematic-logic-index.service';
+import { ResourceDiffQueueService } from './resource-diff-queue.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
 type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; title?: string; status?: string; is_public?: number; visibility?: string };
@@ -49,6 +51,8 @@ export class ResourceV2ReviewService {
     @Optional() private readonly resClient?: ResourceStorageClientService,
     @Optional() private readonly previews?: ResourcePreviewService,
     @Optional() private readonly subscriptions?: ResourceSubscriptionsService,
+    @Optional() private readonly logicIndex?: SchematicLogicIndexService,
+    @Optional() private readonly diffQueue?: ResourceDiffQueueService,
   ) {}
 
   async reviewVersion(resourcePublicId: string, versionPublicId: string, actorId: number, input: {
@@ -63,6 +67,10 @@ export class ResourceV2ReviewService {
 
     let preparedPromotion: PreparedResourcePromotion | null = null;
     let preparedSource: { filePath: string; fileSize: number; contentHash: string } | null = null;
+    let previousRecommendedId = 0;
+    let reviewedKind: string | null = null;
+    let reviewedResourceId = 0;
+    let reviewedVersionId = 0;
     if (action === 'approve') {
       // Validate and copy outside the transaction. The source remains in
       // quarantine until the database transaction commits successfully.
@@ -72,6 +80,16 @@ export class ResourceV2ReviewService {
       if (preflightVersion.status !== 'pending_review') {
         throw new BadRequestException('只有 pending_review 状态的版本可以审核');
       }
+      reviewedKind = preflightResource.resource_kind;
+      reviewedResourceId = Number(preflightResource.id);
+      reviewedVersionId = Number(preflightVersion.id);
+      const previous = await this.dataSource.query(
+        `SELECT id FROM resource_versions
+         WHERE resource_id=? AND id<>? AND status='published' AND recommended=1
+         ORDER BY COALESCE(published_at,created_at) DESC, revision DESC, id DESC LIMIT 1`,
+        [preflightResource.id, preflightVersion.id],
+      ) as Array<{ id: number }>;
+      previousRecommendedId = Number(previous[0]?.id || 0);
       if (preflightVersion.file_path) {
         if (!this.storage) throw new BadRequestException('资源文件存储服务不可用，无法发布此版本');
         const bytes = await this.storage.readQuarantinedFile(preflightVersion.file_path, MAX_RESOURCE_SIZE);
@@ -191,6 +209,11 @@ export class ResourceV2ReviewService {
         }
       }
 
+      // 发布事务内同步逻辑片段索引：下架/转私有后的清理走同一套判断，
+      // 索引不会出现“资源已不可见但检索仍能命中”的窗口。
+      if (action === 'approve' && resource.resource_kind === 'schematic' && this.logicIndex) {
+        await this.logicIndex.syncResource(resource.id, manager);
+      }
       await this.writeEvent(manager, {
         resourceId: resource.id,
         versionId: version.id,
@@ -271,6 +294,12 @@ export class ResourceV2ReviewService {
         outcome.subscriber_notification as Resource,
         { deduplicationKey: `resource-version-published:${outcome.version_public_id}` },
       ).catch((error) => this.logger.warn(`Failed to notify Resource subscribers after version review: ${(error as Error).message}`));
+    }
+
+    // 审核事务提交后再投递热路径 Diff 任务；失败不影响发布，长尾请求仍会懒计算。
+    if (action === 'approve' && previousRecommendedId && (reviewedKind === 'schematic' || reviewedKind === 'map')) {
+      void this.diffQueue?.enqueue(reviewedResourceId, previousRecommendedId, reviewedVersionId)
+        .catch((error) => this.logger.warn(`Failed to enqueue visual diff: ${(error as Error).message}`));
     }
 
     const response: ReviewResponse = {

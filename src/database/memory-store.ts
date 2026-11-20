@@ -178,6 +178,36 @@ export class MemoryStore {
     return removed;
   }
 
+  // ── Lists (resource diff job queue) ──────────────────────────────────────
+  rpush(key: string, value: string): number {
+    const entry = this.read(key);
+    let items: string[] = [];
+    if (entry && typeof entry.value === 'string') {
+      try {
+        const parsed = JSON.parse(entry.value);
+        if (Array.isArray(parsed)) items = parsed.filter((item): item is string => typeof item === 'string');
+      } catch { items = []; }
+    }
+    items.push(value);
+    this.data.set(key, { value: JSON.stringify(items), expiresAt: entry?.expiresAt ?? null });
+    return items.length;
+  }
+
+  lpop(key: string): string | null {
+    const entry = this.read(key);
+    if (!entry || typeof entry.value !== 'string') return null;
+    let items: string[];
+    try {
+      const parsed = JSON.parse(entry.value);
+      if (!Array.isArray(parsed)) return null;
+      items = parsed.filter((item): item is string => typeof item === 'string');
+    } catch { return null; }
+    const value = items.shift() ?? null;
+    if (items.length) this.data.set(key, { value: JSON.stringify(items), expiresAt: entry.expiresAt ?? null });
+    else this.data.delete(key);
+    return value;
+  }
+
   // ── Sorted set (popular searches only) ───────────────────────────────────
   private zset(key: string, create: boolean): Map<string, number> | null {
     const entry = this.read(key);

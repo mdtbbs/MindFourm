@@ -313,6 +313,7 @@ const SOCIAL_MULTIPLAYER_ERRORS: ReadonlyArray<readonly [string, number, boolean
   ['SESSION_ALREADY_ACTIVE', 409, false, '账号已有活跃联机会话', 'The account already owns an active Session; the existing session_id is included in error.details.'],
   ['SESSION_FULL', 409, false, '联机会话人数已满', 'The Session has reached its player capacity.'],
   ['SESSION_NOT_JOINABLE', 400, false, '联机会话当前不可加入', 'The Session configuration does not allow this join path.'],
+  ['SESSION_MODS_INVALID', 400, false, '联机模组清单无效', 'The Session mod list is invalid: mutually exclusive inputs, duplicates, or an unavailable Pack.'],
   ['SESSION_PERMISSION_DENIED', 403, false, '无权访问此联机会话', 'The caller cannot view or join this Session.'],
   ['PEER_NOT_FOUND', 404, false, '联机 Peer 不存在', 'The requested Peer does not exist in this Session.'],
   ['PEER_EXPIRED', 404, false, '联机 Peer 已过期', 'The Peer has left or expired.'],
@@ -362,10 +363,55 @@ const CLOUD_SAVE_ERRORS: ReadonlyArray<readonly [string, number, boolean, string
   ['SAVE_STORAGE_UNAVAILABLE', 503, true, '云存档存储暂不可用', 'The configured local save storage is unavailable or not ready.'],
 ];
 
+const SQUAD_SAVE_ERRORS: ReadonlyArray<readonly [string, number, boolean, string, string]> = [
+  ['SQUADS_DISABLED', 403, false, '小队共享存档功能尚未启用', 'Squad Saves is disabled for this deployment, or personal Cloud Saves is disabled.'],
+  ['SQUAD_INVALID_METADATA', 400, false, '小队数据无效', 'A squad, slot, member or device field failed validation.'],
+  ['SQUAD_NOT_FOUND', 404, false, '小队不存在', 'The Squad does not exist or was deleted.'],
+  ['SQUAD_PERMISSION_DENIED', 403, false, '没有小队操作权限', 'The caller is not an active member, or lacks the role this operation requires.'],
+  ['SQUAD_LIMIT_EXCEEDED', 409, false, '已达到可创建的小队数量上限', 'The account already owns the maximum number of active squads.'],
+  ['SQUAD_MEMBER_LIMIT_EXCEEDED', 409, false, '小队成员数量已达上限', 'Accepting the invitation would exceed the squad member limit.'],
+  ['SQUAD_MEMBER_ALREADY_EXISTS', 409, false, '该用户已经是小队成员', 'The target account is already an active member.'],
+  ['SQUAD_MEMBER_NOT_FOUND', 404, false, '小队成员不存在', 'The target account is not an active member of this squad.'],
+  ['SQUAD_FRIEND_REQUIRED', 403, false, '只能邀请好友', 'Squad invitations are limited to accepted friends.'],
+  ['SQUAD_INVITE_NOT_FOUND', 404, false, '没有待接受的小队邀请', 'The caller has no pending invitation to this squad.'],
+  ['SQUAD_OWNER_ROLE_IMMUTABLE', 409, false, '队长角色不可直接修改', 'The owner role can only change through the two-step ownership transfer.'],
+  ['SQUAD_OWNER_MUST_TRANSFER', 409, false, '队长需先完成转让', 'The owner must transfer ownership before leaving the squad.'],
+  ['SQUAD_TRANSFER_NOT_FOUND', 404, false, '没有待确认的队长转让', 'No pending ownership transfer exists for this squad.'],
+  ['SQUAD_TRANSFER_PENDING', 409, false, '已有待确认的队长转让', 'A squad may have at most one pending ownership transfer.'],
+  ['SQUAD_TRANSFER_EXPIRED', 410, false, '队长转让已过期', 'The ownership transfer expired before it was accepted or declined.'],
+  ['SQUAD_TRANSFER_STALE', 409, false, '队长转让状态已变化', 'The squad owner changed while the transfer was pending.'],
+  ['SQUAD_TRANSFER_QUOTA_EXCEEDED', 409, false, '新队长配额不足', 'The new owner cannot absorb the squad bytes within their Cloud Save quota.'],
+  ['SQUAD_SLOT_LIMIT_EXCEEDED', 409, false, '小队存档槽数量已达上限', 'The squad already has its maximum number of shared save slots.'],
+  ['SQUAD_SAVE_SLOT_NOT_FOUND', 404, false, '小队存档槽不存在', 'The shared save slot does not exist or was deleted.'],
+  ['SQUAD_SAVE_SNAPSHOT_NOT_FOUND', 404, false, '小队快照不存在', 'The shared save snapshot does not exist or was deleted.'],
+  ['SQUAD_SAVE_HEAD_SNAPSHOT_DELETE_FORBIDDEN', 409, false, '主链当前快照不能单独删除', 'The head snapshot must be replaced by a newer commit or the slot deleted first.'],
+  ['SQUAD_SAVE_PIN_LIMIT_EXCEEDED', 409, false, '置顶快照数量已达上限', 'A shared save slot may pin at most ten snapshots.'],
+  ['SQUAD_SAVE_BLOB_MISSING', 409, false, '缺少小队存档文件', 'One or more manifest files have no uploaded blob in this squad.'],
+  ['SQUAD_SAVE_BLOB_NOT_IN_SNAPSHOT', 404, false, '快照不包含该文件', 'The requested blob is not part of this shared save snapshot.'],
+  ['SQUAD_SAVE_BASE_SNAPSHOT_INVALID', 409, false, '基准快照无效', 'The supplied base snapshot is deleted or belongs to another slot.'],
+  ['SQUAD_SAVE_CONFLICT', 409, false, '共享存档已有更新', 'The main-chain head changed since the submitted base snapshot.'],
+  ['SQUAD_SAVE_INVALID_HASH', 400, false, 'SHA-256 格式无效', 'The submitted SHA-256 must be 64 lowercase hexadecimal characters.'],
+  ['SQUAD_SAVE_FILE_TOO_LARGE', 413, false, '存档文件超过大小限制', 'The file exceeds the configured per-file byte limit.'],
+  ['SQUAD_SAVE_SIZE_MISMATCH', 409, false, '上传对象大小不匹配', 'The stored object size differs from the declared size.'],
+  ['SQUAD_SAVE_CHECKSUM_MISMATCH', 409, false, '上传对象校验失败', 'The stored object SHA-256 differs from the declared checksum.'],
+  ['SQUAD_SAVE_STORAGE_UNAVAILABLE', 503, true, '小队存档存储暂不可用', 'The configured save storage is unavailable, or a referenced object is missing.'],
+  ['SQUAD_SAVE_UPLOAD_NOT_FOUND', 404, false, '小队上传会话不存在', 'The upload session is absent or belongs to another member.'],
+  ['SQUAD_SAVE_UPLOAD_EXPIRED', 410, false, '小队上传会话已过期', 'The upload session expired or is no longer committable.'],
+  ['SQUAD_OWNER_QUOTA_EXCEEDED', 409, false, '小队创建者云存档空间不足', 'The owner-scoped unified quota (personal plus owned squad bytes) would be exceeded.'],
+  ['SQUAD_OWNER_CHANGED', 409, true, '小队队长已变化', 'Ownership changed while the caller was staging or committing a squad save; retry the operation.'],
+  ['SQUAD_SAVE_LEASE_HELD', 409, false, '存档槽已由其他房主持有', 'An unexpired write lease is held by another member; join that room or take over as owner/admin.'],
+  ['SQUAD_SAVE_LEASE_STALE', 409, false, '写租约已失效', 'The fencing token is stale, expired, or no longer held by the caller.'],
+  ['SQUAD_SAVE_LEASE_REQUIRED', 409, false, '需要先获取写租约', 'The caller must hold the active write lease before staging squad save files.'],
+  ['SQUAD_TAKEOVER_FORBIDDEN', 403, false, '无权强制接管租约', 'Only the owner or an admin may force-take-over an unexpired lease.'],
+];
+
 for (const [code, httpStatus, retryable, defaultMessage, description] of SOCIAL_MULTIPLAYER_ERRORS) {
   V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
 }
 for (const [code, httpStatus, retryable, defaultMessage, description] of CLOUD_SAVE_ERRORS) {
+  V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
+}
+for (const [code, httpStatus, retryable, defaultMessage, description] of SQUAD_SAVE_ERRORS) {
   V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
 }
 

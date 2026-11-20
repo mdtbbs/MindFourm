@@ -14,6 +14,6 @@ import { CloudSaveNoStoreInterceptor } from './cloud-save-no-store.interceptor';
   imports: [AuthModule, BansModule, SettingsModule, SiteConfigModule],
   controllers: [GameSavesController],
   providers: [GameSavesService, CloudSaveStorageService, GameSavesMaintenanceService, OAuthScopeGuard, CloudSaveNoStoreInterceptor],
-  exports: [GameSavesService],
+  exports: [GameSavesService, CloudSaveStorageService],
 })
 export class GameSavesModule {}

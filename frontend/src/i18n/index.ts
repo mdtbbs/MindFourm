@@ -27,9 +27,17 @@ import ruDiscovery from './locales/ru/discovery.json';
 import jaDiscovery from './locales/ja/discovery.json';
 import zhCNDiscovery from './locales/zh-CN/discovery.json';
 import enChallenge from './locales/en/challenge.json';
+import enResourceEmbeds from './locales/en/resource-embeds.json';
+import enVisualDiff from './locales/en/visual-diff.json';
 import ruChallenge from './locales/ru/challenge.json';
+import ruResourceEmbeds from './locales/ru/resource-embeds.json';
+import ruVisualDiff from './locales/ru/visual-diff.json';
 import jaChallenge from './locales/ja/challenge.json';
+import jaResourceEmbeds from './locales/ja/resource-embeds.json';
+import jaVisualDiff from './locales/ja/visual-diff.json';
 import zhCNChallenge from './locales/zh-CN/challenge.json';
+import zhCNResourceEmbeds from './locales/zh-CN/resource-embeds.json';
+import zhCNVisualDiff from './locales/zh-CN/visual-diff.json';
 import { siteProfile, type SiteLocale } from '@/config/site-profile';
 
 export type Locale = SiteLocale;
@@ -49,10 +57,10 @@ function mergeCatalogs(...sources: Array<Record<string, unknown>>): Record<strin
   return merged;
 }
 const catalogs = {
-  en: mergeCatalogs(en, enWorkflows, enDiscussion, enResources, enActivity, enAccount, enDiscovery, enChallenge),
-  ru: mergeCatalogs(ru, ruWorkflows, ruDiscussion, ruResources, ruActivity, ruAccount, ruDiscovery, ruChallenge),
-  ja: mergeCatalogs(ja, jaWorkflows, jaDiscussion, jaResources, jaActivity, jaAccount, jaDiscovery, jaChallenge),
-  'zh-CN': mergeCatalogs(zhCN, zhCNWorkflows, zhCNDiscussion, zhCNResources, zhCNActivity, zhCNAccount, zhCNDiscovery, zhCNChallenge),
+  en: mergeCatalogs(en, enWorkflows, enDiscussion, enResources, enActivity, enAccount, enDiscovery, enChallenge, enResourceEmbeds, enVisualDiff),
+  ru: mergeCatalogs(ru, ruWorkflows, ruDiscussion, ruResources, ruActivity, ruAccount, ruDiscovery, ruChallenge, ruResourceEmbeds, ruVisualDiff),
+  ja: mergeCatalogs(ja, jaWorkflows, jaDiscussion, jaResources, jaActivity, jaAccount, jaDiscovery, jaChallenge, jaResourceEmbeds, jaVisualDiff),
+  'zh-CN': mergeCatalogs(zhCN, zhCNWorkflows, zhCNDiscussion, zhCNResources, zhCNActivity, zhCNAccount, zhCNDiscovery, zhCNChallenge, zhCNResourceEmbeds, zhCNVisualDiff),
 } as const;
 
 export function normalizeLocale(input?: string | null, supported: readonly string[] = siteProfile.localization.supportedLocales): Locale | null {

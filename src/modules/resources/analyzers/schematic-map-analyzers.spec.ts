@@ -12,7 +12,7 @@ describe('schematic and map metadata analyzers', () => {
       block_positions: [
         { block: 'graphite-press', x: 3, y: 4, rotation: 1, config: 'private logic payload' },
         { block: 'logic-processor', x: 7, y: 2, logic_source_available: true, config: {
-          format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }],
+          format_version: 1, source: 'print "inert source"', links: [{ name: 'node1', x: 2, y: 3 }],
         } },
       ],
       requirements: [{ item: 'copper', amount: 24 }, { item: 'copper', amount: 5 }, { item: 'lead', amount: 12 }],
@@ -40,12 +40,17 @@ describe('schematic and map metadata analyzers', () => {
     expect(result.blocks.find((item) => item.internal_name === 'graphite-press')?.positions_json).toEqual([{ x: 3, y: 4, rotation: 1, size: 1 }]);
     expect(result.blocks.find((item) => item.internal_name === 'logic-processor')?.positions_json).toEqual([{
       x: 7, y: 2, rotation: null, size: 1,
-      config: { type: 'logic', format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }] },
+      config: { type: 'logic', format_version: 1, source: 'print "inert source"', links: [{ name: 'node1', x: 2, y: 3 }] },
       logic_source_available: true,
     }]);
     expect(result.materials).toEqual([{ internal_name: 'copper', amount: 29 }, { internal_name: 'lead', amount: 12 }]);
     expect(result.logic_processors).toEqual([expect.objectContaining({
       position_x: 7, position_y: 2, processor_type: 'logic-processor', links_json: [{ name: 'node1', x: 2, y: 3 }],
+      // 发布索引需要源码与静态审计投影；源码只作为惰性文本保存，绝不执行。
+      source_code: 'print "inert source"', source_truncated: 0,
+      instruction_count: 1, estimated_cycle_ticks: 0.5,
+      source_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      audit_findings_json: expect.any(Array),
     })]);
     expect(result.analysis).toMatchObject({ complete: true, available: true, estimated: true });
     expect(result.analysis.production_json).toMatchObject({
@@ -61,7 +66,7 @@ describe('schematic and map metadata analyzers', () => {
       expect.objectContaining({ code: 'LOGIC_NOT_EXECUTED', severity: 'info' }),
     ]));
     expect(JSON.stringify(result.logic_processors)).not.toContain('private logic payload');
-    expect(JSON.stringify(result.logic_processors)).not.toContain('inert source');
+    expect(JSON.stringify(result.logic_processors)).toContain('inert source');
   });
 
   it('derives schematic block counts only when renderer block type counts are missing', () => {

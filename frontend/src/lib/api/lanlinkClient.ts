@@ -24,6 +24,21 @@ export interface LanLinkAuthResult {
   message?: string;
 }
 
+export interface RoomModSummaryMod {
+  mod_id: string;
+  display_name: string;
+  version: string;
+  syncable: boolean;
+}
+
+export interface RoomModSummary {
+  modded: boolean;
+  mod_count: number;
+  syncable_count: number;
+  pack: { public_id: string; version_public_id: string; title: string } | null;
+  mods: RoomModSummaryMod[];
+}
+
 export interface PublicRoom {
   code: string;
   name: string;
@@ -51,6 +66,9 @@ export interface PublicRoom {
   players?: number;
   max_players?: number;
   updated_at?: string | number;
+  /** Present on rooms that report mod sync metadata; absent on legacy rooms. */
+  multiplayer_session_id?: string | null;
+  mod_summary?: RoomModSummary | null;
   direct?: { mode: string; addr: string; port: number };
   direct_candidates?: Array<{ mode: string; addr: string; port: number }>;
 }

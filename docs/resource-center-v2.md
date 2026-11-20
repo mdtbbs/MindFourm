@@ -23,6 +23,7 @@ Resource Center V2 adds structured, version-aware read APIs and community workfl
 | GET | `/resources/{id}/relations` | Paginate related public resources |
 | GET | `/resources/{id}/stats` | Read views, downloads, likes, favorites and ratings |
 | GET | `/resources/{id}/workbench` | Read a safe, owner-aware workbench projection |
+| GET | `/resources/embeds/cards` | Batch-hydrate up to ten Rich Content `resourceEmbed` cards; private/unavailable rows are neutral placeholders |
 | GET | `/resources/{id}/versions/{versionId}/preview` | Read a published version's PNG preview |
 
 The established `GET /resources/{id}` detail and `GET /resources/{id}/manifest` remain their original V1 DTOs. Type-specific V2 manifests are additive at `/resources/mods/{id}/manifest`, `/resources/schematics/{id}/manifest`, and `/resources/maps/{id}/manifest`. The workbench DTO includes:
@@ -97,7 +98,8 @@ For all version-scoped reads, `version_public_id` is optional. A Content entry h
 | GET | `/resources/schematics/{id}/logic` | Static processor links and variables; logic is never executed |
 | GET | `/resources/schematics/{id}/dependencies` | Version dependencies |
 | GET | `/resources/schematics/{id}/relations` | Public related resources |
-| GET | `/resources/schematics/{id}/diff` | Stored version diff or an unavailable result |
+| GET | `/resources/schematics/{id}/diff` | Visual version diff (schema v2); `202` while another request computes it |
+| GET | `/resources/schematics/logic-search` | Public static mlog snippet search over published schematic recommendations |
 
 Block positions may be empty if the parser did not preserve coordinates. The API does not invent inspection detail. Production is theoretical/estimated data, never a measured gameplay result. The workbench includes owner/maintainer light editors for schematic rotate, horizontal mirror, selected-block deletion, placement, static logic text, and official `.msch` export, plus map terrain, typed boolean rules, wave editing, and official `.msav` export. Both editors fail closed on unknown content that could be lost by the bundled reader. The original published file is never modified; export creates a new direct-upload version for the normal review flow. Bounds and deliberately unsupported map fields are documented in [`schematic-editor.md`](schematic-editor.md) and [`map-editor.md`](map-editor.md).
 
@@ -115,9 +117,23 @@ Block positions may be empty if the parser did not preserve coordinates. The API
 | GET | `/resources/maps/{id}/spawns` | Public spawn coordinates |
 | GET | `/resources/maps/{id}/dependencies` | Version dependencies |
 | GET | `/resources/maps/{id}/relations` | Public related resources |
-| GET | `/resources/maps/{id}/diff` | Stored version diff or an unavailable result |
+| GET | `/resources/maps/{id}/diff` | Visual version diff (schema v2); `202` while another request computes it |
+| GET | `/resources/maps/{id}/diff/chunk` | 128×128 chunk RLE of floor/overlay changes |
+| GET | `/resources/maps/{id}/diff/overlay` | Renderer-generated transparent diff overlay PNG |
 
 Map difficulty and wave strength are estimates. Missing rules, resource entries, spawns, waves, or analysis are represented as `null` or empty lists rather than inferred. Resource entries are derived from the renderer's per-tile deposit layers, so `distribution.tile_count` counts deposit tiles rather than a miner yield, and `distribution.source` is `tile_layer` for those rows. Enemy spawn coordinates fall back to the tile layer when the map header carries no spawn list, and core entries fall back to the block name for `core_type`. The map editor can safely add, delete, and move vanilla Core, Spawn point, and building/object entries; Core and building team changes are supported. It validates content, legal teams, map bounds, and each multiblock footprint. Unknown or unsafe objects/configuration fail closed. Terrain, overlay, Rules, waves, and supported map objects are written through the official renderer and parser round-trip; resource/liquid/marker painting is outside the current editing surface.
+
+## Visual version diff (schematic and map)
+
+`resource_visual_diff_enabled` (runtime setting; both site profiles default to enabled) gates the visual diff and its workbench. `GET /resources/{schematics|maps}/{id}/diff` returns `schema_version: 2` data for a version pair. `from_version_public_id` defaults to the previous published version; `to_version_public_id` defaults to the recommended/latest published version. Owners, active members, moderators and admins may select non-published versions of their own resource; anonymous readers only see published versions. Responses use the standard envelope and are limited to 30 requests per 60 seconds.
+
+Diff computation is cached in `resource_version_diffs` (the existing table; `diff_json.schema_version = 2`). Publishing a new recommended version enqueues an asynchronous precompute for `(previous recommended, new version)` through `forum:resource-diff:jobs`. Any other version pair is computed on demand. A Redis lock (`forum:lock:res-diff:{from}:{to}`) prevents concurrent renderer work: the first caller computes, concurrent callers receive HTTP `202` with `status: "computing"` and `retry_after_ms`. Offset-adjusted schematic comparisons (`offset_x`/`offset_y`) are returned but deliberately not cached. The renderer is fail-closed: when either version contains Mod content it returns `UNSUPPORTED_MOD_CONTENT`, and the API persists a `mode: "metadata_only"` diff with file size/hash, version, game-version-bound and dependency-list changes instead of returning a 500.
+
+Schematic diff data includes block add/remove/modify entries (rotation and typed-config digests, point links), material and theoretical power deltas, and processor `mlog` unified diff hunks. Map diff data includes recognized rule changes, spawn-group changes, core/spawn/building object changes, resource tile deltas, a `128×128` terrain chunk summary and an optional overlay preview key. `GET /resources/maps/{id}/diff/chunk?cx=&cy=` returns the RLE floor/overlay runs for one chunk and is cached for one hour. All geometry, terrain and object values are derived from the official renderer; power, wave strength and difficulty remain theoretical estimates.
+
+## Public mlog logic snippets
+
+Approved public schematic versions are indexed into `schematic_logic_snippets` automatically, using the recommended published version only. Withdrawing, deleting, rejecting or making a schematic private removes its rows in the same transaction as the visibility change. `GET /resources/schematics/logic-search` is anonymous (60 requests per 60 seconds) and supports `q`, `opcode`, `unit`, `processor_type`, `cursor` and `limit`. Results contain the author, resource/version public UUIDs, processor type and position, instruction count, estimated cycle ticks, opcodes, referenced units/blocks, static audit findings and a bounded source excerpt. `mlog` is only lexed and statically analyzed: the service never executes user logic. The audit codes are `MLOG_UNKNOWN_OPCODE`, `MLOG_HIGH_FREQ_UBIND_NO_WAIT`, `MLOG_LARGE_CYCLE_BUDGET`, `MLOG_UNREFERENCED_JUMP` and `MLOG_MEMORY_OUT_OF_RANGE`.
 
 ## Review timeline and annotations
 

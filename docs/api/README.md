@@ -47,8 +47,9 @@
 - [资源中心 API V1](./resources-v1-contract.md)：包含公开发现榜单、推荐算法版本、计分公式、候选窗口与隐私边界；在线地址为 `/api/v1/docs/resources`。
 - [多人联机 API V1](./multiplayer-v1.md)
 - [第三方联机接入指南](./multiplayer-guide.md)：从应用申请到会话、中继与实时事件的端到端路径；也记录公开 API / 基础设施边界的表达方式。
-- [云存档 API V1](./cloud-saves-v1.md)
+- [云存档 API V1](./cloud-saves-v1.md)：云存档 API 同时覆盖小队共享存档接力（Squad Saves）。
 - [通用 Blob 存储 V1](./blobs-v1.md)
+- [基地延时摄影与战报卡 V1](./timelapses.md)：`.mreplay.zip` 上传、渲染状态、视频/封面播放与 `battleReport` 正文节点；另含不属于 Public V1 的站内审核接口边界。
 - [公开 V1 错误代码](./errors-v1.md)
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)

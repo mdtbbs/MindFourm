@@ -3535,6 +3535,191 @@
         }
       }
     },
+    "/v1/resources/embeds/cards": {
+      "get": {
+        "operationId": "listResourceEmbedCardsV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "批量读取富文本资源卡片",
+        "description": "批量读取富文本资源卡片 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "ids",
+            "required": true,
+            "in": "query",
+            "description": "逗号分隔的 Resource public UUID，最多 10 个。",
+            "schema": {
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "批量读取富文本资源卡片。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2EmbedCardsDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/{id}/versions": {
       "get": {
         "operationId": "listResourceVersionsV2",
@@ -7321,6 +7506,30 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -7339,6 +7548,242 @@
                       "properties": {
                         "data": {
                           "$ref": "#/components/schemas/ResourceV2DiffDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/schematics/logic-search": {
+      "get": {
+        "operationId": "searchSchematicLogicV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本）",
+        "description": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本） 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "maxLength": 1024,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "全文检索词；匹配资源标题、处理器类型、opcode、单位/方块名与源码。",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "opcode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "example": "ubind",
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "example": "flare",
+              "type": "string"
+            }
+          },
+          {
+            "name": "processor_type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "example": "logic-processor",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本）。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2LogicSearchPageDto"
                         },
                         "meta": {
                           "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
@@ -9583,8 +10028,8 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "summary": "读取蓝图版本结构差异；未生成时返回 null",
-        "description": "读取蓝图版本结构差异；未生成时返回 null 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "summary": "读取蓝图版本可视化差异；计算中返回 202",
+        "description": "读取蓝图版本可视化差异；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
         "parameters": [
           {
             "name": "id",
@@ -9616,11 +10061,35 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "读取蓝图版本结构差异；未生成时返回 null。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "description": "读取蓝图版本可视化差异；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
             "content": {
               "application/json": {
                 "schema": {
@@ -11878,8 +12347,8 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "summary": "读取地图版本差异；未生成时返回 null",
-        "description": "读取地图版本差异；未生成时返回 null 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "summary": "读取地图版本可视化差异；计算中返回 202",
+        "description": "读取地图版本可视化差异；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
         "parameters": [
           {
             "name": "id",
@@ -11911,11 +12380,35 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "读取地图版本差异；未生成时返回 null。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "description": "读取地图版本可视化差异；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
             "content": {
               "application/json": {
                 "schema": {
@@ -12050,6 +12543,368 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/maps/{id}/diff/chunk": {
+      "get": {
+        "operationId": "getMapDiffChunkV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202",
+        "description": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Source version public UUID. If omitted, the previous published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Target version public UUID. If omitted, the recommended/latest published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cx",
+            "required": true,
+            "in": "query",
+            "description": "128×128 分区列号。",
+            "schema": {
+              "minimum": 0,
+              "maximum": 32767,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cy",
+            "required": true,
+            "in": "query",
+            "description": "128×128 分区行号。",
+            "schema": {
+              "minimum": 0,
+              "maximum": 32767,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2MapDiffChunkDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/maps/{id}/diff/overlay": {
+      "get": {
+        "operationId": "getMapDiffOverlayV2",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取地图版本差异的透明叠加层 PNG",
+        "description": "匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。叠加层由 renderer 生成并与当前版本对绑定。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Source version public UUID. If omitted, the previous published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Target version public UUID. If omitted, the recommended/latest published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG 差异叠加层。",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源、版本对或叠加层不存在。"
           },
           "default": {
             "description": "Public V1 error envelope",
@@ -20167,6 +21022,38 @@
             }
           },
           {
+            "name": "modded",
+            "required": false,
+            "in": "query",
+            "description": "按是否模组房筛选：true 只返回模组房，false 只返回原版房。",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "mod_id",
+            "required": false,
+            "in": "query",
+            "description": "只返回房主清单包含该 Mod 的会话。",
+            "schema": {
+              "maxLength": 191,
+              "example": "flood-driver",
+              "type": "string"
+            }
+          },
+          {
+            "name": "pack_public_id",
+            "required": false,
+            "in": "query",
+            "description": "只返回引用该公开 Pack 的会话。",
+            "schema": {
+              "maxLength": 36,
+              "example": "c0ffee00-0000-4000-8000-000000000000",
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -20251,6 +21138,23 @@
                           "expires_at": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "is_modded": {
+                            "type": "boolean",
+                            "description": "是否为模组房。"
+                          },
+                          "mod_count": {
+                            "type": "integer",
+                            "description": "房主上报的 Mod 数量。"
+                          },
+                          "mod_syncable_count": {
+                            "type": "integer",
+                            "description": "服务端可校验并自动下发授权的 Mod 数量。"
+                          },
+                          "mod_summary": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "大厅摘要；mods 最多前 8 项，完整清单读取单会话。"
                           },
                           "joinable": {
                             "type": "boolean",
@@ -20442,6 +21346,259 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         }
+      }
+    },
+    "/v1/multiplayer/sessions/{id}/mod-sync-plan": {
+      "post": {
+        "operationId": "createMultiplayerSessionModSyncPlan",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "multiplayer.read",
+          "resource.read"
+        ],
+        "summary": "计算加入模组房所需的同步计划并批量签发下载授权",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModSyncPlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "标准成功信封；data 是按房主清单与本地已安装 Mod 计算出的同步计划。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "plan_version",
+                    "session_id",
+                    "status",
+                    "generated_at",
+                    "mod_summary",
+                    "to_download",
+                    "to_enable",
+                    "to_disable",
+                    "preserved_client_mods",
+                    "unresolved",
+                    "limits"
+                  ],
+                  "properties": {
+                    "plan_version": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "example": "ses_AbCdEf0123456789_-wxyz"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "sync_required",
+                        "partial_sync_required"
+                      ],
+                      "description": "ready 可直接加入；sync_required 需同步；partial_sync_required 表示仍有需手动获取的 Mod，但可先拉齐可同步项。"
+                    },
+                    "generated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "mod_summary": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "房主 Mod 清单与可同步计数。"
+                    },
+                    "to_download": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mod_id",
+                          "sha256",
+                          "resource_public_id",
+                          "file_public_id",
+                          "download_url",
+                          "granted"
+                        ],
+                        "properties": {
+                          "mod_id": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "size_bytes": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "resource_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "resource_version_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "file_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "download_url": {
+                            "type": "string",
+                            "format": "uri-reference"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "missing",
+                              "hash_mismatch",
+                              "unverified"
+                            ]
+                          },
+                          "granted": {
+                            "type": "boolean",
+                            "description": "false 表示该文件在 60 秒滚动窗口内已有同账号授权记录。"
+                          }
+                        }
+                      }
+                    },
+                    "to_enable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "to_disable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "preserved_client_mods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      },
+                      "description": "纯客户端辅助 Mod，默认保留不禁用。"
+                    },
+                    "unresolved": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mod_id",
+                          "reason",
+                          "resolution_status"
+                        ],
+                        "properties": {
+                          "mod_id": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "not_in_catalog",
+                              "sha256_missing",
+                              "catalog_file_unavailable",
+                              "catalog_version_mismatch"
+                            ]
+                          },
+                          "resolution_status": {
+                            "type": "string",
+                            "enum": [
+                              "catalog_version_mismatch",
+                              "unlisted_local"
+                            ]
+                          },
+                          "resource_public_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resource_version_public_id": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "limits": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "联机会话"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
       }
     },
     "/v1/multiplayer/sessions/{id}/join": {
@@ -21732,6 +22889,2278 @@
           "中继"
         ],
         "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads": {
+      "get": {
+        "operationId": "SquadsController_list",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出我的小队",
+        "description": "返回当前账号以活跃成员身份加入的小队，包含角色、成员数与存档槽数量。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_create",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建小队",
+        "description": "创建者成为队长，共享存档空间从创建者的个人云存档配额中统一扣除。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/invitations": {
+      "get": {
+        "operationId": "SquadsController_invitations",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出收到的小队邀请",
+        "description": "返回待接受的小队邀请；用 accept / decline 处理。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}": {
+      "get": {
+        "operationId": "SquadsController_get",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看小队详情",
+        "description": "返回成员、共享存档槽、当前租约持有者与待确认的队长转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "description": "小队 UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "SquadsController_rename",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "重命名小队",
+        "description": "队长或管理员可修改小队名称。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_remove",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除小队",
+        "description": "只有队长可删除；共享存档槽与快照软删除，blob 引用释放并进入延迟回收。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members": {
+      "get": {
+        "operationId": "SquadsController_members",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出小队成员",
+        "description": "活跃成员与待接受邀请的成员及其角色。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_invite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "邀请好友加入小队",
+        "description": "只有好友可以被邀请；被邀请人通过 accept / decline 处理。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteSquadMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/accept": {
+      "post": {
+        "operationId": "SquadsController_acceptInvite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "接受小队邀请",
+        "description": "接受后成为活跃成员；小队满员时返回 SQUAD_MEMBER_LIMIT_EXCEEDED。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/decline": {
+      "post": {
+        "operationId": "SquadsController_declineInvite",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "拒绝小队邀请",
+        "description": "拒绝后邀请失效，可由队长或管理员重新邀请。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/members/{userId}": {
+      "patch": {
+        "operationId": "SquadsController_setRole",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "设置成员角色",
+        "description": "只有队长可以把成员设为管理员或降为普通成员；队长角色只能通过两步转让切换。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_removeMember",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "退出或移除小队成员",
+        "description": "成员可退出自己；队长/管理员可移除成员。队长必须先完成转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer": {
+      "post": {
+        "operationId": "SquadsController_createTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "发起队长转让",
+        "description": "现任队长指定一名活跃成员，创建 24 小时内有效的待确认转让；同一小队至多一条。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadOwnershipTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/accept": {
+      "post": {
+        "operationId": "SquadsController_acceptTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "接受队长转让",
+        "description": "事务内按 ORDER BY id ASC 锁定新旧队长，校验新队长剩余配额后原子切换 owner 与 billing_user_id。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/decline": {
+      "post": {
+        "operationId": "SquadsController_declineTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "拒绝队长转让",
+        "description": "只有被指定的新队长可以拒绝。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/ownership-transfer/cancel": {
+      "post": {
+        "operationId": "SquadsController_cancelTransfer",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "取消队长转让",
+        "description": "只有现任队长可以取消待确认的转让。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots": {
+      "get": {
+        "operationId": "SquadsController_slots",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "列出共享存档槽",
+        "description": "返回槽位、当前主链 head 与租约持有者摘要。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_createSlot",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建共享存档槽",
+        "description": "任意活跃成员可创建；数量受小队 max_slots 限制。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}": {
+      "get": {
+        "operationId": "SquadsController_getSlot",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看共享存档槽",
+        "description": "返回槽位、主链 head、当前租约和置顶数量。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "SquadsController_renameSlot",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "重命名共享存档槽",
+        "description": "任意活跃成员可重命名槽位。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_deleteSlot",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除共享存档槽",
+        "description": "队长或管理员可删除；快照软删除、blob 引用释放并回收配额。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease": {
+      "get": {
+        "operationId": "SquadsController_leaseStatus",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看写租约状态",
+        "description": "返回当前有效租约（holder、fencing_token、到期时间）以及调用者是否持有。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_releaseLease",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "释放写租约",
+        "description": "仅当前持有者可释放；可选 fencing_token 防止误释放已被接管的租约。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease/acquire": {
+      "post": {
+        "operationId": "SquadsController_acquireLease",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "获取写租约",
+        "description": "自然到期（150 秒）后任意活跃成员可接力；未到期时返回 409 SQUAD_SAVE_LEASE_HELD，owner/admin 可 force_takeover 强制接管。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/lease/renew": {
+      "post": {
+        "operationId": "SquadsController_renewLease",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "续期写租约",
+        "description": "当前持有者用 fencing_token 续期；接通 90 秒心跳节奏，租约每次延长 150 秒。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewSquadSaveLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots": {
+      "get": {
+        "operationId": "SquadsController_snapshots",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查看快照链",
+        "description": "按 revision 从新到旧返回主链与 conflict 救援分支，标注 head、pinned 与保留层级。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SquadsController_commitSnapshot",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "提交共享存档快照",
+        "description": "持有当前 fencing_token 才能推进主链；过期 token 返回 409 SQUAD_SAVE_LEASE_STALE，可用 mode=conflict_rescue 保存为 conflict 分支。提交成功后同步执行 GFS 裁剪。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/manifest": {
+      "get": {
+        "operationId": "SquadsController_manifest",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "读取快照文件清单",
+        "description": "返回 path / size / sha256 与游戏、Mod 元数据。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/restore": {
+      "post": {
+        "operationId": "SquadsController_restore",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "恢复历史或冲突分支",
+        "description": "创建新的主链 revision，不删除原快照；必须持有当前 fencing_token 并确认 head。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}": {
+      "patch": {
+        "operationId": "SquadsController_pin",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "置顶或取消置顶快照",
+        "description": "置顶快照不参与 GFS 自动裁剪；每个存档槽最多置顶 10 个。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSquadSaveSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SquadsController_deleteSnapshot",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.delete"
+        ],
+        "summary": "删除历史或冲突快照",
+        "description": "队长或管理员可删除非 head 快照；引用归零的 blob 进入延迟回收。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/blobs/check": {
+      "post": {
+        "operationId": "SquadsController_checkBlobs",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "查询小队已持有的文件",
+        "description": "严格限定当前小队的 squad_save_blobs 与暂存表，绝不会触达创建者个人 game_save_blobs。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckSquadSaveBlobsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/blobs": {
+      "post": {
+        "operationId": "SquadsController_createBlobUpload",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "创建小队文件上传会话",
+        "description": "需要持有当前写租约；配额从创建者个人云存档额度统一扣除，不足返回 409 SQUAD_OWNER_QUOTA_EXCEEDED。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSquadSaveBlobUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/blobs/uploads/{uploadId}/file": {
+      "put": {
+        "operationId": "SquadsController_uploadBlobFile",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.write"
+        ],
+        "summary": "上传小队文件字节",
+        "description": "服务端校验大小与 SHA-256；只有创建该会话的成员可以写入。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/download": {
+      "post": {
+        "operationId": "SquadsController_blobDownloads",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "获取快照文件下载地址",
+        "description": "为清单中指定 SHA-256 返回同源 Bearer 下载地址；客户端只需拉取本机缺失的文件。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SquadSaveBlobDownloadGrantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/{sha256}/file": {
+      "get": {
+        "operationId": "SquadsController_blobFile",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 300,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "game_content.saves.read"
+        ],
+        "summary": "下载单个小队存档文件",
+        "description": "只返回该快照清单内、且属于当前小队的文件内容；ETag 为文件 SHA-256。",
+        "parameters": [
+          {
+            "name": "squadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sha256",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 小队共享存档"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
           {
             "MindAuthBearer": []
           }
@@ -25172,6 +28601,403 @@
         ]
       }
     },
+    "/v1/timelapses/uploads": {
+      "post": {
+        "operationId": "TimelapsesController_createUpload",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "创建延时战报上传会话",
+        "description": "校验未绑定草稿 ≤ 20、每小时 ≤ 3 次、每日 ≤ 10 次、同时处理中 ≤ 1，返回隔离上传地址。原始帧包上限 25 MB。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/uploads/{id}/file": {
+      "put": {
+        "operationId": "TimelapsesController_uploadFile",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "上传 .mreplay.zip 原始帧包",
+        "description": "以原始字节流写入隔离目录，服务端计算 SHA-256 并限制 25 MB。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/commit": {
+      "post": {
+        "operationId": "TimelapsesController_commit",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "提交渲染",
+        "description": "校验 SHA-256 与 ZIP 基础头信息后推入 Redis 渲染队列；幂等返回当前状态。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitTimelapseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}": {
+      "get": {
+        "operationId": "TimelapsesController_get",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "查询延时战报",
+        "description": "返回任务状态、聚合战报 JSON、视频与封面播放地址。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/video": {
+      "get": {
+        "operationId": "TimelapsesController_video",
+        "x-rate-limit": {
+          "limit": 600,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "播放战报视频",
+        "description": "H.264 (yuv420p) MP4，支持单段 Range 请求。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "range",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/poster": {
+      "get": {
+        "operationId": "TimelapsesController_poster",
+        "x-rate-limit": {
+          "limit": 300,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "读取战报封面",
+        "description": "最后一帧生成的 WebP 封面。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/draft-post": {
+      "post": {
+        "operationId": "TimelapsesController_draftPost",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "生成战报草稿帖",
+        "description": "创建包含 battleReport 节点的帖子草稿，作者可继续编辑后发布。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTimelapseDraftPostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/game-content/meta": {
       "get": {
         "operationId": "GameContentController_meta",
@@ -27270,7 +31096,7 @@
   "info": {
     "title": "MDTBBS Public Client API",
     "description": "Stable V1 contract for MindAuth public clients. Use /api/v1/capabilities for feature discovery. Server-side integrations use a separate authorization boundary and are not part of this specification. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "contact": {}
   },
   "tags": [],
@@ -28007,6 +31833,201 @@
           "object_public_id"
         ]
       },
+      "ResourceV2EmbedAuthorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "username": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "avatar_url"
+        ]
+      },
+      "ResourceV2EmbedCardDto": {
+        "type": "object",
+        "properties": {
+          "resource_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "pending_review",
+              "unavailable"
+            ]
+          },
+          "resource_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "schematic",
+              "map",
+              "mod",
+              "pack"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "preview_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "download_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceV2EmbedAuthorDto"
+              }
+            ]
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "schematic": {
+            "type": "object",
+            "nullable": true
+          },
+          "map": {
+            "type": "object",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "resource_public_id",
+          "version_public_id",
+          "status",
+          "resource_kind",
+          "title",
+          "summary",
+          "url",
+          "preview_url",
+          "download_url",
+          "author",
+          "version",
+          "schematic",
+          "map",
+          "reason"
+        ]
+      },
+      "ResourceV2EmbedCardsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2EmbedCardDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ResourceV2ApiMetaDto": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "example": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "pagination": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "request_id"
+        ]
+      },
+      "ResourceV2ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "RESOURCE_NOT_FOUND"
+          },
+          "message": {
+            "type": "string",
+            "example": "资源不存在或不可见"
+          },
+          "retryable": {
+            "type": "boolean",
+            "example": false
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "documentation_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "details",
+          "documentation_url"
+        ]
+      },
+      "ResourceV2ApiErrorEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ResourceV2ApiErrorDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+          }
+        },
+        "required": [
+          "error",
+          "meta"
+        ]
+      },
       "ResourceV2CompatibilityDto": {
         "type": "object",
         "properties": {
@@ -28344,75 +32365,6 @@
         "required": [
           "items",
           "pagination"
-        ]
-      },
-      "ResourceV2ApiMetaDto": {
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "example": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
-          },
-          "next_cursor": {
-            "type": "string",
-            "nullable": true
-          },
-          "pagination": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "request_id"
-        ]
-      },
-      "ResourceV2ApiErrorDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "RESOURCE_NOT_FOUND"
-          },
-          "message": {
-            "type": "string",
-            "example": "资源不存在或不可见"
-          },
-          "retryable": {
-            "type": "boolean",
-            "example": false
-          },
-          "details": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "documentation_url": {
-            "type": "string",
-            "format": "uri",
-            "example": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
-          }
-        },
-        "required": [
-          "code",
-          "message",
-          "retryable",
-          "details",
-          "documentation_url"
-        ]
-      },
-      "ResourceV2ApiErrorEnvelopeDto": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ResourceV2ApiErrorDto"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
-          }
-        },
-        "required": [
-          "error",
-          "meta"
         ]
       },
       "ResourceV2ResourceRefDto": {
@@ -29429,7 +33381,15 @@
           },
           "status": {
             "type": "string",
-            "example": "ready"
+            "enum": [
+              "completed",
+              "metadata_only",
+              "computing",
+              "unavailable",
+              "disabled",
+              "failed"
+            ],
+            "example": "completed"
           },
           "parser_version": {
             "type": "string",
@@ -29439,6 +33399,15 @@
             "type": "object",
             "nullable": true,
             "description": "Null when no stored diff exists for this version pair."
+          },
+          "retry_after_ms": {
+            "type": "number",
+            "nullable": true,
+            "description": "status=computing 时建议的重试间隔。"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -29447,6 +33416,117 @@
           "status",
           "parser_version",
           "diff"
+        ]
+      },
+      "ResourceV2LogicSearchItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "resource_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resource_url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "type": "object",
+            "nullable": true
+          },
+          "processor_type": {
+            "type": "string"
+          },
+          "position": {
+            "type": "object"
+          },
+          "instruction_count": {
+            "type": "number"
+          },
+          "estimated_cycle_ticks": {
+            "type": "number",
+            "nullable": true
+          },
+          "opcodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "referenced_units": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "referenced_blocks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "has_warnings": {
+            "type": "boolean"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "source_excerpt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "resource_public_id",
+          "resource_url",
+          "title",
+          "version_public_id",
+          "version",
+          "author",
+          "processor_type",
+          "position",
+          "instruction_count",
+          "estimated_cycle_ticks",
+          "opcodes",
+          "referenced_units",
+          "referenced_blocks",
+          "has_warnings",
+          "findings",
+          "source_excerpt"
+        ]
+      },
+      "ResourceV2LogicSearchPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2LogicSearchItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceV2CursorDto"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
         ]
       },
       "ResourceV2SchematicMetadataDto": {
@@ -30599,6 +34679,54 @@
         "required": [
           "items",
           "pagination"
+        ]
+      },
+      "ResourceV2MapDiffChunkDto": {
+        "type": "object",
+        "properties": {
+          "from_version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "to_version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "cx": {
+            "type": "number"
+          },
+          "cy": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "computing",
+              "metadata_only",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "chunk": {
+            "type": "object",
+            "nullable": true,
+            "description": "128×128 分区 RLE；status=ready 时存在。"
+          },
+          "retry_after_ms": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "from_version_public_id",
+          "to_version_public_id",
+          "cx",
+          "cy",
+          "status",
+          "chunk"
         ]
       },
       "ResourceV2SchematicConfigEditDto": {
@@ -33065,6 +37193,96 @@
           }
         }
       },
+      "ModPackRefDto": {
+        "type": "object",
+        "properties": {
+          "pack_public_id": {
+            "type": "string",
+            "example": "c0ffee00-0000-4000-8000-000000000000",
+            "maxLength": 36,
+            "description": "公开 Pack 资源的 public_id。"
+          },
+          "version_public_id": {
+            "type": "string",
+            "example": "c0ffee00-0000-4000-8000-000000000001",
+            "maxLength": 36,
+            "description": "固定 Pack 版本的 public_id；缺省时使用当前推荐已发布版本。"
+          }
+        },
+        "required": [
+          "pack_public_id"
+        ]
+      },
+      "SessionModDto": {
+        "type": "object",
+        "properties": {
+          "mod_id": {
+            "type": "string",
+            "example": "flood-driver",
+            "maxLength": 191,
+            "description": "Mod 的稳定标识（与资源目录 mod_id 同一命名空间）。"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "Flood Driver",
+            "maxLength": 255,
+            "description": "展示名称；缺省时由公开目录补齐。"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.2.0",
+            "maxLength": 100,
+            "description": "房主本地版本号。"
+          },
+          "sha256": {
+            "type": "string",
+            "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "maxLength": 64,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "本地 Mod 文件的 SHA-256；只有与已发布版本主文件一致时才可被自动同步。"
+          },
+          "required": {
+            "type": "boolean",
+            "example": true,
+            "description": "是否多人内容必需；缺省为 true。"
+          }
+        },
+        "required": [
+          "mod_id"
+        ]
+      },
+      "SquadSaveRefDto": {
+        "type": "object",
+        "properties": {
+          "squad_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "小队 UUID。"
+          },
+          "slot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "共享存档槽 UUID。"
+          },
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "调用者持有的写租约 fencing_token。"
+          },
+          "lanlink_room_code": {
+            "type": "string",
+            "example": "A1B2C3D4E5",
+            "maxLength": 16,
+            "description": "可选的 LanLink 房间码；供其他成员在 409 SQUAD_SAVE_LEASE_HELD 时一键加入。"
+          }
+        },
+        "required": [
+          "squad_id",
+          "slot_id",
+          "fencing_token"
+        ]
+      },
       "CreateMultiplayerSessionDto": {
         "type": "object",
         "properties": {
@@ -33117,6 +37335,30 @@
             "maximum": 64,
             "example": 8,
             "description": "Peer 最大数量。"
+          },
+          "mod_pack_ref": {
+            "description": "引用一个已发布 Pack；与 mods 互斥。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModPackRefDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 64,
+            "description": "房主本地 Mod 清单，最多 64 项；与 mod_pack_ref 互斥。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionModDto"
+            }
+          },
+          "squad_save_ref": {
+            "description": "小队共享存档接力：调用者必须是该槽位当前租约持有者；成功后回填 active_session_id。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SquadSaveRefDto"
+              }
+            ]
           }
         },
         "required": [
@@ -33136,6 +37378,62 @@
         "required": [
           "code"
         ]
+      },
+      "InstalledModDto": {
+        "type": "object",
+        "properties": {
+          "mod_id": {
+            "type": "string",
+            "example": "flood-driver",
+            "maxLength": 191,
+            "description": "本地 Mod 的稳定标识。"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.2.0",
+            "maxLength": 100,
+            "description": "本地版本号。"
+          },
+          "sha256": {
+            "type": "string",
+            "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "maxLength": 64,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "本地文件的 SHA-256；缺失时无法确认已同步。"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true,
+            "description": "本地是否已启用；缺省为 true。"
+          },
+          "client_only": {
+            "type": "boolean",
+            "example": false,
+            "description": "是否为纯客户端辅助 Mod（mod.hjson hidden / 白名单）；默认保留不禁用。"
+          }
+        },
+        "required": [
+          "mod_id"
+        ]
+      },
+      "ModSyncPlanDto": {
+        "type": "object",
+        "properties": {
+          "installed_mods": {
+            "maxItems": 128,
+            "description": "客户端本地已安装 Mod 清单，最多 128 项；省略时按空清单计算（全部需要下载）。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstalledModDto"
+            }
+          },
+          "join_code": {
+            "type": "string",
+            "example": "ABCD1234",
+            "maxLength": 32,
+            "description": "可选房间码；与 join 接口同一校验。持有有效房间码的客人可在加入前读取同步计划。"
+          }
+        }
       },
       "JoinMultiplayerSessionDto": {
         "type": "object",
@@ -33279,6 +37577,331 @@
             "description": "客户端支持能力的 JSON 对象。"
           }
         }
+      },
+      "CreateSquadDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "周末联机小队",
+            "maxLength": 80,
+            "description": "小队名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PatchSquadDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "新小队名",
+            "maxLength": 80,
+            "description": "新的小队名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "InviteSquadMemberDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "number",
+            "example": 123,
+            "minimum": 1,
+            "description": "被邀请好友的用户 ID；仅限已是好友的账号。"
+          }
+        },
+        "required": [
+          "user_id"
+        ]
+      },
+      "PatchSquadMemberDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "example": "admin",
+            "description": "成员角色；队长由两步转让单独切换。"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "CreateSquadOwnershipTransferDto": {
+        "type": "object",
+        "properties": {
+          "target_user_id": {
+            "type": "number",
+            "example": 123,
+            "minimum": 1,
+            "description": "目标小队成员的用户 ID。"
+          }
+        },
+        "required": [
+          "target_user_id"
+        ]
+      },
+      "CreateSquadSlotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "主世界",
+            "maxLength": 100,
+            "description": "共享存档槽名称。"
+          },
+          "game_version": {
+            "type": "string",
+            "example": "v160.7",
+            "maxLength": 64,
+            "description": "存档依赖的游戏版本。"
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "存档依赖的 Mod 摘要；接力开房前用于唤起模组同步。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PatchSquadSlotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "新槽位名",
+            "maxLength": 100,
+            "description": "新的存档槽名称。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "AcquireSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "force_takeover": {
+            "type": "boolean",
+            "example": false,
+            "description": "目标槽位被未过期的其他房主持有时，owner/admin 可确认强制接管。"
+          }
+        }
+      },
+      "RenewSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "当前持有的 fencing_token；不匹配说明租约已被他人接管。"
+          }
+        },
+        "required": [
+          "fencing_token"
+        ]
+      },
+      "ReleaseSquadSaveLeaseDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "可选 fencing_token；提供时必须是当前值，否则拒绝释放。"
+          }
+        }
+      },
+      "CommitSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "租约 fencing_token；只有当前持有者才能推进主链。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "conflict_rescue"
+            ],
+            "example": "normal",
+            "description": "conflict_rescue 将旧房主的过期提交保存为 conflict 分支，不推进主链。"
+          },
+          "base_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "本次提交基于的主链快照；与当前 head 不一致时返回 SQUAD_SAVE_CONFLICT。"
+          },
+          "manifest": {
+            "description": "本次快照的完整文件清单。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveManifestDto"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "before_launch",
+              "after_exit",
+              "periodic",
+              "restore",
+              "conflict",
+              "import"
+            ],
+            "example": "manual",
+            "description": "保存原因。"
+          },
+          "game": {
+            "description": "游戏版本信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveGameMetadataDto"
+              }
+            ]
+          },
+          "save": {
+            "description": "游戏内存档显示信息。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameSaveDisplayMetadataDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 100,
+            "description": "该存档使用的 Mod 列表。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSaveModDto"
+            }
+          },
+          "device_id": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "desktop-main",
+            "description": "客户端设备标识。"
+          }
+        },
+        "required": [
+          "fencing_token",
+          "manifest"
+        ]
+      },
+      "RestoreSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "fencing_token": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "当前租约 fencing_token；恢复会创建新的主链快照。"
+          },
+          "confirm_head_snapshot_id": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "确认当前 head；变化时拒绝恢复，避免覆盖他人新存档。"
+          }
+        },
+        "required": [
+          "fencing_token"
+        ]
+      },
+      "PatchSquadSaveSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "pinned": {
+            "type": "boolean",
+            "example": true,
+            "description": "置顶后该快照不参与 GFS 自动裁剪；每个槽最多 10 个。"
+          }
+        },
+        "required": [
+          "pinned"
+        ]
+      },
+      "CheckSquadSaveBlobsDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "待查询的 SHA-256；查询范围严格限定在当前小队。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      },
+      "CreateSquadSaveBlobUploadDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "description": "单个文件内容的 SHA-256。"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "example": 4194304,
+            "description": "单个文件字节数。"
+          }
+        },
+        "required": [
+          "sha256",
+          "size"
+        ]
+      },
+      "SquadSaveBlobDownloadGrantDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "maxItems": 5000,
+            "example": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "description": "要下载的 SHA-256；必须属于该快照清单。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sha256"
+        ]
       },
       "CreatePostDto": {
         "type": "object",
@@ -33592,6 +38215,31 @@
           "title",
           "description"
         ]
+      },
+      "CommitTimelapseDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "客户端计算的压缩包 SHA-256；提供时服务端会与已上传文件比对。"
+          }
+        }
+      },
+      "CreateTimelapseDraftPostDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "草稿标题；省略时根据地图名自动生成。"
+          },
+          "category_id": {
+            "type": "number",
+            "minimum": 1,
+            "description": "论坛分类 ID；省略时使用站点默认分类。"
+          }
+        }
       },
       "GameContentAuthorDto": {
         "type": "object",

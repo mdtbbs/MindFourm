@@ -36,6 +36,7 @@ function createService(overrides: {
   postTagRepository?: Record<string, jest.Mock>;
   relationRepository?: Record<string, jest.Mock>;
   resourceRepository?: Record<string, jest.Mock>;
+  resourceEmbeds?: Record<string, jest.Mock>;
 } = {}) {
   const postTagRepository = {
     find: jest.fn().mockResolvedValue([
@@ -56,6 +57,7 @@ function createService(overrides: {
     postTagRepository as any,
     relationRepository as any,
     resourceRepository as any,
+    overrides.resourceEmbeds as any,
   );
 
   return {
@@ -166,5 +168,31 @@ describe('PostDetailService', () => {
         author: { id: 7, username: 'Alice', avatar_url: '/uploads/alice.png' },
       },
     });
+  });
+
+  it('hydrates resourceEmbed cards and uses the hydrated projections', async () => {
+    const resourceEmbeds = {
+      hydrateDocument: jest.fn().mockResolvedValue({
+        content_html: '<p>说明</p><aside data-resource-embed="4ab5d671-8af6-4d16-8238-7b6fd4b0a240"><a href="/resources/4ab5d671-8af6-4d16-8238-7b6fd4b0a240">[资源卡片: 铜墙阵列 (schematic)]</a></aside>',
+        content_text: '说明\n[资源卡片: 铜墙阵列 (schematic)]',
+        embeds: [{ resource_public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', status: 'available' }],
+      }),
+    };
+    const { service } = createService({ resourceEmbeds });
+    const result = await service.toDetail({
+      id: 42, user_id: 7, category_id: 3, server_id: null, required_group_id: null,
+      post_type: 'normal', slug: 'embed', title: 'Embed', content: '说明',
+      content_format: 'tiptap_json',
+      content_json: { type: 'doc', content: [{ type: 'resourceEmbed', attrs: { resourcePublicId: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', displayMode: 'card' } }] },
+      content_html: '<aside><a href="/resources/4ab5d671-8af6-4d16-8238-7b6fd4b0a240">资源卡片</a></aside>',
+      content_schema_version: 2, content_text: '[资源卡片: 4ab5d671-8af6-4d16-8238-7b6fd4b0a240]',
+      status: 'published', is_pinned: false, is_locked: false, best_reply_id: null, edited_at: null,
+      view_count: 1, like_count: 0, created_at: new Date(), updated_at: new Date(),
+      category: null, user: null, location_label: null,
+    } as any);
+    expect(result.content_html).toContain('[资源卡片: 铜墙阵列 (schematic)]');
+    expect(result.content_text).toContain('[资源卡片: 铜墙阵列 (schematic)]');
+    expect(result.resource_embeds).toHaveLength(1);
+    expect(resourceEmbeds.hydrateDocument).toHaveBeenCalledWith(expect.objectContaining({ type: 'doc' }));
   });
 });

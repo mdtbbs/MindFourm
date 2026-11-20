@@ -8,8 +8,10 @@ import {
   uniqueWarnings,
   warning,
 } from './renderer-metadata.util';
+import { auditMlogSource } from './mlog-auditor';
 
 export const SCHEMATIC_ANALYZER_VERSION = 'mdtbbs-schematic-metadata-1';
+export const MAX_LOGIC_SOURCE_CHARS = 131_072;
 
 export type SchematicBlockRecord = {
   internal_name: string;
@@ -26,6 +28,12 @@ export type SchematicLogicProcessorRecord = {
   processor_type: string | null;
   links_json: unknown[] | null;
   variables_json: Record<string, unknown> | null;
+  source_code: string | null;
+  source_truncated: number;
+  source_sha256: string | null;
+  instruction_count: number;
+  estimated_cycle_ticks: number | null;
+  audit_findings_json: unknown[] | null;
 };
 
 export type SchematicAnalysisRecord = {
@@ -163,12 +171,23 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
     if (/(?:processor|logic-display|display-logic|logic-message)/.test(name)) {
       const processorKey = `${position.x ?? ''}:${position.y ?? ''}:${name}`;
       if (!processorMap.has(processorKey)) {
+        const source = logicConfig?.source ?? null;
+        const audit = source === null ? null : auditMlogSource(source, {
+          processorType: name,
+          linkedBlocks: logicConfig?.links ?? [],
+        });
         processorMap.set(processorKey, {
           position_x: position.x,
           position_y: position.y,
           processor_type: name.slice(0, 64),
           links_json: logicConfig?.links ?? null,
           variables_json: null,
+          source_code: source === null ? null : source.slice(0, MAX_LOGIC_SOURCE_CHARS),
+          source_truncated: source !== null && source.length >= MAX_LOGIC_SOURCE_CHARS ? 1 : 0,
+          source_sha256: audit?.source_sha256 ?? null,
+          instruction_count: audit?.instruction_count ?? 0,
+          estimated_cycle_ticks: audit?.estimated_cycle_ticks ?? null,
+          audit_findings_json: audit?.findings ?? null,
         });
       }
     }
@@ -192,7 +211,7 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
 function normalizeLogicConfig(value: unknown): { type: 'logic'; source: string; links: Array<{ name: string; x: number; y: number }>; format_version: 1 } | null {
   const config = record(value);
   if (config.format_version !== 1 || (config.type !== undefined && config.type !== 'logic')) return null;
-  const source = boundedString(config.source, 32_768);
+  const source = boundedString(config.source, MAX_LOGIC_SOURCE_CHARS);
   if (source === null || source.includes('\0')) return null;
   const rawLinks = list(config.links, 1_000);
   if (rawLinks.truncated) return null;

@@ -27,11 +27,15 @@ import { SearchModule } from '../search/search.module';
 import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { EventsModule } from '../events/events.module';
+import { TimelapseRefsModule } from '../timelapses/timelapse-refs.module';
+import { ResourceEmbedModule } from '../resources/resource-embed.module';
 
 @Module({
   imports: [
     DatabaseModule,
     EventsModule,
+    TimelapseRefsModule,
+    ResourceEmbedModule,
     PointsModule,
     GroupsModule,
     PluginsModule,

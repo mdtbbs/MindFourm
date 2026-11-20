@@ -10,7 +10,7 @@ describe('root TypeORM entity registration', () => {
       'ResourceVersionDiff', 'ResourceSourceSync',
       'ModProfile', 'ModIdAlias', 'ModVersionMetadata', 'ModContent', 'ModContentAlias', 'ModLocalization',
       'ModCompatibilityReport', 'ModIssueReport', 'ModConflictReport', 'ModConflictMember',
-      'SchematicVersionMetadata', 'SchematicBlock', 'SchematicMaterial', 'SchematicLogicProcessor', 'SchematicAnalysis',
+      'SchematicVersionMetadata', 'SchematicBlock', 'SchematicMaterial', 'SchematicLogicProcessor', 'SchematicAnalysis', 'SchematicLogicSnippet',
       'MapVersionMetadata', 'MapResourceEntry', 'MapSpawn', 'MapCore', 'MapWaveSummary', 'MapAnalysis', 'MapFeedback',
       'ModReportAttachment',
     ]));

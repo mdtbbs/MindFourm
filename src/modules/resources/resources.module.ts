@@ -69,6 +69,12 @@ import { ResourceDiscoveryService } from './resource-discovery.service';
 import { ResourceDiscoveryController } from './resource-discovery.controller';
 import { ResourceOperationsService } from './resource-operations.service';
 import { ResourceOperationsController } from './resource-operations.controller';
+import { ResourceEmbedService } from './resource-embed.service';
+import { ResourceEmbedModule } from './resource-embed.module';
+import { SchematicLogicIndexService } from './schematic-logic-index.service';
+import { ResourceDiffRendererClient } from './v2/resource-diff-renderer.client';
+import { ResourceVisualDiffService } from './v2/resource-visual-diff.service';
+import { ResourceDiffQueueService } from './v2/resource-diff-queue.service';
 
 @Module({
   imports: [
@@ -81,10 +87,11 @@ import { ResourceOperationsController } from './resource-operations.controller';
     CustomEmojisModule,
     DownloadsModule,
     ResourceCommentsModule,
+    ResourceEmbedModule,
     TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ResourceViewEvent, DownloadEvent, ModReportAttachment]),
   ],
-  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourceUploadCompletionService, ResourcePreviewService, ResourceLifecycleService, ResourceStorageReconciliationService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDependencyReadService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService, ResourceDiscoveryService, ResourceOperationsService],
+  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourceUploadCompletionService, ResourcePreviewService, ResourceLifecycleService, ResourceStorageReconciliationService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDependencyReadService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService, ResourceDiscoveryService, ResourceOperationsService, ResourceEmbedService, SchematicLogicIndexService, ResourceDiffRendererClient, ResourceVisualDiffService, ResourceDiffQueueService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController, ResourceStorageReconciliationController, ResourceDiscoveryController, ResourceOperationsController],
-  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDependencyReadService, ResourceDiscoveryService, ResourceOperationsService],
+  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDependencyReadService, ResourceDiscoveryService, ResourceOperationsService, ResourceEmbedService, SchematicLogicIndexService, ResourceDiffRendererClient, ResourceVisualDiffService, ResourceDiffQueueService],
 })
 export class ResourcesModule {}

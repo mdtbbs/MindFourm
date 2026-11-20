@@ -56,6 +56,7 @@ export function getSiteDefaultSettings(profile: SiteProfile): Readonly<Record<st
     feature_multiplayer_invites_v1_enabled: 'false',
     feature_multiplayer_relay_v1_enabled: 'false',
     feature_third_party_multiplayer_v1_enabled: 'false',
+    resource_visual_diff_enabled: 'true',
     require_approval: 'false',
     require_post_approval: 'false',
     require_reply_approval: 'false',

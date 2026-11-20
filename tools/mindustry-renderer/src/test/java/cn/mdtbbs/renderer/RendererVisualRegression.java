@@ -39,6 +39,7 @@ public final class RendererVisualRegression {
     public static void main(String[] args) {
         verifyIconComposition();
         verifyVanillaMapFixture();
+        DiffRegression.verify();
         System.out.println("renderer visual fixtures passed");
     }
 

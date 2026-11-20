@@ -11,7 +11,7 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 2. 请求 `GET /api/v1/capabilities`，确认 `multiplayer` 下需要的站点功能已启用。Presence/Multiplayer 不另查 MindAuth 应用目录的逐项能力审批；每个接口仍校验 OAuth 范围、用户权限、隐私与站点开关。
 3. 客户端登录后调用 `POST /api/v1/presence/connections` 创建在线连接。请求中的 `platform` 表示客户端类型；服务端返回连接 ID 和心跳间隔。
 4. 调用 `PUT /api/v1/presence/connections/{connection_id}/activity` 发布游戏状态。应用名称和图标由已审核的 OAuth 客户端资料提供，客户端无需重复提交。
-5. 调用 `POST /api/v1/multiplayer/sessions` 创建会话，再按服务端返回的策略加入、邀请或请求加入。连接建立后，双方分别提交网络候选地址。
+5. 调用 `POST /api/v1/multiplayer/sessions` 创建会话；模组房可同时用 `mod_pack_ref` 或 `mods[]` 声明房主清单。再按服务端返回的策略加入、邀请或请求加入。连接建立后，双方分别提交网络候选地址。
 6. 如需实时事件，申请一次性 WebSocket 票据后连接 `/realtime/v1`。断线重连时发送各事件流的 `last_event_id`；若收到 `resume_failed`，重新获取快照。
 
 公共 JSON 接口位于 `/api/v1/*`，成功响应使用 `{data, meta}`，错误通过稳定的 `error.code` 标识。论坛 Cookie 和移动端会话继续按第一方规则处理；MindAuth Bearer 按请求所需的权限范围校验。第三方联机还受应用整体审核和站点开关控制，无需逐项审批能力。
@@ -56,8 +56,9 @@ OAuth 应用的 Presence/Multiplayer 资格随统一 forum 范围生效，不再
 | PUT/DELETE | `/api/v1/presence/connections/{id}/activity` | `presence.write` | 发布或清除富活动状态 |
 | GET/PATCH | `/api/v1/multiplayer/preferences` | `multiplayer.read` / `multiplayer.write` | 读取/设置用户默认加入意图客户端 |
 | GET | `/api/v1/multiplayer/capabilities` | `multiplayer.read` | 多人联机能力与约束 |
-| GET | `/api/v1/multiplayer/sessions` | `multiplayer.read` | 公开联机大厅；按可见范围列出可发现的会话（`page`/`limit`，最多 50/页） |
-| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；每账号最多一个活跃会话 |
+| GET | `/api/v1/multiplayer/sessions` | `multiplayer.read` | 公开联机大厅；按可见范围列出可发现的会话（`page`/`limit`，最多 50/页），支持 `modded`、`mod_id`、`pack_public_id` 筛选 |
+| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话；每账号最多一个活跃会话；可用 `mod_pack_ref` 或 `mods[]` 声明模组房 |
+| POST | `/api/v1/multiplayer/sessions/{id}/mod-sync-plan` | `multiplayer.read resource.read` | 计算加入模组房所需的同步计划并批量签发下载授权 |
 | GET | `/api/v1/multiplayer/sessions/{id}`、`.../{id}/peers` | `multiplayer.read` | 查询可见会话和对端 |
 | POST | `/api/v1/multiplayer/sessions/resolve-code` | `multiplayer.read` | 解析不公开会话加入码 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join`、`.../{id}/leave` | `multiplayer.write` | 加入/退出或用绑定的恢复令牌恢复对端 |
@@ -236,7 +237,7 @@ Authorization: Bearer <ACCESS_TOKEN>
 }
 ```
 
-四个布尔值表示会话、邀请、中继和第三方应用功能当前是否启用；先检查这些值和顶层 `multiplayer` 能力标志，再展示功能。`GET /api/v1/multiplayer/preferences` 返回 `default_client_id` 与 `clients`。PATCH 请求体可提交 `{"client_id":"desktop-launcher"}`；`client_id` 必须来自返回的 `clients`。发送 `null` 或省略表示清除默认启动器。客户端对象包含 `client_id`、`name`、`application_icon_url`、`developer_name`、`developer_url`、`supports_presence`、`supports_multiplayer`、`supports_join_intent`、`launch_uri_template`。
+`sessions_v1`、`invites_v1`、`relay_v1`、`third_party_multiplayer` 与 `mod_sync_v1` 表示对应功能当前是否启用；`mod_sync` 还给出 `max_mods_per_session`（64）、`max_installed_mods`（128）与稳定的定级/计划状态枚举。顶层 `multiplayer_mod_sync_enabled` 是模组同步总开关。先检查这些值和顶层 `multiplayer` 能力标志，再展示功能。`GET /api/v1/multiplayer/preferences` 返回 `default_client_id` 与 `clients`。PATCH 请求体可提交 `{"client_id":"desktop-launcher"}`；`client_id` 必须来自返回的 `clients`。发送 `null` 或省略表示清除默认启动器。客户端对象包含 `client_id`、`name`、`application_icon_url`、`developer_name`、`developer_url`、`supports_presence`、`supports_multiplayer`、`supports_join_intent`、`launch_uri_template`。
 
 创建会话：
 
@@ -265,8 +266,15 @@ Content-Type: application/json
 | `join_policy` | 否 | `invite_only`、`friends`、`public` | 缺省 `friends`。决定谁有资格加入；与 `visibility` 正交，任一组合都合法。 |
 | `require_approval` | 否 | 布尔 | 缺省 `false`。为 `true` 时符合加入范围的用户仍需房主批准。 |
 | `max_players` | 否 | 2–64 整数 | 缺省 8。 |
+| `mod_pack_ref` | 否 | `{ "pack_public_id": "<uuid>", "version_public_id": "<uuid>" }` | 引用一个已发布 Pack 的固定版本；`version_public_id` 省略时使用当前推荐已发布版本。与 `mods` 互斥。 |
+| `mods` | 否 | 最多 64 项的对象数组 | 房主本地 Mod 清单，与 `mod_pack_ref` 互斥。每项必须含 `mod_id`（≤191），可选 `display_name`（≤255）、`version`（≤100）、`sha256`（64 位十六进制）与 `required`（缺省 true）。 |
+| `squad_save_ref` | 否 | 对象：`squad_id`、`slot_id`、`fencing_token`（整数 ≥ 1），可选 `lanlink_room_code`（≤ 16 字符） | 小队共享存档接力。调用者必须是该小队活跃成员并持有该槽位当前写租约；租约缺失、已到期、token 过期或已被接管返回 409 `SQUAD_SAVE_LEASE_STALE`（文件暂存接口另用 `SQUAD_SAVE_LEASE_REQUIRED`）。 |
+
+携带模组字段需要站点能力 `multiplayer.mod_sync_v1`；关闭时返回 403 `FEATURE_DISABLED`。两项同时提交、为空项、重复 `mod_id`、Pack 不可见或版本未发布返回 400 `SESSION_MODS_INVALID`。服务端只按公开资源目录解析；未过审、隔离、已删除、已合并或分类停用的资源不会留下可下载引用。
 
 创建响应包含 `session`、`peer`、`resume_token`；`join_policy = public` 的会话还包含一次性展示的 `join_code`。立即安全保存 `resume_token`；它绑定用户和 OAuth `client_id`、只能使用一次，断线恢复后会旋转出新令牌。
+
+带 `squad_save_ref` 创建会话时，服务端在同一事务内校验调用者仍是该小队活跃成员且租约仍由本人持有：租约缺失、已自然到期、`fencing_token` 过期或已被接管均返回 409 `SQUAD_SAVE_LEASE_STALE`；小队文件暂存接口 `POST /api/v1/squads/{squadId}/slots/{slotId}/blobs` 在未持租约时使用 409 `SQUAD_SAVE_LEASE_REQUIRED`。绑定失败会回滚整个会话创建。绑定成功后，新 `session_id` 回填到 `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`，响应原样回显 `squad_save_ref`。可选的 `lanlink_room_code` 会写入 `squad_save_slots.lanlink_room_code`；它只用于其他成员在 `lease/acquire` 收到 409 `SQUAD_SAVE_LEASE_HELD` 时，用 `error.details[0].lanlink_room_code` 一键加入当前房主房间，**不参与任何授权判断**。
 
 每个账号最多有一个 `active` 会话。再次创建时返回 HTTP 409 `SESSION_ALREADY_ACTIVE`，`error.details[0].session_id` 指向现有会话；客户端可打开该会话或结束后再建房。重复提交同一 `session_id` 与 `target_user_id` 的邀请时，如果仍有未过期邀请，服务端幂等返回原邀请且不再创建通知。每个发送者最多保留 50 个待处理邀请；超限返回 409 `INVITE_LIMIT_REACHED`，`error.details[0].retry_after_seconds` 表示最早何时可重试。每个 Presence 账号最多 32 条有效连接；这些限制也会出现在 `GET /multiplayer/capabilities.limits`。
 
@@ -281,6 +289,17 @@ Content-Type: application/json
     "activity_name":"正在游玩 Salt Flats",
     "current_players":1,
     "max_players":8,
+    "is_modded":false,
+    "mod_count":0,
+    "mod_syncable_count":0,
+    "mod_summary":{
+      "modded":false,
+      "mod_count":0,
+      "syncable_count":0,
+      "pack":null,
+      "mods":[],
+      "mods_truncated":false
+    },
     "status":"active",
     "expires_at":"2026-10-01T16:00:00.000Z"
   },
@@ -300,8 +319,6 @@ Content-Type: application/json
 
 会话对象中的 `current_players` 是当前占用人数：`joining`、`active` 和仍在恢复窗口内的 `disconnected` 对端都占用名额；`expired` 对端不占名额。对端心跳每 30 秒发送一次；90 秒未收到心跳后状态变为 `disconnected`，服务端清理其网络候选和中继分配，并保留 60 秒恢复窗口。此窗口按最后一次心跳的在线状态租期截止时间计算；窗口结束后对端变为 `expired`，恢复令牌不再可用，名额释放。`expires_at` 是会话最长生命周期截止时间。对端对象的 `role` 为 `owner` 或 `member`，`status` 是 `joining`、`active`、`disconnected`、`expired` 等服务端状态；`capabilities` 是客户端加入时提交的可选 JSON。`GET .../sessions/{id}/peers` 返回仍占用名额的对端数组；该接口要求调用者本身是活跃对端。
 
-### 解析、加入、退出和恢复
-
 ### 联机大厅
 
 `GET /api/v1/multiplayer/sessions?page=1&limit=20` 返回调用者**可发现**的活跃会话数组。`page` 从 1 起，`limit` 最大 50。可选 `game_id`、`game_version` 以精确匹配筛选游戏；空白值按未指定处理。返回值只包含 `visibility = public` 的会话，以及 `visibility = friends` 且调用者是房主好友或该会话活跃对端的会话；`private` 会话永不出现在该发现列表中。被任一方屏蔽的房主同样不会出现。每个会话对象含 `joinable`（调用者可直接加入）、`blocked_reason`（`null`、`ALREADY_IN_SESSION`、`PRIVACY_DENIED`、`SESSION_NOT_JOINABLE`、`FRIEND_REQUIRED`、`SESSION_FULL` 或 `JOIN_REQUEST_REQUIRED`）和 `can_request_join`（是否可请求审批）。`current_players` 为实时占用人数。
@@ -315,9 +332,58 @@ Content-Type: application/json
 }
 ```
 
-当前会话模型没有模组清单字段，因此大厅暂不支持按模组筛选；客户端可按已有的 `game_id` 和 `game_version` 筛选。新增模组筛选前，需要先定义会话如何声明及验证模组标识。
+大厅还支持三个模组筛选参数：`modded=true|false` 只返回模组房或原版房；`mod_id` 只返回房主清单包含该 Mod 的会话（支持公开别名，按规范 `mod_id` 匹配）；`pack_public_id` 只返回引用该公开 Pack 的会话。筛选是发现条件，不改变加入鉴权。
+
+每个会话对象新增 `is_modded`、`mod_count`、`mod_syncable_count` 与 `mod_summary`。`mod_summary.mods` 在列表中最多返回前 8 项并置 `mods_truncated=true`；完整清单通过 `GET /api/v1/multiplayer/sessions/{id}` 读取。`mod_summary.pack` 只在该 Pack 仍公开可见时返回。`syncable_count` 只统计 `catalog_verified` 且带 SHA-256 的条目。
 
 大厅只是发现入口：列表里的每个会话在实际加入时仍会走同一套加入鉴权，`joinable` 是列表生成时的策略快照，加入接口仍会重新鉴权。客户端不得根据列表可见性推断加入权限。
+
+### 模组房与同步计划
+
+模组房让房主声明实际启用的 Mod，客人在加入前先取得「下载、启用、禁用、保留、手动获取」清单。该能力由站点能力 `multiplayer.mod_sync_v1`（顶层 `multiplayer_mod_sync_enabled`）与运行时开关 `feature_multiplayer_mod_sync_enabled` 共同控制；关闭时携带模组字段建房和调用同步计划都返回 403 `FEATURE_DISABLED`。旧客户端不传模组字段时，会话行为与旧版完全一致。
+
+服务端只按公开资源目录解析 Mod，并执行 fail-closed 定级：
+
+| `resolution_status` | 含义 | 是否自动下发 |
+| --- | --- | --- |
+| `catalog_verified` | 公开 Mod 的当前推荐已发布版本有可用 SHA-256 主文件，且房主上报的 `sha256` 完全一致 | 是 |
+| `catalog_version_mismatch` | 目录命中但房主哈希不同 | 否，仅提示手动获取 |
+| `unlisted_local` | 未收录、缺少哈希，或目录缺少可用主文件 | 否，仅提示手动获取 |
+
+未过审、隔离、已删除、已合并或分类停用的资源不会被解析成可下载条目；`catalog_version_mismatch` 与 `unlisted_local` 也不会保存文件 ID。`mod_pack_ref` 的 Mod 成员来自 Pack 已固定的已发布版本，通过校验后直接记为 `catalog_verified`；Pack 中的地图/蓝图不计入 `mod_count`。
+
+同步计划请求：
+
+```http
+POST /api/v1/multiplayer/sessions/ses_AbCdEf0123456789_-wxyz/mod-sync-plan
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "installed_mods": [
+    {"mod_id":"flood-driver","version":"1.2.0","sha256":"<64_HEX>","enabled":true,"client_only":false}
+  ],
+  "join_code":"ABCD1234"
+}
+```
+
+权限范围是 `multiplayer.read` + `resource.read`；调用者必须是活跃 Peer、满足该会话的可见范围，或持有该会话未过期的邀请/已批准加入请求。可选 `join_code` 与加入接口同一校验：持有有效房间码的客人也能在加入前读取计划。`installed_mods` 最多 128 项；同一 `mod_id` 重复返回 400 `SESSION_MODS_INVALID`。`client_only=true` 对应 `mod.hjson` 的 `hidden: true` 或白名单内的纯客户端辅助插件。
+
+响应 `data`：
+
+| 字段 | 含义 |
+| --- | --- |
+| `session_id` | 目标会话。 |
+| `status` | `ready`（无需变更）、`sync_required`（存在下载/启用/禁用动作）或 `partial_sync_required`（仍有需手动获取的 Mod，但可先拉齐全部 `to_download`）。 |
+| `to_download[]` | 缺失或哈希不一致、且服务端可校验的条目。含 `mod_id`、`display_name`、`version`、`sha256`、`size_bytes`、`resource_public_id`、`resource_version_public_id`、`file_public_id`、`download_url`、`reason`（`missing` / `hash_mismatch` / `unverified`）与 `granted`。每项都经由 `DownloadGrantService` 记录 `requested` / `granted` 下载事件，并遵守同账号同文件 60 秒滚动去重；`granted=false` 表示窗口内已有授权，不是失败。 |
+| `to_enable[]` | 本地已有相同哈希但尚未启用的内容 Mod。 |
+| `to_disable[]` | 本地已启用、不在房主清单内、且不是纯客户端辅助的 Mod。 |
+| `preserved_client_mods[]` | 默认豁免保留的纯客户端辅助 Mod：客户端标记 `client_only=true`，或内置白名单 `mdtbbsaddon`、`lanlink`。客户端弹窗可让用户微调勾选，但不得默认禁用。 |
+| `unresolved[]` | 不可自动下载的条目，含 `mod_id`、`display_name`、`version`、`sha256`、`resolution_status`、`reason`（`not_in_catalog` / `sha256_missing` / `catalog_file_unavailable` / `catalog_version_mismatch`）与可公开的 `resource_public_id` / `resource_version_public_id`。绝不包含文件 ID 或下载地址。 |
+| `mod_summary` | 房主完整清单、`syncable_count` 与 Pack 摘要；完整清单不受大厅 8 项截断限制。 |
+| `limits` | `max_session_mods`（64）与 `max_installed_mods`（128）。 |
+
+下载地址沿用既有资源文件接口的鉴权与限流；客户端实际取文件时仍需具备 `resource.download`。若存在 `to_download` 但站点关闭资源下载，返回 403 `FEATURE_DISABLED`，不会只签发一半授权。会话不可见返回 403 `SESSION_PERMISSION_DENIED`；会话不存在、过期或关闭分别返回 404 `SESSION_NOT_FOUND` / `SESSION_EXPIRED` / `SESSION_CLOSED`。客户端必须按 `status` 与 `unresolved` 展示半自动同步弹窗，不得自行把 `unlisted_local` 或 `catalog_version_mismatch` 拼成下载地址。
 
 ### 解析、加入、退出和恢复
 
@@ -456,6 +522,8 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
+小队共享存档事件也走用户事件流，发送给该小队每个活跃成员：`squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`。它们只是状态变化通知，收到后应重新读取小队详情、槽位租约或快照链；强制接管时还会额外通知原持有者（即使其已不再是活跃成员）。
+
 每个事件帧中的 `id` 都由服务端生成并保证存在；下表给出各用户流事件的确切 `data` 形状。用户事件不包含完整好友、邀请或 Presence 对象：
 
 | 事件 | `data` JSON 示例 | 获取完整当前状态 |
@@ -469,7 +537,14 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 | `multiplayer.join_request.created` | `{"join_request_id":"jrq_…","session_id":"ses_…","requester_user_id":123}` | `GET /api/v1/multiplayer/sessions/{session_id}/join-requests` |
 | `multiplayer.join_request.approved` | `{"join_request_id":"jrq_…","session_id":"ses_…","intent_id":"jnt_…"}` | 直接消费 `intent_id`；不需要重新查意图 |
 | `multiplayer.join_request.rejected` | `{"join_request_id":"jrq_…","session_id":"ses_…"}` | 重新读取对应会话或请求状态 |
+| `squad_save.lease_acquired` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"previous_holder_user_id":null,"fencing_token":7,"expires_at":"2026-11-20T11:57:30.000Z"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.lease_released` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"fencing_token":7}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.lease_taken_over` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"previous_holder_user_id":456,"fencing_token":8,"expires_at":"2026-11-20T11:57:30.000Z"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.snapshot_committed` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","snapshot_id":"<快照 UUID>","revision":12,"branch_type":"main","uploader_user_id":123,"fencing_token":7,"head_snapshot_id":"<快照 UUID>"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/snapshots` |
+| `squad_save.ownership_transferred` | `{"squad_id":"<小队 UUID>","from_user_id":123,"to_user_id":456,"transfer_id":"<转让 UUID>"}` | `GET /api/v1/squads/{squad_id}` |
 | `session.updated`（房主用户流） | `{"session_id":"ses_…","status":"active"}` | `GET /api/v1/multiplayer/sessions/{id}` |
+
+`squad_save.snapshot_committed` 在冲突救援分支上 `head_snapshot_id` 为 `null`；从历史快照恢复也复用同一事件，此时 `snapshot_id` 是新的 head。事件可能丢失或延迟，客户端收到后一律重新读取小队详情或快照链，不要仅凭事件推断主链状态。
 
 会话流事件包含定位所需的 `session_id`，对端事件包含 `peer_id`，候选事件包含 `candidate_id`；`candidate.created` 还带候选对象。`session.updated` 包含 `status`，进入关闭宽限期时还带 `grace_seconds`。`relay.allocated` / `relay.revoked` 包含 `session_id`、`peer_id` 和 `allocation_id`。收到会话流的 `resume_failed` 后，按需求读取 `GET /api/v1/multiplayer/sessions/{id}`、`.../peers` 或候选接口。
 
@@ -550,7 +625,7 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 
 ## 错误码
 
-稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`PRESENCE_CONNECTION_LIMIT_REACHED`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_ALREADY_ACTIVE`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_LIMIT_REACHED`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
+稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`FEATURE_DISABLED`、`PRESENCE_CONNECTION_NOT_FOUND`、`PRESENCE_CONNECTION_LIMIT_REACHED`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_ALREADY_ACTIVE`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_MODS_INVALID`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_LIMIT_REACHED`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。
 
 客户端依据 `error.code` 和 HTTP 状态处理错误，不依赖提示文字。主要码的语义：
 
@@ -565,6 +640,7 @@ Relay 凭证是 HMAC 签名的短期串，绑定 `relay_session_id`、`session_i
 | `INVITE_LIMIT_REACHED` / `PRESENCE_CONNECTION_LIMIT_REACHED` | 409 | 否 | 先等待邀请过期或关闭已有 Presence 连接 |
 | `SESSION_FULL` | 409 | 否 | 换会话或稍后重试 |
 | `SESSION_NOT_JOINABLE` / `JOIN_REQUEST_REQUIRED` | 400 / 409 | 否 | 换加入路径（邀请或审批） |
+| `SESSION_MODS_INVALID` | 400 | 否 | 模组清单同时提交 Pack 与 `mods`、条目重复/超限、或 Pack 不可用；修正请求体后重试 |
 | `PEER_RESUME_INVALID` | 403 | 否 | 恢复令牌单次消费，不得重放 |
 | `CANDIDATE_LIMIT_REACHED` | 429 | 是 | 已有上限内的候选，不必重复发布 |
 | `JOIN_INTENT_CONSUMED` | 409 | 否 | 仅恢复窗口内存活时重试才有意义 |

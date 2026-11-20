@@ -205,7 +205,7 @@ Content-Type: application/json
 
 ### 配额与清理
 
-- 配额仍按**账号内唯一 blob 字节**计费（`used_bytes`），同一内容被多个快照引用只计一次；
+- 配额按**账号内唯一 blob 字节**计费（`used_bytes`），同一内容被多个快照引用只计一次；`used_bytes` 现在等于个人 blob、名下小队 blob 与待提交预留之和，三项明细见 `GET /game-saves/quota` 的 `breakdown`。
 - 独立 blob 上传会话在提交前会预留配额，过期未使用的内容与已无快照引用的 blob 均由维护任务按宽限期回收；
 - 整包快照（`format = "zip"`）继续按原有方式下载与恢复，行为不变。
 
@@ -238,8 +238,9 @@ Content-Type: application/json
 
 | 字段 | 含义 |
 |---|---|
-| `used_bytes` | 按账号内唯一 blob 字节计费的使用量；同一内容被多个快照引用只计一次。 |
-| `logical_bytes` | 所有存活快照清单的逻辑大小之和；用于向用户解释「删除快照后 `used_bytes` 缓慢下降」。 |
+| `used_bytes` | 统一配额用量：`personal_bytes + owned_squads_bytes + pending_bytes`；同一内容被多个存活快照引用只计一次。 |
+| `breakdown` | `{ personal_bytes, owned_squads_bytes, pending_bytes }`：`used_bytes` 的三项组成，分别表示个人云存档、名下小队和仍有效的待提交预留。 |
+| `logical_bytes` | 个人云存档所有存活快照清单的逻辑大小之和（不含小队快照）；用于向用户解释「删除快照后 `used_bytes` 缓慢下降」。 |
 | `limit_bytes` | 当前账号的总存储字节配额。 |
 | `max_file_size_bytes` | 单个上传文件/快照的最大字节数。 |
 | `formats` | 当前服务端支持的快照格式：`zip`、`manifest`。 |
@@ -249,6 +250,344 @@ Content-Type: application/json
 | `retention.max_unpinned_age_days` | 未固定快照按年龄清理的保留天数。 |
 
 `limit_bytes`、`max_file_size_bytes` 可由管理端调整；`slots.limit`、`retention.max_unpinned_versions_per_slot` 和 `retention.max_unpinned_age_days` 由部署环境变量 `CLOUD_SAVES_MAX_SLOTS`、`CLOUD_SAVES_MAX_HISTORY_PER_SLOT`、`CLOUD_SAVES_RETENTION_DAYS` 控制，修改后需重启服务。要拿到当前生效值，读取此接口，不要假设默认值。云存档目前没有单独的“账号内快照总数上限”字段；总字节配额与每槽未固定历史策略共同约束快照数量。
+
+## 小队共享存档接力（Squad Saves）
+
+小队共享存档让多个论坛账号共用一个存档槽接力开房：持有写租约的成员上传本地存档并提交快照，其他成员下载同一快照、加入同一局游戏；新房主接手后继续推进同一条主链。接口位于 `/api/v1/squads/*`，复用个人云存档的三个 OAuth 范围，但配额归属和文件存储都与个人云存档分开。
+
+启用前检查 `GET /api/v1/capabilities` 的 `squad_saves_v1`；它为 `true` 才表示小队功能和底层个人云存档同时可用。站点关闭小队功能时返回 403 `SQUADS_DISABLED`；只关闭个人云存档时返回 403 `CLOUD_SAVES_DISABLED`。
+
+### 概念、角色与所有权
+
+- 每个小队有唯一队长（`squads.owner_user_id`），成员角色为 `owner`、`admin`、`member`。加入必须由现有队长或管理员邀请，且邀请对象必须是已接受的好友。
+- 每账号最多拥有 10 个活跃小队；小队默认最多 8 名活跃成员、5 个共享存档槽，分别由 `squads.max_members` / `max_slots` 控制。
+- 每个共享存档槽有独立、单调递增的主链 `revision`。`branch_type = "main"` 是主链；`branch_type = "conflict"` 是旧房主失去租约后用 `mode:"conflict_rescue"` 保存的冲突救援分支，不推进 head。
+- 配额统一记在创建者（`squads.owner_user_id`）名下。小队文件存放在 `squad_save_blobs`，与个人 `game_save_blobs` 物理隔离：成员调用 `POST /squads/{squadId}/slots/{slotId}/blobs/check` 只能查询本小队持有的内容，不会命中创建者或其他账号的个人云存档，也不能借内容摘要探测个人文件是否存在。
+- 删除小队或槽位会软删快照并释放 blob 引用；引用归零的 blob 进入延迟 GC，创建者的配额立即释放。
+
+| 操作 | owner | admin | member |
+|---|---|---|---|
+| 查看小队、槽位、快照，下载文件 | 是 | 是 | 是 |
+| 创建或重命名共享存档槽 | 是 | 是 | 是 |
+| 获取、续期、释放写租约，提交快照，置顶快照 | 是 | 是 | 是 |
+| 邀请成员、移除普通成员、重命名小队 | 是 | 是 | 否 |
+| 删除共享存档槽、删除非 head 快照 | 是 | 是 | 否 |
+| 未过期租约的 `force_takeover` 强制接管 | 是 | 是 | 否 |
+| 调整成员角色（`admin` / `member`） | 是 | 否 | 否 |
+| 删除小队、发起或取消队长转让 | 是 | 否 | 否 |
+| 退出小队 | 需先转让 | 是 | 是 |
+
+### 接口一览
+
+下表路径均相对于 `/api/v1`。权限列复用个人云存档范围：读取 = `game_content.saves.read`，写入 = `game_content.saves.write`，删除 = `game_content.saves.delete`。
+
+| 方法 | 路径 | 权限 | 用途 |
+|---|---|---|---|
+| GET | `/squads` | 读取 | 列出当前账号以活跃成员身份加入的小队，含 `my_role`、成员数与槽位数 |
+| GET | `/squads/invitations` | 读取 | 列出待接受的小队邀请 |
+| POST | `/squads` | 写入 | 创建小队；调用者成为队长 |
+| GET | `/squads/{squadId}` | 读取 | 小队详情：成员、槽位与租约摘要、待确认的队长转让 |
+| PATCH | `/squads/{squadId}` | 写入 | 重命名小队（队长或管理员） |
+| DELETE | `/squads/{squadId}` | 删除 | 删除小队及其共享存档（仅队长） |
+| GET | `/squads/{squadId}/members` | 读取 | 列出活跃成员与待接受邀请 |
+| POST | `/squads/{squadId}/members` | 写入 | 邀请好友加入（body `user_id`） |
+| POST | `/squads/{squadId}/members/accept` | 写入 | 接受邀请，成为活跃成员 |
+| POST | `/squads/{squadId}/members/decline` | 写入 | 拒绝邀请 |
+| PATCH | `/squads/{squadId}/members/{userId}` | 写入 | 设置成员角色为 `admin` 或 `member`（仅队长） |
+| DELETE | `/squads/{squadId}/members/{userId}` | 写入 | 自己退出或被队长/管理员移除 |
+| POST | `/squads/{squadId}/ownership-transfer` | 写入 | 发起两步队长转让（仅队长） |
+| POST | `/squads/{squadId}/ownership-transfer/accept` | 写入 | 被指定的新队长接受转让 |
+| POST | `/squads/{squadId}/ownership-transfer/decline` | 写入 | 被指定的新队长拒绝转让 |
+| POST | `/squads/{squadId}/ownership-transfer/cancel` | 写入 | 现任队长取消待确认的转让 |
+| GET | `/squads/{squadId}/slots` | 读取 | 列出共享存档槽与 head、租约摘要 |
+| POST | `/squads/{squadId}/slots` | 写入 | 创建共享存档槽（任意活跃成员） |
+| GET | `/squads/{squadId}/slots/{slotId}` | 读取 | 槽位详情：head 快照、当前租约、置顶数量 |
+| PATCH | `/squads/{squadId}/slots/{slotId}` | 写入 | 重命名共享存档槽 |
+| DELETE | `/squads/{squadId}/slots/{slotId}` | 删除 | 删除槽位及其快照（队长或管理员） |
+| GET | `/squads/{squadId}/slots/{slotId}/lease` | 读取 | 读取当前写租约、持有者与到期时间 |
+| POST | `/squads/{squadId}/slots/{slotId}/lease/acquire` | 写入 | 获取写租约；可选 `force_takeover` |
+| POST | `/squads/{squadId}/slots/{slotId}/lease/renew` | 写入 | 用 `fencing_token` 续期；建议 90 秒一次 |
+| DELETE | `/squads/{squadId}/slots/{slotId}/lease` | 写入 | 释放写租约；可选 body `fencing_token` |
+| GET | `/squads/{squadId}/slots/{slotId}/snapshots` | 读取 | 按 `revision` 从新到旧列出主链与冲突分支（最多 500 条） |
+| POST | `/squads/{squadId}/slots/{slotId}/snapshots` | 写入 | 用 `fencing_token` + `base_snapshot_id` + manifest 提交快照 |
+| GET | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/manifest` | 读取 | 读取快照文件清单与游戏、Mod 元数据 |
+| POST | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/restore` | 写入 | 将历史或冲突分支恢复为新的主链 revision |
+| PATCH | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}` | 写入 | 置顶或取消置顶（`pinned`） |
+| DELETE | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}` | 删除 | 删除非 head 快照（队长或管理员） |
+| POST | `/squads/{squadId}/slots/{slotId}/blobs/check` | 读取 | 按 SHA-256 查询本小队已持有或已暂存的文件 |
+| POST | `/squads/{squadId}/slots/{slotId}/blobs` | 写入 | 为本小队创建单个文件上传会话；需要当前写租约 |
+| PUT | `/squads/{squadId}/blobs/uploads/{uploadId}/file` | 写入 | 上传单个文件字节；只有创建该会话的成员可写 |
+| POST | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/download` | 读取 | 获取清单内指定文件的同源 Bearer 下载地址 |
+| GET | `/squads/{squadId}/slots/{slotId}/snapshots/{snapshotId}/blobs/{sha256}/file` | 读取 | 下载快照清单内的单个文件 |
+
+JSON 响应使用 V1 结构 `{ "data": ..., "meta": { "request_id": ... } }`，并带 `Cache-Control: private, no-store`。列表接口的 `data` 直接是数组；小队、成员和槽位数量受上述上限约束，当前没有额外分页参数。
+
+### 小队与成员流程
+
+1. `POST /squads`（body `{"name":"周末联机小队"}`）创建小队，调用者成为 `owner`。名称 1–80 字符，首尾与连续空白会被规范化。
+2. 队长或管理员调用 `POST /squads/{squadId}/members`（body `{"user_id":123}`）邀请好友。目标账号通过 `GET /squads/invitations` 看到邀请，再调用 `members/accept` 或 `members/decline`。
+3. 接受时若活跃成员已达到 `max_members`，返回 409 `SQUAD_MEMBER_LIMIT_EXCEEDED`。对仍处于 `invited` 状态的账号重复邀请会幂等返回 `already_invited: true`；对已经是活跃成员的账号再邀请返回 409 `SQUAD_MEMBER_ALREADY_EXISTS`。
+4. 只有队长能通过 `PATCH /squads/{squadId}/members/{userId}` 调整 `admin` / `member`。队长角色不能直接修改，必须走两步转让（`SQUAD_OWNER_ROLE_IMMUTABLE`）。
+5. 普通成员可以退出自己；队长或管理员可以移除普通成员，管理员只能移除普通成员。队长必须先转让才能退出（`SQUAD_OWNER_MUST_TRANSFER`）。
+6. 任意活跃成员都可以创建和重命名共享存档槽，但删除槽位、删除历史快照需要队长或管理员。删除小队只有队长可以执行。
+
+`GET /squads/{squadId}` 返回成员、槽位和 `ownership_transfer`。每个槽位的 `lease` 摘要包含 `holder_user_id`、`holder_username`、`fencing_token` 和 `expires_at`；`active_session_id` / `lanlink_room_code` 用于让其他成员定位当前房主的联机房间。
+
+### 两步队长转让
+
+1. 现任队长调用 `POST /squads/{squadId}/ownership-transfer`（body `{"target_user_id":123}`）指定一名活跃成员，生成 24 小时内有效的 `pending` 转让。
+2. 同一小队至多一条待确认转让；已有未过期记录时返回 409 `SQUAD_TRANSFER_PENDING`。过期记录会被标记为 `expired` 后允许重新发起。
+3. 被指定的新队长调用 `.../ownership-transfer/accept` 接受。服务端在同一事务内先按 `ORDER BY id ASC` 锁定新旧队长的 `users` 行（固定加锁顺序，避免互相转让时死锁），再校验小队 owner 未变化、双方仍是活跃成员，并计算该小队当前占用字节（存活 blob + 待提交预留）。
+4. 若新队长的统一配额无法承接该小队（`新队长已用 + 小队字节 > limit_bytes`），返回 409 `SQUAD_TRANSFER_QUOTA_EXCEEDED`，**整个事务回滚**：owner、角色、计费归属和转让记录都不变化。
+5. 成功后原子切换 `squads.owner_user_id`、小队 blob 与待提交上传的 `billing_user_id`、双方角色和转让状态，并向全体活跃成员发送 `squad_save.ownership_transferred`。
+6. 新队长可以拒绝（`decline`），现任队长可以取消（`cancel`）；过期后接受或拒绝返回 410 `SQUAD_TRANSFER_EXPIRED`。
+
+接受成功的 `data` 包含 `transfer_id`、`squad_id`、`owner_user_id`、`from_user_id`、`squad_bytes` 和 `usage_after`（新队长的三项配额分解）。
+
+### 写租约状态机
+
+写租约保证同一时刻只有一个客户端推进主链，并用单调递增的 `fencing_token` 拒绝旧房主的迟到提交。租约有效期 **150 秒 = 90 秒心跳租约 + 60 秒宽限**；客户端应以 90 秒间隔调用 `lease/renew`。
+
+| 当前状态 | 操作 | 结果 |
+|---|---|---|
+| 无记录、已释放或已自然到期 | 任意活跃成员 `POST .../lease/acquire` | 获得租约，`fencing_token` 在上一值上 +1（首次为 1），有效期 150 秒 |
+| 未过期，由其他成员持有 | `POST .../lease/acquire` | 409 `SQUAD_SAVE_LEASE_HELD`，`details[0]` 含当前持有者信息 |
+| 未过期，调用者是 owner/admin | `POST .../lease/acquire` with `{"force_takeover":true}` | 立即接管，token +1，记录 `taken_over: true` 并通知原持有者 |
+| 未过期，调用者是普通成员 | `force_takeover: true` | 403 `SQUAD_TAKEOVER_FORBIDDEN` |
+| 调用者持有有效租约 | `POST .../lease/renew` with `fencing_token` | 延长到当前时间 +150 秒，返回 `heartbeat_interval_seconds: 90` |
+| token 过期、已被接管或不属于调用者 | `renew` / `release` / 主链提交 | 409 `SQUAD_SAVE_LEASE_STALE` |
+| 调用者持有租约 | `DELETE .../lease` | 标记 `released`，其他成员可立即接力；可选 `fencing_token` 防止误释放 |
+| 调用者没有当前租约，或上传会话对应的租约已被接管/过期 | `POST .../slots/{slotId}/blobs` / `PUT /squads/{squadId}/blobs/uploads/{uploadId}/file` | 409 `SQUAD_SAVE_LEASE_REQUIRED`；旧房主不能继续用过期 token 灌入暂存内容 |
+
+`SQUAD_SAVE_LEASE_HELD` 的 `details[0]` 形状：
+
+```json
+{
+  "holder_user_id": 123,
+  "fencing_token": 6,
+  "multiplayer_session_id": "ses_AbCdEf0123456789_-wxyz",
+  "lanlink_room_code": "A1B2C3D4E5",
+  "expires_at": "2026-11-20T12:00:00.000Z"
+}
+```
+
+`multiplayer_session_id` 和 `lanlink_room_code` 可能为 `null`。`lanlink_room_code` 只在建房时通过联机的 `squad_save_ref` 写入，用于让其他成员“一键加入当前房主房间”，**不参与任何授权判断**。
+
+获取租约的请求/响应：
+
+```http
+POST /api/v1/squads/{squadId}/slots/{slotId}/lease/acquire
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{"force_takeover": false}
+```
+
+```json
+{
+  "data": {
+    "lease": {
+      "slot_id": "<槽位 UUID>",
+      "lease_id": "<租约 UUID>",
+      "holder_user_id": 123,
+      "holder_client_id": "desktop-launcher",
+      "multiplayer_session_id": null,
+      "fencing_token": 7,
+      "status": "active",
+      "acquired_at": "2026-11-20T11:55:00.000Z",
+      "last_heartbeat_at": "2026-11-20T11:55:00.000Z",
+      "expires_at": "2026-11-20T11:57:30.000Z"
+    },
+    "taken_over": false,
+    "previous_holder_user_id": null,
+    "previous_lease_id": null
+  },
+  "meta": { "request_id": "req_..." }
+}
+```
+
+获取或接管租约时会清空槽位上的 `active_session_id` 与 `lanlink_room_code`，需要重新通过联机会话绑定。租约、快照和转让变化通过用户事件流通知小队每个活跃成员：`squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`。事件只是通知，收到后应重新读取小队详情或快照链。
+
+### 快照提交与冲突救援
+
+主链提交必须同时提供**当前** `fencing_token` 和与当前 head 一致的 `base_snapshot_id`。清单格式与个人云存档的 manifest 相同（`format: "copper-save-manifest-v1"`，最多 5000 项，单文件默认 ≤ 50 MiB，序列化默认 ≤ 1 MiB；当前生效值见个人 `GET /game-saves/quota`）。
+
+```http
+POST /api/v1/squads/{squadId}/slots/{slotId}/snapshots
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "fencing_token": 7,
+  "base_snapshot_id": "<当前 head 快照 UUID，首次提交为 null>",
+  "mode": "normal",
+  "manifest": {
+    "format": "copper-save-manifest-v1",
+    "files": [
+      {"path": "saves/0.msav", "size": 4194304, "sha256": "<64 位小写十六进制>"},
+      {"path": "settings.bin", "size": 20480, "sha256": "<64 位小写十六进制>"}
+    ]
+  },
+  "reason": "after_exit",
+  "game": {"version": "v160.7", "build": 8},
+  "save": {"map_name": "示例地图", "wave": 42, "playtime_seconds": 7993},
+  "mods": [{"id": "example-mod", "version": "1.2.0"}],
+  "device_id": "desktop-main"
+}
+```
+
+```json
+{
+  "data": {
+    "id": "<快照 UUID>",
+    "slot_id": "<槽位 UUID>",
+    "squad_id": "<小队 UUID>",
+    "revision": 12,
+    "parent_snapshot_id": "<上一 head 快照 UUID>",
+    "uploader_user_id": 123,
+    "fencing_token": 7,
+    "branch_type": "main",
+    "retention_tier": "recent",
+    "format": "manifest_v1",
+    "sha256": "<清单规范化摘要>",
+    "size": 4214784,
+    "file_count": 2,
+    "game": {"version": "v160.7", "build": 8},
+    "save": {"map_name": "示例地图", "wave": 42, "playtime_seconds": 7993},
+    "mods": {"count": 1, "manifest_hash": "<Mod 清单摘要或 null>"},
+    "reason": "after_exit",
+    "pinned": false,
+    "is_head": true,
+    "created_at": "2026-11-20T12:00:00.000Z",
+    "no_changes": false,
+    "pruned_snapshot_ids": ["<被 GFS 淘汰的快照 UUID>"]
+  },
+  "meta": { "request_id": "req_..." }
+}
+```
+
+快照对象字段：
+
+| 字段 | 含义 |
+|---|---|
+| `id` / `slot_id` / `squad_id` | 快照、槽位和小队的 UUID；均视为不透明值。 |
+| `revision` | 槽位内单调递增的版本号。冲突分支也会分配新 revision，但不会成为 head。 |
+| `parent_snapshot_id` | 提交时参考的上一 head；冲突救援分支为提交时看到的 head 或 `base_snapshot_id`。 |
+| `uploader_user_id` | 提交该快照的成员。 |
+| `fencing_token` | 提交时使用的租约令牌；可用来判断提交者是否持有当时的写权限。 |
+| `branch_type` | `main` 或 `conflict`。 |
+| `retention_tier` | `recent`、`daily`、`pinned` 或 `conflict`，由 GFS 裁剪维护。 |
+| `format` | 当前为 `manifest_v1`。 |
+| `sha256` / `size` / `file_count` | 清单规范化摘要、逻辑文件总大小和文件数。 |
+| `game` / `save` / `mods` | 游戏版本、存档显示信息和 Mod 摘要；`mods` 为 `{ count, manifest_hash }`。 |
+| `reason` | `manual`、`before_launch`、`after_exit`、`periodic`、`restore`、`conflict` 或 `import`；冲突救援固定为 `conflict`。 |
+| `pinned` / `is_head` | 是否置顶；是否为主链当前 head。 |
+| `created_at` | 服务端创建时间。 |
+
+提交规则：
+
+- `base_snapshot_id` 必须等于当前 `head_snapshot_id`（首次提交两者都为 `null`），否则返回 409 `SQUAD_SAVE_CONFLICT`，`details[0]` 返回 `base_snapshot_id` 与 `head_snapshot_id`。
+- 内容与 head 完全一致（manifest 摘要相同）时不消耗 revision：返回 head 摘要并带 `no_changes: true`，不发送 `squad_save.snapshot_committed`。
+- 清单中的每个 `sha256 + size` 必须已在本小队的 `squad_save_blobs` 或有效暂存会话中；缺失返回 409 `SQUAD_SAVE_BLOB_MISSING`，`details` 列出缺失项。校验、配额检查和建快照在同一事务内，任何一项失败整体回滚。
+- 主链提交和恢复都要求当前 `fencing_token`；token 过期返回 409 `SQUAD_SAVE_LEASE_STALE`。
+- `mode:"conflict_rescue"` 用于当前持有者主动降级，或“最近一次被接管”的原房主保存尚未提交的本地内容。提交仍必须携带 `fencing_token`：调用者必须是当前持有者并携带当前 token，或是租约行记录的上一次持有者（`previous_holder_user_id`）并携带其当时的 `previous_fencing_token`；其他成员即使使用很小的 token 也会返回 409 `SQUAD_SAVE_LEASE_STALE`，避免绕过写租约无限写入冲突分支。由于文件暂存和上传字节都要求当时持有租约，旧房主只能复用被接管前已上传为 `ready` 的文件。冲突救援不推进 head，写入 `branch_type: "conflict"`、`retention_tier: "conflict"`、`reason: "conflict"`，`is_head` 为 `false`，`pruned_snapshot_ids` 为空。可选的 `base_snapshot_id` 必须属于本槽位，否则返回 409 `SQUAD_SAVE_BASE_SNAPSHOT_INVALID`。冲突分支不会自动裁剪，可由队长/管理员显式删除，或通过恢复流程重新成为主链。
+- `POST .../snapshots/{snapshotId}/restore` 需要 `fencing_token` 和当前 head（`confirm_head_snapshot_id`）；head 不一致返回 409 `SQUAD_SAVE_CONFLICT`。恢复会创建新的主链 revision，原快照保留。
+
+### 文件级差量上传与下载
+
+1. 先获取并保持写租约，再 `POST .../slots/{slotId}/blobs/check`（body `{"sha256":["...","..."]}`）。查询严格限定在当前小队，返回 `{"exists":[...],"missing":[...]}`。
+2. 对每个 `missing` 调用 `POST .../slots/{slotId}/blobs`（body `{"sha256":"...","size":4194304}`）。本小队已持有该内容时返回 `{"no_upload_required":true,"sha256":"...","size":4194304}`；否则返回 `upload_id` 与 `upload.url`。创建会话要求当前写租约，租约不在有效期内返回 409 `SQUAD_SAVE_LEASE_REQUIRED`。
+3. 把原始字节 `PUT` 到 `/api/v1/squads/{squadId}/blobs/uploads/{uploadId}/file`。只有创建该上传会话的成员可以写入；服务端校验大小与 SHA-256，失败分别返回 409 `SQUAD_SAVE_SIZE_MISMATCH` / `SQUAD_SAVE_CHECKSUM_MISMATCH`。上传会话默认 10 分钟有效，过期返回 410 `SQUAD_SAVE_UPLOAD_EXPIRED`。
+4. 用完整清单提交快照。上传成功返回 `{"upload_id":"...","uploaded":true,"size_bytes":4194304,"sha256":"...","status":"ready"}`。
+5. 下载时先 `GET .../snapshots/{snapshotId}/manifest`，再 `POST .../snapshots/{snapshotId}/blobs/download`（body `{"sha256":[...]}`）。响应 `downloads` 数组每项含 `path`、`size`、`sha256` 与 `download.url`，客户端只拉取本机缺失的文件。
+6. 对下载地址发送带 Bearer 的 `GET`，校验 SHA-256 后写入临时文件再替换。响应为 `application/octet-stream`，带 `ETag: "sha256-<摘要>"`，路径同源、非签名、可复用；服务端每次重新校验调用者仍是该小队活跃成员、快照和文件属于该槽位。
+
+个人云存档已持有的相同内容不会自动计入小队：`squad_save_blobs` 与 `game_save_blobs` 物理隔离，必须在小队内重新建立引用。
+
+### GFS 分层裁剪
+
+每次主链提交（含恢复）后，服务端在同一事务内同步执行 Grandfather-Father-Son 分层保留：
+
+- 保留每个槽位**最近 10 个未置顶主链快照**；
+- 保留过去 **7 个自然日（含当天）每天最后一个未置顶主链快照**；
+- 保留**全部 pinned 快照**，每槽最多置顶 10 个，超过返回 409 `SQUAD_SAVE_PIN_LIMIT_EXCEEDED`；
+- 保留**全部 `branch_type = "conflict"` 分支**，不参与自动裁剪。
+
+淘汰时对快照做软删（`deleted_at`）、删除文件行，并对该快照引用的每个 blob 将 `ref_count` 减 1。`ref_count` 归零时写入 `pending_delete_at = NOW() + 宽限期`（默认 24 小时），进入延迟 GC。配额按 `ref_count > 0` 统计，所以淘汰后创建者配额**立即释放**；物理对象由维护任务（约 15 分钟一轮、每批最多 100 个）在宽限期后删除。删除失败会重新排期，不会误删仍被存活快照引用的对象。
+
+提交和恢复响应的 `pruned_snapshot_ids` 列出本次被淘汰的快照 ID。客户端应把它视为该槽位历史发生变化的通知；被淘汰的快照不可再读取、下载或恢复。GFS 不会淘汰当前 head，因为最新主链快照总在“最近 10 个”集合内。
+
+### 配额
+
+小队共享存档与个人云存档共用同一份统一配额。`GET /api/v1/game-saves/quota` 返回：
+
+| 字段 | 含义 |
+|---|---|
+| `breakdown.personal_bytes` | 个人云存档中仍被存活快照引用的唯一 blob 字节。 |
+| `breakdown.owned_squads_bytes` | 当前账号作为队长的小队中仍被存活快照引用的唯一 blob 字节之和。 |
+| `breakdown.pending_bytes` | 个人与名下小队尚未被任意存活快照引用、且仍处于有效期内的暂存上传预留字节。 |
+| `used_bytes` | `personal_bytes + owned_squads_bytes + pending_bytes`。 |
+| `limit_bytes` | 统一配额上限；与个人云存档共用。 |
+
+- 小队创建者的额度同时约束其个人存档和名下所有小队。任意成员创建/提交小队文件时，服务端按**创建者**的 `used_bytes` 校验；不足时返回 409 `SQUAD_OWNER_QUOTA_EXCEEDED`。
+- 非创建者收到的 `SQUAD_OWNER_QUOTA_EXCEEDED` 不携带具体数值（`details` 为空）；创建者本人收到的 `details[0]` 含 `used_bytes`、`limit_bytes`、`required_bytes`，便于自行清理。
+- 队长转让接受前会检查新队长的统一配额能否承接该小队；不足返回 `SQUAD_TRANSFER_QUOTA_EXCEEDED` 并整体回滚。
+- `logical_bytes` 仍只统计个人云存档快照的逻辑大小，不包含小队快照。
+
+### 错误码
+
+| 错误码 | HTTP | 含义 |
+|---|---|---|
+| `SQUADS_DISABLED` | 403 | 小队共享存档功能未启用，或底层个人云存档未启用。 |
+| `SQUAD_INVALID_METADATA` | 400 | 小队名称、槽位名称、成员、设备标识或 `fencing_token` 字段校验失败。 |
+| `SQUAD_NOT_FOUND` | 404 | 小队不存在或已删除。 |
+| `SQUAD_PERMISSION_DENIED` | 403 | 调用者不是活跃成员，或角色不足以执行该操作。 |
+| `SQUAD_LIMIT_EXCEEDED` | 409 | 已达到每账号可创建的活跃小队数量上限。 |
+| `SQUAD_MEMBER_LIMIT_EXCEEDED` | 409 | 接受邀请会超过小队成员上限。 |
+| `SQUAD_MEMBER_ALREADY_EXISTS` | 409 | 目标账号已经是活跃成员。 |
+| `SQUAD_MEMBER_NOT_FOUND` | 404 | 目标账号不是该小队的活跃成员。 |
+| `SQUAD_FRIEND_REQUIRED` | 403 | 只能邀请已接受的好友。 |
+| `SQUAD_INVITE_NOT_FOUND` | 404 | 没有待接受的小队邀请。 |
+| `SQUAD_OWNER_ROLE_IMMUTABLE` | 409 | 队长角色不能直接修改，必须走两步转让。 |
+| `SQUAD_OWNER_MUST_TRANSFER` | 409 | 队长必须先完成转让才能退出。 |
+| `SQUAD_TRANSFER_NOT_FOUND` | 404 | 没有待确认的队长转让。 |
+| `SQUAD_TRANSFER_PENDING` | 409 | 小队已有未过期的待确认转让，至多一条。 |
+| `SQUAD_TRANSFER_EXPIRED` | 410 | 队长转让已过期，需重新发起。 |
+| `SQUAD_TRANSFER_STALE` | 409 | 转让期间现任队长或成员状态已变化。 |
+| `SQUAD_TRANSFER_QUOTA_EXCEEDED` | 409 | 新队长的统一配额不足以承接该小队；事务回滚。 |
+| `SQUAD_SLOT_LIMIT_EXCEEDED` | 409 | 小队共享存档槽数量已达上限。 |
+| `SQUAD_SAVE_SLOT_NOT_FOUND` | 404 | 共享存档槽不存在或已删除。 |
+| `SQUAD_SAVE_SNAPSHOT_NOT_FOUND` | 404 | 快照不存在、已删除或不属于该槽位。 |
+| `SQUAD_SAVE_HEAD_SNAPSHOT_DELETE_FORBIDDEN` | 409 | 不能单独删除主链当前 head。 |
+| `SQUAD_SAVE_PIN_LIMIT_EXCEEDED` | 409 | 每槽最多置顶 10 个快照。 |
+| `SQUAD_SAVE_BLOB_MISSING` | 409 | 清单引用了本小队尚未持有的文件；`details` 列出缺失项。 |
+| `SQUAD_SAVE_BLOB_NOT_IN_SNAPSHOT` | 404 | 请求的文件不属于该快照清单。 |
+| `SQUAD_SAVE_BASE_SNAPSHOT_INVALID` | 409 | 提供的基准快照已删除或属于其他槽位。 |
+| `SQUAD_SAVE_CONFLICT` | 409 | 主链 head 已变化或恢复时 head 确认不一致。 |
+| `SQUAD_SAVE_INVALID_HASH` | 400 | SHA-256 不是 64 位小写十六进制。 |
+| `SQUAD_SAVE_FILE_TOO_LARGE` | 413 | 单个文件超过服务端大小上限。 |
+| `SQUAD_SAVE_SIZE_MISMATCH` | 409 | 上传对象大小与声明不一致。 |
+| `SQUAD_SAVE_CHECKSUM_MISMATCH` | 409 | 上传对象 SHA-256 与声明不一致。 |
+| `SQUAD_SAVE_STORAGE_UNAVAILABLE` | 503 | 存档存储未配置、暂不可用或对象缺失；可重试。 |
+| `SQUAD_SAVE_UPLOAD_NOT_FOUND` | 404 | 上传会话不存在或属于其他成员。 |
+| `SQUAD_SAVE_UPLOAD_EXPIRED` | 410 | 上传会话已过期或已取消。 |
+| `SQUAD_OWNER_QUOTA_EXCEEDED` | 409 | 小队创建者的统一配额不足；非创建者不返回具体数值。 |
+| `SQUAD_OWNER_CHANGED` | 409 | 暂存/提交期间队长发生转让，计费归属不再确定；`retryable: true`，重试即可。 |
+| `SQUAD_SAVE_LEASE_HELD` | 409 | 槽位存在未过期的其他持有者；`details` 含持有者与房间信息。 |
+| `SQUAD_SAVE_LEASE_STALE` | 409 | `fencing_token` 已过期、被接管或不属于调用者。 |
+| `SQUAD_SAVE_LEASE_REQUIRED` | 409 | 上传暂存前必须先获取当前写租约。 |
+| `SQUAD_TAKEOVER_FORBIDDEN` | 403 | 只有队长或管理员可以强制接管未过期租约。 |
+
+### 客户端要求
+
+- 把 `squadId`、`slotId`、`snapshotId`、`uploadId` 视为不透明值，不解析、不推测顺序，也不要把它们当作跨系统的稳定 ID。
+- 上传前先 `lease/acquire`，把返回的 `fencing_token` 与 `lease_id` 保存在内存中；按 90 秒节奏调用 `lease/renew`，网络抖动时不要等到 150 秒到期才续期。
+- 提交主链快照必须携带当前 `fencing_token` 和明确的 `base_snapshot_id`。收到 409 `SQUAD_SAVE_LEASE_STALE` 时不要重试同一 token；若只是要保住本地进度，且你曾被接管、此前已把文件暂存为 `ready`，改用 `mode:"conflict_rescue"` 并携带被接管前的旧 token 保存为冲突分支。
+- 收到 `squad_save.lease_taken_over` 后立即停止主链提交和上传暂存，等待当前操作结束；不要尝试用旧 token 覆盖。需要继续游戏时重新读取槽位与租约，按新的 head 提交。
+- 实时事件只是通知，可能丢失或延迟；收到任何小队事件后重新读取 `GET /squads/{squadId}/slots/{slotId}`、快照链或清单，以 API 快照为准。
+- 下载按“清单 → 缺失文件授址 → 单文件下载”的顺序进行，校验 SHA-256 后再替换本地文件；保留一份已校验的本地副本，直到云端提交被确认。
+- 查询配额时使用 `breakdown` 解释空间占用。成员无法看到创建者的具体剩余额度，遇到 `SQUAD_OWNER_QUOTA_EXCEEDED` 应提示联系队长清理，而不是自行重试。
+- 删除云端小队或槽位不会删除本地存档；OAuth 范围被撤销后停止使用对应令牌。
 
 ## 功能可用性
 

@@ -245,6 +245,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return Number(value);
   }
 
+  /** Append to a Redis list; used by the resource diff job queue. */
+  async rpush(key: string, value: string): Promise<number> {
+    return this.withFallback(
+      () => this.client.rpush(key, value),
+      () => this.fallback.rpush(key, value),
+    );
+  }
+
+  /** Pop the head of a Redis list; returns null when the list is empty. */
+  async lpop(key: string): Promise<string | null> {
+    return this.withFallback(
+      () => this.client.lpop(key),
+      () => this.fallback.lpop(key),
+    );
+  }
+
   async exists(key: string): Promise<number> {
     return this.withFallback(
       () => this.client.exists(key),

@@ -94,7 +94,7 @@ import {
 } from './mod-resource-v2.entity';
 import {
   SchematicVersionMetadata, SchematicBlock, SchematicMaterial,
-  SchematicLogicProcessor, SchematicAnalysis,
+  SchematicLogicProcessor, SchematicAnalysis, SchematicLogicSnippet,
 } from './schematic-resource-v2.entity';
 import {
   MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore,
@@ -143,6 +143,7 @@ import { ModReportAttachment } from './mod-report-attachment.entity';
 import { SocialPrivacySetting } from './social-privacy-setting.entity';
 import { UserPresencePreference } from './user-presence-preference.entity';
 import { MultiplayerSession } from './multiplayer-session.entity';
+import { MultiplayerSessionMod } from './multiplayer-session-mod.entity';
 import { MultiplayerPeer } from './multiplayer-peer.entity';
 import { MultiplayerPeerResumeToken } from './multiplayer-peer-resume-token.entity';
 import { MultiplayerInvite } from './multiplayer-invite.entity';
@@ -157,10 +158,21 @@ import { GameSaveBlob } from './game-save-blob.entity';
 import { GameSaveBlobUpload } from './game-save-blob-upload.entity';
 import { GameSaveUploadSession } from './game-save-upload-session.entity';
 import { GameSaveIdempotency } from './game-save-idempotency.entity';
+import { Squad } from './squad.entity';
+import { SquadMember } from './squad-member.entity';
+import { SquadOwnershipTransfer } from './squad-ownership-transfer.entity';
+import { SquadSaveSlot } from './squad-save-slot.entity';
+import { SquadSaveLease } from './squad-save-lease.entity';
+import { SquadSaveBlob } from './squad-save-blob.entity';
+import { SquadSaveSnapshot } from './squad-save-snapshot.entity';
+import { SquadSaveSnapshotFile } from './squad-save-snapshot-file.entity';
+import { SquadSaveBlobUpload } from './squad-save-blob-upload.entity';
 import { BlobObject } from './blob-object.entity';
 import { BlobRecord } from './blob-record.entity';
 import { BlobUploadSession } from './blob-upload-session.entity';
 import { BlobIdempotency } from './blob-idempotency.entity';
+import { TimelapseReport } from './timelapse-report.entity';
+import { TimelapsePostRef } from './timelapse-post-ref.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -270,6 +282,7 @@ export const coreEntities = [
   SchematicMaterial,
   SchematicLogicProcessor,
   SchematicAnalysis,
+  SchematicLogicSnippet,
   MapVersionMetadata,
   MapResourceEntry,
   MapSpawn,
@@ -304,6 +317,7 @@ export const coreEntities = [
   SocialPrivacySetting,
   UserPresencePreference,
   MultiplayerSession,
+  MultiplayerSessionMod,
   MultiplayerPeer,
   MultiplayerPeerResumeToken,
   MultiplayerInvite,
@@ -332,6 +346,17 @@ export const mdtbbsEntities = [
   GameSaveBlobUpload,
   GameSaveUploadSession,
   GameSaveIdempotency,
+  Squad,
+  SquadMember,
+  SquadOwnershipTransfer,
+  SquadSaveSlot,
+  SquadSaveLease,
+  SquadSaveBlob,
+  SquadSaveSnapshot,
+  SquadSaveSnapshotFile,
+  SquadSaveBlobUpload,
+  TimelapseReport,
+  TimelapsePostRef,
 ] as const;
 
 /** Runtime profile composition. MDTBBS remains the current and only profile. */
@@ -340,9 +365,12 @@ export const entities = [...coreEntities, ...mdtbbsEntities];
 export {
   GameSaveSlot, GameSaveSnapshot, GameSaveSnapshotFile, GameSaveBlob, GameSaveBlobUpload,
   GameSaveUploadSession, GameSaveIdempotency,
+  Squad, SquadMember, SquadOwnershipTransfer, SquadSaveSlot, SquadSaveLease, SquadSaveBlob,
+  SquadSaveSnapshot, SquadSaveSnapshotFile, SquadSaveBlobUpload,
+  TimelapseReport, TimelapsePostRef,
   BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
-  SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,
+  SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerSessionMod, MultiplayerPeer,
   MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinIntent, MultiplayerJoinRequest,
   MultiplayerRelayAllocation, MultiplayerAuditLog,
   AdminNotification,
@@ -395,7 +423,7 @@ export {
   ModProfile, ModIdAlias, ModVersionMetadata, ModContent, ModContentAlias, ModLocalization,
   ModCompatibilityReport, ModIssueReport, ModConflictReport, ModConflictMember,
   ModReportAttachment,
-  SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis,
+  SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis, SchematicLogicSnippet,
   MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore, MapWaveSummary, MapAnalysis, MapFeedback,
   // Phase 4 (refactor): Media
   MediaAsset, ResourceMediaLink,

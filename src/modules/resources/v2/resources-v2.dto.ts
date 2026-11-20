@@ -73,6 +73,39 @@ export class ResourceV2DependencyResolutionDto {
   @ApiProperty() truncated!: boolean;
 }
 
+export class ResourceV2EmbedCardsQueryDto {
+  @ApiProperty({ description: '逗号分隔的 Resource public UUID，最多 10 个。', example: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240' })
+  @IsString() @IsNotEmpty() @MaxLength(400)
+  ids!: string;
+}
+
+export class ResourceV2EmbedAuthorDto {
+  @ApiProperty() id!: number;
+  @ApiProperty() username!: string;
+  @ApiProperty({ nullable: true, type: String }) avatar_url!: string | null;
+}
+
+export class ResourceV2EmbedCardDto {
+  @ApiProperty({ format: 'uuid' }) resource_public_id!: string;
+  @ApiProperty({ nullable: true, format: 'uuid', type: String }) version_public_id!: string | null;
+  @ApiProperty({ enum: ['available', 'pending_review', 'unavailable'] }) status!: string;
+  @ApiProperty({ nullable: true, enum: ['schematic', 'map', 'mod', 'pack'], type: String }) resource_kind!: string | null;
+  @ApiProperty({ nullable: true, type: String }) title!: string | null;
+  @ApiProperty({ nullable: true, type: String }) summary!: string | null;
+  @ApiProperty({ nullable: true, type: String }) url!: string | null;
+  @ApiProperty({ nullable: true, type: String }) preview_url!: string | null;
+  @ApiProperty({ nullable: true, type: String }) download_url!: string | null;
+  @ApiProperty({ nullable: true, type: ResourceV2EmbedAuthorDto }) author!: ResourceV2EmbedAuthorDto | null;
+  @ApiProperty({ nullable: true, type: String }) version!: string | null;
+  @ApiProperty({ nullable: true, type: 'object' }) schematic!: Record<string, unknown> | null;
+  @ApiProperty({ nullable: true, type: 'object' }) map!: Record<string, unknown> | null;
+  @ApiProperty({ nullable: true, type: String }) reason!: string | null;
+}
+
+export class ResourceV2EmbedCardsDto {
+  @ApiProperty({ type: [ResourceV2EmbedCardDto] }) items!: ResourceV2EmbedCardDto[];
+}
+
 export class ResourceV2DiffQueryDto {
   @ApiPropertyOptional({ format: 'uuid', description: 'Source version public UUID. If omitted, the previous published version is selected.' })
   @IsOptional() @IsUUID() @MaxLength(36)
@@ -81,6 +114,77 @@ export class ResourceV2DiffQueryDto {
   @ApiPropertyOptional({ format: 'uuid', description: 'Target version public UUID. If omitted, the recommended/latest published version is selected.' })
   @IsOptional() @IsUUID() @MaxLength(36)
   to_version_public_id?: string;
+
+  @ApiPropertyOptional({ minimum: -127, maximum: 127, default: 0, description: '蓝图坐标对齐微调；非 0 时不写入缓存。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(-127) @Max(127)
+  offset_x?: number;
+
+  @ApiPropertyOptional({ minimum: -127, maximum: 127, default: 0, description: '蓝图坐标对齐微调；非 0 时不写入缓存。' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(-127) @Max(127)
+  offset_y?: number;
+}
+
+export class ResourceV2MapDiffChunkQueryDto extends ResourceV2DiffQueryDto {
+  @ApiProperty({ minimum: 0, maximum: 32767, description: '128×128 分区列号。' })
+  @Type(() => Number) @IsInt() @Min(0) @Max(32767)
+  cx!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 32767, description: '128×128 分区行号。' })
+  @Type(() => Number) @IsInt() @Min(0) @Max(32767)
+  cy!: number;
+}
+
+export class ResourceV2MapDiffChunkDto {
+  @ApiProperty({ nullable: true, type: String, format: 'uuid' }) from_version_public_id!: string | null;
+  @ApiProperty({ nullable: true, type: String, format: 'uuid' }) to_version_public_id!: string | null;
+  @ApiProperty() cx!: number;
+  @ApiProperty() cy!: number;
+  @ApiProperty({ enum: ['ready', 'computing', 'metadata_only', 'unavailable', 'disabled'] }) status!: string;
+  @ApiProperty({ nullable: true, type: 'object', description: '128×128 分区 RLE；status=ready 时存在。' }) chunk!: Record<string, unknown> | null;
+  @ApiPropertyOptional({ nullable: true, type: Number }) retry_after_ms?: number | null;
+}
+
+export class ResourceV2LogicSearchQueryDto extends ResourceV2PageQueryDto {
+  @ApiPropertyOptional({ maxLength: 200, description: '全文检索词；匹配资源标题、处理器类型、opcode、单位/方块名与源码。' })
+  @IsOptional() @IsString() @MaxLength(200)
+  q?: string;
+
+  @ApiPropertyOptional({ maxLength: 50, example: 'ubind' })
+  @IsOptional() @IsString() @MaxLength(50)
+  opcode?: string;
+
+  @ApiPropertyOptional({ maxLength: 50, example: 'flare' })
+  @IsOptional() @IsString() @MaxLength(50)
+  unit?: string;
+
+  @ApiPropertyOptional({ maxLength: 64, example: 'logic-processor' })
+  @IsOptional() @IsString() @MaxLength(64)
+  processor_type?: string;
+}
+
+export class ResourceV2LogicSearchItemDto {
+  @ApiProperty() id!: number;
+  @ApiProperty({ format: 'uuid' }) resource_public_id!: string;
+  @ApiProperty() resource_url!: string;
+  @ApiProperty() title!: string;
+  @ApiProperty({ format: 'uuid' }) version_public_id!: string;
+  @ApiProperty({ nullable: true, type: String }) version!: string | null;
+  @ApiProperty({ nullable: true, type: 'object' }) author!: Record<string, unknown> | null;
+  @ApiProperty() processor_type!: string;
+  @ApiProperty({ type: 'object' }) position!: { x: number | null; y: number | null };
+  @ApiProperty() instruction_count!: number;
+  @ApiProperty({ nullable: true, type: Number }) estimated_cycle_ticks!: number | null;
+  @ApiProperty({ type: [String] }) opcodes!: string[];
+  @ApiProperty({ type: [String] }) referenced_units!: string[];
+  @ApiProperty({ type: [String] }) referenced_blocks!: string[];
+  @ApiProperty() has_warnings!: boolean;
+  @ApiProperty({ type: 'array', items: { type: 'object' } }) findings!: Array<Record<string, unknown>>;
+  @ApiProperty({ nullable: true, type: String }) source_excerpt!: string | null;
+}
+
+export class ResourceV2LogicSearchPageDto {
+  @ApiProperty({ type: [ResourceV2LogicSearchItemDto] }) items!: ResourceV2LogicSearchItemDto[];
+  @ApiProperty({ type: ResourceV2CursorDto }) pagination!: ResourceV2CursorDto;
 }
 
 export class ResourceV2ContentSearchQueryDto extends ResourceV2PageQueryDto {
@@ -613,9 +717,11 @@ export class ResourceV2WavePageDto extends ResourceV2PageDto {
 export class ResourceV2DiffDto {
   @ApiProperty({ nullable: true, type: String, format: 'uuid' }) from_version_public_id!: string | null;
   @ApiProperty({ nullable: true, type: String, format: 'uuid' }) to_version_public_id!: string | null;
-  @ApiProperty({ example: 'ready' }) status!: string;
+  @ApiProperty({ enum: ['completed', 'metadata_only', 'computing', 'unavailable', 'disabled', 'failed'], example: 'completed' }) status!: string;
   @ApiProperty({ nullable: true, type: String }) parser_version!: string | null;
   @ApiProperty({ nullable: true, type: 'object', description: 'Null when no stored diff exists for this version pair.' }) diff!: Record<string, unknown> | null;
+  @ApiPropertyOptional({ nullable: true, type: Number, description: 'status=computing 时建议的重试间隔。' }) retry_after_ms?: number | null;
+  @ApiPropertyOptional({ nullable: true, type: String }) reason?: string | null;
 }
 
 export class ResourceV2WorkbenchPermissionsDto {
