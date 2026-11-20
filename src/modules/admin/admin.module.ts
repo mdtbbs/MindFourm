@@ -17,6 +17,7 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
 import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit } from '@entities/index';
 import { EventsModule } from '../events/events.module';
 import { PostsModule } from '../posts/posts.module';
+import { TimelapseRefsModule } from '../timelapses/timelapse-refs.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PostsModule } from '../posts/posts.module';
     PointsModule,
     AdminNotificationsModule,
     PostsModule,
+    TimelapseRefsModule,
     EventsModule,
   ],
   controllers: [AdminController, OperationAuditController],

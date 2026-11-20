@@ -5,6 +5,7 @@ import { RichVideoCard } from './rich-video-card';
 import { RichAttachmentCard } from './rich-attachment-card';
 import { RichQuoteCard } from './rich-quote-card';
 import { RichHtmlBlock } from './rich-html-block';
+import { RichBattleReportCard } from './rich-battle-report-card';
 
 /**
  * The HTML block shows its rendered result in the editor.
@@ -27,7 +28,14 @@ export function RichHtmlBlockNodeView({ node }: NodeViewProps) {
 export function RichCardNodeView({ node }: NodeViewProps) {
   const attrs = node.attrs;
   return <NodeViewWrapper contentEditable={false}>
-    {node.type.name === 'video' ? <RichVideoCard attrs={attrs} editing />
+    {node.type.name === 'battleReport'
+      ? <RichBattleReportCard
+        publicId={typeof attrs.timelapsePublicId === 'string' ? attrs.timelapsePublicId : null}
+        mapName={typeof attrs.mapName === 'string' ? attrs.mapName : ''}
+        maxWave={Number.isFinite(Number(attrs.maxWave)) ? Number(attrs.maxWave) : 0}
+        editing
+      />
+      : node.type.name === 'video' ? <RichVideoCard attrs={attrs} editing />
       : node.type.name === 'attachment' ? <RichAttachmentCard id={attrs.attachmentId || undefined} draftToken={attrs.draftToken || undefined} editing />
       : <RichQuoteCard postId={attrs.postId} replyId={node.type.name === 'replyQuote' ? attrs.replyId : undefined} editing />}
   </NodeViewWrapper>;

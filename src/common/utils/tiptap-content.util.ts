@@ -13,10 +13,10 @@ const BLOCK_NODES = new Set([
   'doc', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList',
   'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'table',
   'tableRow', 'tableHeader', 'tableCell', 'spoiler', 'video', 'attachment',
-  'postQuote', 'replyQuote', 'htmlBlock',
+  'postQuote', 'replyQuote', 'htmlBlock', 'battleReport',
 ]);
 const INLINE_NODES = new Set(['text', 'hardBreak', 'image', 'mention', 'customEmoji']);
-const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock']);
+const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport']);
 const MARKS = new Set(['bold', 'italic', 'strike', 'underline', 'code', 'link', 'textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const V2_MARKS = new Set(['textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const MAX_NODES = 5000;
@@ -27,6 +27,10 @@ const HIGHLIGHTS = new Set(['yellow', 'green', 'blue', 'pink', 'orange']);
 const BLOCK_ALIGNMENTS = new Set(['left', 'center', 'right', 'justify']);
 const USERNAME_RE = /^[\p{L}\p{N}_-]{1,64}$/u;
 const SHORTCODE_RE = /^[a-z0-9_+-]{1,48}$/;
+/** 基地延时战报公开 ID：服务端生成的 UUID（第 3 段版本 1-8，第 4 段变体 8-11）。 */
+const TIMELAPSE_PUBLIC_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** 每篇正文最多引用 3 张战报卡。 */
+const MAX_BATTLE_REPORTS = 3;
 
 export class ContentSchemaError extends ApiV1Exception {
   constructor(code: string, message: string, details: Record<string, unknown>) {
@@ -237,6 +241,19 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
         result.draftToken = token;
       } else invalid(path, type, 'attrs', version);
       break;
+    case 'battleReport': {
+      // timelapsePublicId 是节点身份，必须由服务端可校验的 UUID 承载；
+      // mapName/maxWave 是服务端回填的投影字段，客户端提交值会在写入事务里被覆盖，
+      // 这里仍然做范围校验，避免把非法值存进正文。
+      strictKeys(source, ['timelapsePublicId', 'mapName', 'maxWave'], path, type, version);
+      textAttr('timelapsePublicId', 36, true);
+      if (!TIMELAPSE_PUBLIC_ID_RE.test(String(result.timelapsePublicId))) invalid(path + '.timelapsePublicId', type, 'timelapsePublicId', version);
+      // UUID 大小写不敏感；统一存小写，保证与数据库 public_id 及引用映射一致。
+      result.timelapsePublicId = String(result.timelapsePublicId).toLowerCase();
+      textAttr('mapName', 160);
+      if (source.maxWave !== undefined && source.maxWave !== null) intAttr('maxWave', 0, 1_000_000);
+      break;
+    }
     case 'htmlBlock': {
       // `text` is a server projection: whatever a client sends is replaced by the
       // plain text of the sanitized fragment, so the two can never disagree.
@@ -263,11 +280,24 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
   return Object.keys(result).length ? result : undefined;
 }
 
+/**
+ * 战报卡的摘要文本（不含方括号，供 HTML / 纯文本 / Markdown 三种投影复用）。
+ *
+ * `mapName` 和 `maxWave` 由服务端按数据库战报回填；缺省时只输出
+ * `基地延时战报`。`maxWave` 为 0 时视为“未统计”，不拼出“最高 0 波”。
+ */
+export function battleReportSummaryText(attrs: Record<string, unknown> | undefined): string {
+  const mapName = typeof attrs?.mapName === 'string' && attrs.mapName.trim() ? attrs.mapName : '';
+  const maxWave = Number.isSafeInteger(attrs?.maxWave) && Number(attrs?.maxWave) > 0 ? Number(attrs?.maxWave) : null;
+  const details = [...(mapName ? [mapName] : []), ...(maxWave === null ? [] : ['最高 ' + maxWave + ' 波'])];
+  return details.length ? '基地延时战报: ' + details.join(' · ') : '基地延时战报';
+}
+
 function childAllowed(parent: string, child: string): boolean {
-  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'].includes(child);
+  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport'].includes(child);
   if (parent === 'paragraph' || parent === 'heading') return INLINE_NODES.has(child);
   if (parent === 'blockquote') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'htmlBlock'].includes(child);
-  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'].includes(child);
+  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport'].includes(child);
   if (parent === 'bulletList' || parent === 'orderedList') return child === 'listItem';
   if (parent === 'taskList') return child === 'taskItem';
   if (parent === 'codeBlock') return child === 'text';
@@ -288,6 +318,7 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
   let nodeCount = 0;
   let textLength = 0;
   let htmlBlocks = 0;
+  let battleReports = 0;
   const mentions = new Set<number>();
   const visit = (value: unknown, depth: number, path: string, parent?: string, inSpoiler = false): Record<string, unknown> => {
     if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 32 || ++nodeCount > MAX_NODES) invalid(path, undefined, undefined, version);
@@ -307,7 +338,10 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
       if (textLength > MAX_TEXT_LENGTH) invalid(path + '.text', type, 'text', version);
       output.text = node.text;
     }
+    // battleReport 是 atom，没有 attrs 就没有可渲染的身份，必须拒绝。
+    if (type === 'battleReport' && node.attrs === undefined) invalid(path + '.attrs', type, 'attrs', version);
     if (node.attrs !== undefined) output.attrs = normalizeAttrs(type, node.attrs, path + '.attrs', version);
+    if (type === 'battleReport' && ++battleReports > MAX_BATTLE_REPORTS) throw schemaError('BATTLE_REPORT_LIMIT_EXCEEDED', '每篇正文最多包含 3 个基地延时战报', path, type, undefined, version);
     if (node.marks !== undefined) {
       if (type !== 'text' || !Array.isArray(node.marks) || node.marks.length > 12) invalid(path + '.marks', type, 'marks', version);
       output.marks = node.marks.map((rawMark, index) => {
@@ -368,6 +402,9 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
       if (node.content?.[0]?.type !== 'paragraph') invalid(path + '.content[0]', type, 'content', version);
     }
     if (type === 'doc' && depth !== 0) invalid(path, type, 'type', version);
+    // battleReport 是 atom：空 content 数组在规范化时丢弃；非空 content 已在上面的
+    // 通用检查（非容器节点不得携带子节点）中按 INVALID_CONTENT_JSON 拒绝。
+    if (type === 'battleReport') delete output.content;
     if (type === 'text' && node.content !== undefined) invalid(path + '.content', type, 'content', version);
     if (type === 'attachment' && (output.attrs as any)?.draftToken && !options.allowDraftAttachments) throw schemaError('ATTACHMENT_DRAFT_UNRESOLVED', '附件草稿必须在发布时绑定到正文', path + '.attrs.draftToken', type, 'draftToken', version);
     return output;
@@ -413,6 +450,54 @@ export function collectTiptapMentionIds(input: unknown): number[] {
   };
   visit(document as unknown as Record<string, any>);
   return [...ids];
+}
+
+/**
+ * 收集正文里引用的战报公开 ID（去重，保持出现顺序）。
+ *
+ * 先按 Schema v2 规范化，因此非法 UUID、未知属性、超量战报都会在这里
+ * 以 400 ContentSchemaError 拒绝；帖子写入事务随后按这些 ID 查询数据库。
+ * 允许草稿附件令牌，便于与附件绑定流程共用同一次写入。
+ */
+export function collectBattleReportPublicIds(input: unknown): string[] {
+  const document = normalizeTiptapDocument(input, { schemaVersion: 2, allowDraftAttachments: true });
+  const ids = new Set<string>();
+  const visit = (node: Record<string, any>) => {
+    if (node.type === 'battleReport') ids.add(String(node.attrs.timelapsePublicId));
+    for (const child of node.content || []) visit(child);
+  };
+  visit(document as unknown as Record<string, any>);
+  return [...ids];
+}
+
+export interface BattleReportMetadata {
+  mapName: string;
+  maxWave: number;
+}
+
+/**
+ * 用服务端查询到的战报元数据覆盖正文中的 `mapName` / `maxWave`。
+ *
+ * 客户端提交的这两个属性一律视为不可信：命中元数据时写入数据库值，
+ * 未命中（战报不存在或不可见）时写入空字符串和 0。返回值经过第二次
+ * 规范化，确保仍是合法 Schema v2 文档。
+ */
+export function applyBattleReportMetadata(input: unknown, metadata: Map<string, BattleReportMetadata>): TiptapDocument {
+  const document = normalizeTiptapDocument(input, { schemaVersion: 2, allowDraftAttachments: true });
+  const visit = (node: Record<string, any>) => {
+    if (node.type === 'battleReport') {
+      const entry = metadata.get(String(node.attrs.timelapsePublicId));
+      // 数据库列本身就是 VARCHAR(160) / UNSIGNED INT，这里再做一次防御性收敛，
+      // 避免异常元数据让整个帖子写入因 400 失败。
+      const mapName = typeof entry?.mapName === 'string' ? entry.mapName.slice(0, 160) : '';
+      const rawMaxWave = entry?.maxWave;
+      const maxWave = Number.isSafeInteger(rawMaxWave) && Number(rawMaxWave) >= 0 && Number(rawMaxWave) <= 1_000_000 ? Number(rawMaxWave) : 0;
+      node.attrs = { timelapsePublicId: node.attrs.timelapsePublicId, mapName, maxWave };
+    }
+    for (const child of node.content || []) visit(child);
+  };
+  visit(document as unknown as Record<string, any>);
+  return normalizeTiptapDocument(document, { schemaVersion: 2, allowDraftAttachments: true });
 }
 
 function escapeHtml(value: string): string {
@@ -478,6 +563,12 @@ function renderNode(raw: Record<string, any>): string {
       return '<a data-rich-video-provider="' + escapeHtml(raw.attrs.provider) + '"' + (raw.attrs.videoId ? ' data-rich-video-id="' + escapeHtml(raw.attrs.videoId) + '"' : '') + ' href="' + escapeHtml(href) + '">' + escapeHtml(raw.attrs.title || ('播放 ' + raw.attrs.provider + ' 视频')) + '</a>';
     }
     case 'attachment': return '<a data-attachment-id="' + raw.attrs.attachmentId + '" href="/api/attachments/' + raw.attrs.attachmentId + '/download">附件 #' + raw.attrs.attachmentId + '</a>';
+    case 'battleReport': {
+      // 只输出公开 ID 与摘要文本：视频/封面地址由前端按 ID 调用 API 获取，
+      // 未通过审核的战报对非作者返回 404，投影里绝不出现流地址。
+      const publicId = String(raw.attrs.timelapsePublicId);
+      return '<figure data-battle-report="1" data-timelapse-public-id="' + escapeHtml(publicId) + '"><a href="/timelapses/' + escapeHtml(publicId) + '">' + escapeHtml(battleReportSummaryText(raw.attrs)) + '</a></figure>';
+    }
     case 'htmlBlock': return raw.attrs.html + '\n';
     case 'postQuote': return '<aside data-quote-type="post"><a href="/posts/' + raw.attrs.postId + '">引用帖子 #' + raw.attrs.postId + '</a></aside>';
     case 'replyQuote': return '<aside data-quote-type="reply" data-post-id="' + raw.attrs.postId + '" data-reply-id="' + raw.attrs.replyId + '"><a href="/posts/' + raw.attrs.postId + '#reply-' + raw.attrs.replyId + '">引用回复 #' + raw.attrs.replyId + '</a></aside>';
@@ -645,6 +736,7 @@ export function serializeTiptapToMarkdown(input: unknown): string {
       case 'spoiler': return '> [!SPOILER] ' + node.attrs.title + '\n' + children.trim().split('\n').map((line: string) => '> ' + line).join('\n') + '\n\n';
       case 'video': return (node.attrs.src || '[' + node.attrs.provider + ' video ' + node.attrs.videoId + ']') + '\n\n';
       case 'attachment': return '[Attachment #' + (node.attrs.attachmentId || 'draft') + ']\n\n';
+      case 'battleReport': return '[' + battleReportSummaryText(node.attrs) + '](/timelapses/' + node.attrs.timelapsePublicId + ')\n\n';
       case 'postQuote': return '[Quoted post #' + node.attrs.postId + '](/posts/' + node.attrs.postId + ')\n\n';
       case 'replyQuote': return '[Quoted reply #' + node.attrs.replyId + '](/posts/' + node.attrs.postId + '#reply-' + node.attrs.replyId + ')\n\n';
       case 'tableRow':
@@ -667,6 +759,7 @@ export function extractTiptapText(input: unknown): string {
     if (node.type === 'customEmoji') return ':' + node.attrs.shortcode + ':';
     if (node.type === 'video') return node.attrs.title || (node.attrs.provider + ' video');
     if (node.type === 'attachment') return '[Attachment ' + (node.attrs.attachmentId || 'draft') + ']';
+    if (node.type === 'battleReport') return '[' + battleReportSummaryText(node.attrs) + ']';
     if (node.type === 'postQuote') return '[Quoted post #' + node.attrs.postId + ']';
     if (node.type === 'replyQuote') return '[Quoted reply #' + node.attrs.replyId + ']';
     if (node.type === 'taskItem') return (node.attrs?.checked ? '[x] ' : '[ ] ') + (node.content || []).map(visit).join('\n');

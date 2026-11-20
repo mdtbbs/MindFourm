@@ -3,6 +3,7 @@ tools/mindustry-renderer/build/
 renderer-runtime/
 data/
 .env
+timelapse-worker.env
 *.log
 .DS_Store
 Thumbs.db

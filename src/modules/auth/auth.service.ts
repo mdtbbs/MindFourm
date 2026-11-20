@@ -148,6 +148,7 @@ const FORUM_OAUTH_SCOPES = [
   'notification.read', 'message.read', 'message.write', 'friends.read',
   'presence.read', 'presence.write', 'multiplayer.read', 'multiplayer.write',
   'game_content.saves.read', 'game_content.saves.write', 'game_content.saves.delete',
+  'timelapse.read', 'timelapse.write',
 ];
 
 @Injectable()

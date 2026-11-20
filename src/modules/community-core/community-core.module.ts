@@ -52,6 +52,7 @@ import { SocialModule } from '../social/social.module';
 import { MultiplayerModule } from '../multiplayer/multiplayer.module';
 import { RealtimeGatewayModule } from '../realtime/realtime-gateway.module';
 import { SecurityAccessLogsModule } from '../security-access-logs/security-access-logs.module';
+import { TimelapsesModule } from '../timelapses/timelapses.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { SecurityAccessLogsModule } from '../security-access-logs/security-acces
     UserBlocksModule, ReactionsModule, UploadsModule, FriendsModule, PresenceModule, CapabilitiesModule,
     MediaModule, DownloadsModule, EventsModule, ThreadsModule, CreatorModule, KnowledgeModule, SecurityAccessLogsModule,
     FeedbackModule, NoticesModule, NavigationModule, PortalModule, RealtimeModule, SocialModule, MultiplayerModule, RealtimeGatewayModule,
+    TimelapsesModule,
   ],
 })
 export class CommunityCoreModule {}

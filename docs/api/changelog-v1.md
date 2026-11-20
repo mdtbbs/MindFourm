@@ -1,5 +1,27 @@
 # 公开 API 更新记录
 
+## 2026-11-20 — 基地延时摄影与战报卡
+
+### Added
+
+- `POST /api/v1/timelapses/uploads`：创建延时战报上传会话，返回 `id`、`upload_url`、`expires_at` 与 `max_bytes`；需要 `timelapse.write`。
+- `PUT /api/v1/timelapses/uploads/{id}/file`：以 `application/octet-stream` 上传 `.mreplay.zip` 原始帧包（≤ 25 MiB），返回服务端计算的 `size_bytes` 与 `sha256`。
+- `POST /api/v1/timelapses/{id}/commit`：提交渲染；可选请求字段 `sha256` 用于校验，重复提交幂等返回当前状态。
+- `GET /api/v1/timelapses/{id}`：读取状态、作者、地图/波次/时长、`metrics`、`highlights` 与 `video_url` / `poster_url`。匿名可读已发布战报，携带 Bearer 时需要 `timelapse.read`。
+- `GET /api/v1/timelapses/{id}/video`：返回 H.264 (yuv420p) MP4，支持单段 `Range` 请求与 `206 Partial Content`。
+- `GET /api/v1/timelapses/{id}/poster`：返回最后一帧生成的 WebP 封面。
+- `POST /api/v1/timelapses/{id}/draft-post`：为已生成（`published` / `pending_review`）的战报创建含 `battleReport` 节点的帖子草稿。
+- Rich Content Schema v2 新增块级 `battleReport` 节点：每篇最多 3 个，`timelapsePublicId` 为必填 UUID，`mapName` / `maxWave` 由服务端按战报回填并覆盖客户端提交值。
+- `GET /api/v1/capabilities` 新增 `timelapses_v1`（布尔），仅在 `timelapses_enabled` 打开且存储目录可用时为 `true`。
+- OAuth 权限范围新增 `timelapse.read`（读取已发布或本人可见的战报）与 `timelapse.write`（上传、提交和生成草稿帖）。
+
+### Clarified
+
+- 战报按 `uploading → queued → processing → pending_review → published` 流转；审核驳回进入 `rejected`，渲染失败、超时或队列丢失进入 `failed`。`timelapse_auto_approve_trusted` 打开时，符合条件的可信作者可从 `processing` 直接进入 `published`。
+- 未通过审核或不可见的战报对非作者一律返回 `404 TIMELAPSE_NOT_FOUND`；`battleReport` 的 HTML、纯文本与 Markdown 投影只包含公开 ID 与摘要文本，不包含视频或封面地址。
+- 限额：未绑定任何已发布帖子的战报 ≤ 20 个、每账号每小时 ≤ 3 次、每日 ≤ 10 次、同时处理中 ≤ 1 个；上传会话 24 小时有效，未绑定草稿 30 天后过期，原始帧包在合成完成 24 小时后删除，被已发布帖子引用的战报随帖子永久保留。
+- `.mreplay.zip` 上限 25 MiB、解压 80 MiB、5–180 帧、单帧 ≤ 1024×1024、`metrics.jsonl` 单行 ≤ 4 KiB。
+
 ## 2026-10-30 — 云存档文件级差量上传
 
 ### Added

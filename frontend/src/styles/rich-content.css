@@ -127,3 +127,69 @@
 .rich-html-block--empty { padding: .75rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: .8125rem; }
 /* The editor shows the same rendering; the frame marks where the block begins. */
 .mdtbbs-rich-content--editor .rich-html-block { padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+/* 基地延时战报卡（模块四）。卡片本身是帖子正文的一部分，宽度不超过阅读列；
+ * 视频、倍速、波次跳转与三张 SVG 图表在窄屏下纵向堆叠。 */
+.mdtbbs-rich-content .rich-battle-report-card {
+  display: grid;
+  gap: .75rem;
+  width: 100%;
+  min-width: 0;
+  margin: .8em 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.mdtbbs-rich-content .rich-battle-report-card--placeholder,
+.mdtbbs-rich-content .rich-battle-report-card--editing { color: var(--text-secondary); }
+.mdtbbs-rich-content .rich-battle-report-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-start; justify-content: space-between; }
+.mdtbbs-rich-content .rich-battle-report-heading { min-width: 0; }
+.mdtbbs-rich-content .rich-battle-report-eyebrow { font-size: .72rem; letter-spacing: .08em; color: var(--text-muted); text-transform: uppercase; }
+.mdtbbs-rich-content .rich-battle-report-title { margin: .15em 0; font-size: 1.1em; }
+.mdtbbs-rich-content .rich-battle-report-meta { display: flex; flex-wrap: wrap; gap: .35em .9em; margin: 0; font-size: .82em; color: var(--text-secondary); }
+.mdtbbs-rich-content .rich-battle-report-head-actions { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+.mdtbbs-rich-content .rich-battle-report-status { padding: 2px 8px; border-radius: 999px; font-size: .75em; border: 1px solid currentColor; }
+.mdtbbs-rich-content .rich-battle-report-status--review { color: #b45309; }
+.mdtbbs-rich-content .rich-battle-report-status--error { color: #b91c1c; }
+.mdtbbs-rich-content .rich-battle-report-link { font-size: .82em; color: var(--brand-primary, #2f80ed); text-decoration: none; }
+.mdtbbs-rich-content .rich-battle-report-link:hover { text-decoration: underline; }
+.mdtbbs-rich-content .rich-battle-report-review-note { margin: 0; font-size: .82em; color: var(--text-secondary); }
+.mdtbbs-rich-content .rich-battle-report-stage { display: flex; width: 100%; aspect-ratio: 16 / 9; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-sm); background: #1e1e2e; }
+.mdtbbs-rich-content .rich-battle-report-stage video { width: 100%; height: 100%; background: #000; }
+.mdtbbs-rich-content .rich-battle-report-stage--empty { aspect-ratio: auto; min-height: 96px; color: #cdd6f4; font-size: .9em; }
+.mdtbbs-rich-content .rich-battle-report-player-controls { display: grid; gap: .5rem; }
+.mdtbbs-rich-content .rich-battle-report-controls-label { font-size: .78em; color: var(--text-muted); }
+.mdtbbs-rich-content .rich-battle-report-rate-buttons,
+.mdtbbs-rich-content .rich-battle-report-wave-buttons { display: flex; flex-wrap: wrap; gap: .35rem; }
+.mdtbbs-rich-content .rich-battle-report-rate-buttons button,
+.mdtbbs-rich-content .rich-battle-report-wave-buttons button {
+  padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text); font-size: .78em; cursor: pointer;
+}
+.mdtbbs-rich-content .rich-battle-report-rate-buttons button[aria-pressed='true'] { border-color: var(--brand-primary, #2f80ed); color: var(--brand-primary, #2f80ed); }
+.mdtbbs-rich-content .rich-battle-report-wave-jumps { display: grid; gap: .35rem; }
+.mdtbbs-rich-content .rich-battle-report-wave-track { position: relative; height: 5px; border-radius: 999px; background: var(--border); }
+.mdtbbs-rich-content .rich-battle-report-wave-tick { position: absolute; top: -2px; width: 2px; height: 9px; background: currentColor; opacity: .55; }
+.mdtbbs-rich-content .rich-battle-report-highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .5rem; }
+.mdtbbs-rich-content .rich-battle-report-highlight { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg, transparent); }
+.mdtbbs-rich-content .rich-battle-report-highlight-label { display: block; font-size: .72em; color: var(--text-muted); }
+.mdtbbs-rich-content .rich-battle-report-highlight-value { display: block; margin-top: .15em; font-size: 1.02em; }
+.mdtbbs-rich-content .rich-battle-report-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
+.mdtbbs-rich-content .rich-battle-report-chart { min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.mdtbbs-rich-content .rich-battle-report-chart--wide { grid-column: 1 / -1; }
+.mdtbbs-rich-content .rich-battle-report-chart-title { font-size: .82em; font-weight: 600; margin-bottom: .25em; }
+.mdtbbs-rich-content .rich-battle-report-chart-legend { display: flex; flex-wrap: wrap; gap: .25em .85em; margin: 0 0 .35em; padding: 0; list-style: none; font-size: .75em; color: var(--text-secondary); }
+.mdtbbs-rich-content .rich-battle-report-chart-legend li { display: inline-flex; gap: .35em; align-items: center; }
+.mdtbbs-rich-content .rich-battle-report-chart-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.mdtbbs-rich-content .rich-battle-report-chart-value { color: var(--text); font-variant-numeric: tabular-nums; }
+.mdtbbs-rich-content .rich-battle-report-chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.mdtbbs-rich-content .rich-battle-report-chart-empty { margin: 0; padding: .75em 0; font-size: .8em; color: var(--text-muted); }
+.mdtbbs-rich-content .rich-battle-report-foot { display: flex; flex-wrap: wrap; gap: .35em .9em; font-size: .76em; color: var(--text-muted); }
+.mdtbbs-rich-content .rich-battle-report-card--editing { border-style: dashed; }
+.mdtbbs-rich-content .rich-battle-report-editing-hint { margin: .25em 0 0; font-size: .82em; color: var(--text-secondary); }
+
+@media (max-width: 640px) {
+  .mdtbbs-rich-content .rich-battle-report-card { padding: 10px; }
+  .mdtbbs-rich-content .rich-battle-report-charts { grid-template-columns: 1fr; }
+}

@@ -25,6 +25,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "start:timelapse-worker": "node dist/workers/timelapse-worker.js",
+    "dev:timelapse-worker": "nest start --watch --entryFile workers/timelapse-worker",
     "test": "node scripts/run-jest.cjs",
     "test:watch": "jest --watch",
     "review:claude": "node scripts/claude-review.mjs",

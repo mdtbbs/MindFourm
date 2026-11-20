@@ -1,4 +1,5 @@
 import { HtmlDocumentProjection1720000370000 } from './1720000370000-HtmlDocumentProjection';
+import { TimelapseBattleReports1720000440000 } from './1720000440000-TimelapseBattleReports';
 import { MultiplayerVisibilityJoinPolicySplit1720000380000 } from './1720000380000-MultiplayerVisibilityJoinPolicySplit';
 import { MultiplayerInviteLimits1720000390000 } from './1720000390000-MultiplayerInviteLimits';
 import { CloudSaveManifestSnapshots1720000400000 } from './1720000400000-CloudSaveManifestSnapshots';
@@ -181,4 +182,5 @@ export const migrations = [
   MultiplayerVisibilityJoinPolicySplit1720000380000,
   MultiplayerInviteLimits1720000390000,
   CloudSaveManifestSnapshots1720000400000,
+  TimelapseBattleReports1720000440000,
 ];

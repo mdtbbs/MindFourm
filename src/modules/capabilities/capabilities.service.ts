@@ -30,6 +30,8 @@ export type ClientCapabilities = {
   cloud_saves_v1: boolean;
   /** Generic Blob API: enabled by settings and backed by a writable path. */
   blobs_v1: boolean;
+  /** 基地延时摄影：开关打开且本地存储目录可用。 */
+  timelapses_v1: boolean;
   client: { minimum_supported_version: string | null; recommended_version: string | null };
   resource_read: boolean;
   resource_files: boolean;
@@ -88,7 +90,7 @@ export class CapabilitiesService {
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
       notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
-      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled] = await Promise.all([
+      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, timelapsesEnabled, timelapsePath, resourceCenterEnabled] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -107,6 +109,8 @@ export class CapabilitiesService {
       this.settingsService.get('cloud_saves_storage_path'),
       this.settingsService.getBoolean('blobs_enabled', false),
       this.settingsService.get('blobs_storage_path'),
+      this.settingsService.getBoolean('timelapses_enabled', false),
+      this.settingsService.get('timelapse_storage_path'),
       this.settingsService.getBoolean('feature_resources_enabled', true),
     ]);
     const cloudSavesAvailable = cloudSavesEnabled && isAbsoluteStoragePath(
@@ -114,6 +118,9 @@ export class CapabilitiesService {
     );
     const blobsAvailable = blobsEnabled && isAbsoluteStoragePath(
       blobsPath || process.env.BLOBS_STORAGE_PATH || resolve(process.cwd(), 'storage', 'blobs'),
+    );
+    const timelapsesAvailable = timelapsesEnabled && isAbsoluteStoragePath(
+      timelapsePath || process.env.TIMELAPSE_STORAGE_PATH || resolve(process.cwd(), 'storage', 'timelapses'),
     );
     const resourceCenterAvailable = Boolean(this.siteConfig.current.features.resources && resourceCenterEnabled && resourceRead);
     const editorReadiness = resourceCenterAvailable && resourceUpload
@@ -158,6 +165,7 @@ export class CapabilitiesService {
       },
       cloud_saves_v1: cloudSavesAvailable,
       blobs_v1: blobsAvailable,
+      timelapses_v1: timelapsesAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
       resource_read: resourceRead,
       resource_files: resourceRead,

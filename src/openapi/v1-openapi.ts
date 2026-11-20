@@ -21,6 +21,7 @@ import { SocialModule } from '../modules/social/social.module';
 import { MultiplayerModule } from '../modules/multiplayer/multiplayer.module';
 import { PresenceModule } from '../modules/presence/presence.module';
 import { RealtimeGatewayModule } from '../modules/realtime/realtime-gateway.module';
+import { TimelapsesModule } from '../modules/timelapses/timelapses.module';
 import { GameSavesModule } from '../modules/game-saves/game-saves.module';
 import { BlobsModule } from '../modules/blobs/blobs.module';
 import { PacksModule } from '../modules/packs/packs.module';
@@ -261,6 +262,7 @@ export function createInternalV1OpenApiDocument(app: INestApplication): OpenAPIO
       MultiplayerModule,
       PresenceModule,
       RealtimeGatewayModule,
+      TimelapsesModule,
     ],
   });
 

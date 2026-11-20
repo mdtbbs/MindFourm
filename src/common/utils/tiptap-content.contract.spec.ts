@@ -51,6 +51,7 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
         { type: 'spoiler', attrs: { title: '答案', open: false }, content: [paragraph('hidden'), { type: 'video', attrs: { provider: 'bilibili', videoId: 'BV1xx411c7mD', title: '' } }, { type: 'attachment', attrs: { draftToken: 'A'.repeat(43) } }] },
         { type: 'postQuote', attrs: { postId: 13 } },
         { type: 'replyQuote', attrs: { postId: 13, replyId: 14 } },
+        { type: 'battleReport', attrs: { timelapsePublicId: '123e4567-e89b-42d3-a456-426614174000' } },
         // Block alignment: the editor's BlockAlign extension and the API validator
         // both have to accept the same set.
         ...['center', 'right', 'justify'].map(aligned),
@@ -116,6 +117,7 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
     const rendered = renderTiptapDocument(canonical, { schemaVersion: 2, allowDraftAttachments: true });
     expect(rendered).toContain('<details');
     expect(rendered).toContain('<p data-align="center" style="text-align:center">');
+    expect(rendered).toContain('<figure data-battle-report="1" data-timelapse-public-id="123e4567-e89b-42d3-a456-426614174000">');
   });
 
   it('round-trips Markdown task lists and tables through block-shaped table cells', () => {
@@ -160,6 +162,7 @@ describe('editor schema is no wider than the API schema', () => {
     postQuote: () => ({ type: 'postQuote', attrs: { postId: 1 } }),
     replyQuote: () => ({ type: 'replyQuote', attrs: { postId: 1, replyId: 2 } }),
     htmlBlock: () => ({ type: 'htmlBlock', attrs: { html: '<p>block</p>' } }),
+    battleReport: () => ({ type: 'battleReport', attrs: { timelapsePublicId: '123e4567-e89b-42d3-a456-426614174000' } }),
     image: () => ({ type: 'image', attrs: { src: 'https://cdn.example.org/x.png', alt: 'x' } }),
     mention: () => ({ type: 'mention', attrs: { userId: 1, username: 'alice' } }),
     customEmoji: () => ({ type: 'customEmoji', attrs: { id: 1, name: 'emoji', shortcode: 'sun' } }),
@@ -170,6 +173,7 @@ describe('editor schema is no wider than the API schema', () => {
     bulletList: (n) => n, orderedList: (n) => n, blockquote: (n) => n, table: (n) => n, taskList: (n) => n,
     paragraph: (n) => n, heading: (n) => n, codeBlock: (n) => n, horizontalRule: (n) => n, spoiler: (n) => n,
     video: (n) => n, attachment: (n) => n, postQuote: (n) => n, replyQuote: (n) => n, htmlBlock: (n) => n,
+    battleReport: (n) => n,
     listItem: (n) => ({ type: 'bulletList', content: [n] }),
     taskItem: (n) => ({ type: 'taskList', content: [n] }),
     tableRow: (n) => ({ type: 'table', content: [n] }),
@@ -212,7 +216,7 @@ describe('editor schema is no wider than the API schema', () => {
    * after some prefix the expression allows, the editor can really produce it.
    */
   const BLOCK_PREFIXES = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
-    'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'];
+    'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport'];
 
   function allowsChild(schema: ReturnType<typeof getSchema>, parent: string, child: string): boolean {
     let match = schema.nodes[parent].contentMatch;
@@ -251,6 +255,7 @@ describe('editor schema is no wider than the API schema', () => {
       ['video in blockquote', { type: 'doc', content: [{ type: 'blockquote', content: [SAMPLES.video()] }] }],
       ['attachment in blockquote', { type: 'doc', content: [{ type: 'blockquote', content: [SAMPLES.attachment()] }] }],
       ['postQuote in blockquote', { type: 'doc', content: [{ type: 'blockquote', content: [SAMPLES.postQuote()] }] }],
+      ['battleReport in blockquote', { type: 'doc', content: [{ type: 'blockquote', content: [SAMPLES.battleReport()] }] }],
     ];
     for (const [name, document] of rejected) {
       expect([name, accepts(document)]).toEqual([name, false]);

@@ -16,8 +16,8 @@
 /** Blocks allowed inside `listItem`, `taskItem`, `tableCell`, `tableHeader` and `spoiler`. */
 export const CONTAINER_BLOCKS = [
   'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
-  'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote',
-  'htmlBlock',
+  'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'battleReport',
+  'postQuote', 'replyQuote', 'htmlBlock',
 ] as const;
 
 /** `doc` and `blockquote` accept everything above plus a spoiler. */

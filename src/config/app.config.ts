@@ -107,6 +107,13 @@ export const appConfig = () => ({
     blobUploadMinutes: parsePositiveInt(process.env.CLOUD_SAVES_BLOB_UPLOAD_MINUTES, 10),
     storagePath: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
   },
+  timelapse: {
+    storagePath: process.env.TIMELAPSE_STORAGE_PATH || resolve(process.cwd(), 'storage', 'timelapses'),
+    // Worker 与控制面共享的 HMAC 密钥；未配置时内部回调接口拒绝所有请求。
+    workerSecret: process.env.TIMELAPSE_WORKER_SECRET || '',
+    maxSourceBytes: parsePositiveInt(process.env.TIMELAPSE_MAX_SOURCE_BYTES, 26214400),
+    internalUrlTtlSeconds: parsePositiveInt(process.env.TIMELAPSE_INTERNAL_URL_TTL_SECONDS, 3600),
+  },
   forge: {
     baseUrl: process.env.MDT_FORGE_URL || '',
     apiKey: process.env.MDT_FORGE_API_KEY || '',
