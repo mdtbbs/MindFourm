@@ -31,6 +31,8 @@
 | --- | --- | --- | --- |
 | `from_version_public_id` | 字符串（UUID） | 否 | Source version public UUID. If omitted, the previous published version is selected. |
 | `to_version_public_id` | 字符串（UUID） | 否 | Target version public UUID. If omitted, the recommended/latest published version is selected. |
+| `offset_x` | 数字 | 否 | 蓝图坐标对齐微调；非 0 时不写入缓存；最小 -127；最大 127；默认 0 |
+| `offset_y` | 数字 | 否 | 蓝图坐标对齐微调；非 0 时不写入缓存；最小 -127；最大 127；默认 0 |
 
 ## 响应
 
@@ -53,6 +55,8 @@ HTTP 状态码：
     "diff": {}, // Null when no stored diff exists for this version pair.
     "from_version_public_id": "string",
     "parser_version": "string",
+    "reason": "string",
+    "retry_after_ms": 0.0, // status=computing 时建议的重试间隔。
     "status": "string",
     "to_version_public_id": "string"
   },
@@ -69,6 +73,6 @@ HTTP 状态码：
 ```bash
 # 可选：带上 Bearer 时按账号权限返回
 curl --fail-with-body \
-  "$FORUM_BASE_URL/api/v1/resources/mods/{id}/diff?from_version_public_id=<from_version_public_id>&to_version_public_id=<to_version_public_id>" \
+  "$FORUM_BASE_URL/api/v1/resources/mods/{id}/diff?from_version_public_id=<from_version_public_id>&to_version_public_id=<to_version_public_id>&offset_x=<offset_x>&offset_y=<offset_y>" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```

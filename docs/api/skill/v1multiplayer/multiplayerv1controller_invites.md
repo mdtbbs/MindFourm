@@ -15,24 +15,54 @@
 
 **地址：** `$FORUM_BASE_URL/api/v1/multiplayer/invites`
 
+### 查询参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `page` | 数字 | 否 | 页码，从 1 开始；最小 1 |
+| `limit` | 数字 | 否 | 每页邀请数，最大 50；最小 1；最大 50 |
+
 ## 响应
 
 HTTP 状态码：
 
 | 状态 | 说明 |
 | --- | --- |
+| `200` | 标准成功信封；data 是数组，分页摘要位于 meta.pagination。 |
 | `401` | 需要有效的 MindAuth access token 或 MDTBBS 登录会话。 |
 | `403` | 访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。 |
 | `default` | Public V1 error envelope（公开 V1 错误响应结构；见 [errors-v1.md](../errors-v1.md)） |
 
-> 契约未声明成功响应：该接口是否可用、返回什么，取决于站点策略与运行时状态。
+**响应结构：** V1MultiplayerInvitesGetResponse
 
-调用方应按状态码分支处理，不要假设返回 JSON 结构。
+```json
+{
+  "data": [{
+    "expires_at": "string",
+    "invite_id": "string",
+    "sender_user_id": 0,
+    "session": {},
+    "session_id": "string",
+    "status": "string",
+    "target_user_id": 0
+  }],
+  "meta": {
+    "pagination": {
+      "has_more": false,
+      "limit": 0,
+      "page": 0,
+      "total": 0,
+      "total_pages": 0
+    },
+    "request_id": "string"
+  }
+}
+```
 
 ## 调用示例
 
 ```bash
 curl --fail-with-body \
-  "$FORUM_BASE_URL/api/v1/multiplayer/invites" \
+  "$FORUM_BASE_URL/api/v1/multiplayer/invites?page=<page>&limit=<limit>" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```

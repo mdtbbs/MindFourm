@@ -35,7 +35,7 @@ HTTP 状态码：
 ```json
 {
   "avatar_status": "string", // 头像审核状态。
-  "avatar_url": "string", // 头像 URL。
+  "avatar_url": "string", // 头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。
   "bio": "string", // 个人简介。
   "created_at": "string", // 账号创建时间。
   "email_verified": false, // 邮箱是否已验证。

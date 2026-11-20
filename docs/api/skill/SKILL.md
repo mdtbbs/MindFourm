@@ -65,6 +65,17 @@ requires:
 | --- | --- |
 | [DiscoverV1Controller_getSummary](./v1discover/discoverv1controller_getsummary.md) | GET /v1/discover |
 
+### v1EditorTools
+
+| 接口 | 说明 |
+| --- | --- |
+| [getEditorToolStatus](./v1editortools/geteditortoolstatus.md) | 读取在线地图与蓝图编辑器的实际可用状态 |
+| [getMindustryEditorContentCatalog](./v1editortools/getmindustryeditorcontentcatalog.md) | 读取固定 Mindustry 运行时生成的可编辑内容目录 |
+| [createStandaloneMindustryEditorFile](./v1editortools/createstandalonemindustryeditorfile.md) | 通过官方 Mindustry 写入器创建空白蓝图或地图 |
+| [analyzeEditorSourceFile](./v1editortools/analyzeeditorsourcefile.md) | 安全分析普通在线编辑器上传的本地地图或蓝图文件 |
+| [exportStandaloneSchematicEdit](./v1editortools/exportstandaloneschematicedit.md) | 通过官方 Schematics 读写导出本地蓝图编辑结果 |
+| [exportStandaloneMapEdit](./v1editortools/exportstandalonemapedit.md) | 通过官方 MapIO 读写导出本地地图编辑结果 |
+
 ### v1Feedback
 
 | 接口 | 说明 |
@@ -137,11 +148,18 @@ requires:
 | [GameSavesController_delete](./v1gamesaves/gamesavescontroller_delete.md) | 删除云存档 |
 | [GameSavesController_rename](./v1gamesaves/gamesavescontroller_rename.md) | 重命名云存档 |
 | [GameSavesController_snapshots](./v1gamesaves/gamesavescontroller_snapshots.md) | 查看快照历史 |
+| [GameSavesController_createManifestSnapshot](./v1gamesaves/gamesavescontroller_createmanifestsnapshot.md) | 用文件清单创建快照 |
 | [GameSavesController_download](./v1gamesaves/gamesavescontroller_download.md) | 获取快照下载地址 |
 | [GameSavesController_downloadFile](./v1gamesaves/gamesavescontroller_downloadfile.md) | 下载快照文件 |
 | [GameSavesController_restore](./v1gamesaves/gamesavescontroller_restore.md) | 恢复历史快照 |
 | [GameSavesController_deleteSnapshot](./v1gamesaves/gamesavescontroller_deletesnapshot.md) | 删除历史快照 |
 | [GameSavesController_pin](./v1gamesaves/gamesavescontroller_pin.md) | 固定或取消固定快照 |
+| [GameSavesController_checkBlobs](./v1gamesaves/gamesavescontroller_checkblobs.md) | 查询差量文件是否已存在 |
+| [GameSavesController_createBlobUpload](./v1gamesaves/gamesavescontroller_createblobupload.md) | 创建差量文件上传会话 |
+| [GameSavesController_uploadBlobFile](./v1gamesaves/gamesavescontroller_uploadblobfile.md) | 上传差量文件内容 |
+| [GameSavesController_manifest](./v1gamesaves/gamesavescontroller_manifest.md) | 读取快照文件清单 |
+| [GameSavesController_blobDownloads](./v1gamesaves/gamesavescontroller_blobdownloads.md) | 获取差量文件下载地址 |
+| [GameSavesController_blobFile](./v1gamesaves/gamesavescontroller_blobfile.md) | 下载单个存档文件 |
 | [GameSavesController_createUpload](./v1gamesaves/gamesavescontroller_createupload.md) | 创建上传会话 |
 | [GameSavesController_uploadFile](./v1gamesaves/gamesavescontroller_uploadfile.md) | 上传存档文件 |
 | [GameSavesController_commit](./v1gamesaves/gamesavescontroller_commit.md) | 校验并提交上传 |
@@ -178,9 +196,11 @@ requires:
 | [MultiplayerV1Controller_capabilities](./v1multiplayer/multiplayerv1controller_capabilities.md) | GET /v1/multiplayer/capabilities |
 | [MultiplayerV1Controller_preferences](./v1multiplayer/multiplayerv1controller_preferences.md) | GET /v1/multiplayer/preferences |
 | [MultiplayerV1Controller_setPreferences](./v1multiplayer/multiplayerv1controller_setpreferences.md) | PATCH /v1/multiplayer/preferences |
+| [MultiplayerV1Controller_listSessions](./v1multiplayer/multiplayerv1controller_listsessions.md) | GET /v1/multiplayer/sessions |
 | [MultiplayerV1Controller_createSession](./v1multiplayer/multiplayerv1controller_createsession.md) | POST /v1/multiplayer/sessions |
 | [MultiplayerV1Controller_resolveCode](./v1multiplayer/multiplayerv1controller_resolvecode.md) | POST /v1/multiplayer/sessions/resolve-code |
 | [MultiplayerV1Controller_getSession](./v1multiplayer/multiplayerv1controller_getsession.md) | GET /v1/multiplayer/sessions/{id} |
+| [createMultiplayerSessionModSyncPlan](./v1multiplayer/createmultiplayersessionmodsyncplan.md) | 计算加入模组房所需的同步计划并批量签发下载授权 |
 | [MultiplayerV1Controller_join](./v1multiplayer/multiplayerv1controller_join.md) | POST /v1/multiplayer/sessions/{id}/join |
 | [MultiplayerV1Controller_leave](./v1multiplayer/multiplayerv1controller_leave.md) | POST /v1/multiplayer/sessions/{id}/leave |
 | [MultiplayerV1Controller_peers](./v1multiplayer/multiplayerv1controller_peers.md) | GET /v1/multiplayer/sessions/{id}/peers |
@@ -193,6 +213,7 @@ requires:
 | [MultiplayerV1Controller_acceptInvite](./v1multiplayer/multiplayerv1controller_acceptinvite.md) | POST /v1/multiplayer/invites/{id}/accept |
 | [MultiplayerV1Controller_declineInvite](./v1multiplayer/multiplayerv1controller_declineinvite.md) | POST /v1/multiplayer/invites/{id}/decline |
 | [MultiplayerV1Controller_revokeInvite](./v1multiplayer/multiplayerv1controller_revokeinvite.md) | POST /v1/multiplayer/invites/{id}/revoke |
+| [MultiplayerV1Controller_listSessionJoinRequests](./v1multiplayer/multiplayerv1controller_listsessionjoinrequests.md) | GET /v1/multiplayer/sessions/{id}/join-requests |
 | [MultiplayerV1Controller_requestJoin](./v1multiplayer/multiplayerv1controller_requestjoin.md) | POST /v1/multiplayer/sessions/{id}/join-requests |
 | [MultiplayerV1Controller_approveJoin](./v1multiplayer/multiplayerv1controller_approvejoin.md) | POST /v1/multiplayer/join-requests/{id}/approve |
 | [MultiplayerV1Controller_rejectJoin](./v1multiplayer/multiplayerv1controller_rejectjoin.md) | POST /v1/multiplayer/join-requests/{id}/reject |
@@ -267,6 +288,7 @@ requires:
 | [ResourcesV1WriteController_create](./v1resourceuploads/resourcesv1writecontroller_create.md) | POST /v1/resources |
 | [ResourcesV1WriteController_initDirectUpload](./v1resourceuploads/resourcesv1writecontroller_initdirectupload.md) | POST /v1/resources/uploads/init |
 | [ResourcesV1WriteController_completeDirectUpload](./v1resourceuploads/resourcesv1writecontroller_completedirectupload.md) | POST /v1/resources/uploads/complete |
+| [ResourcesV1WriteController_directUploadStatus](./v1resourceuploads/resourcesv1writecontroller_directuploadstatus.md) | GET /v1/resources/uploads/{sessionId}/status |
 | [ResourcesV1WriteController_previewDraft](./v1resourceuploads/resourcesv1writecontroller_previewdraft.md) | POST /v1/resources/drafts/preview |
 | [ResourcesV1WriteController_createUploadDraft](./v1resourceuploads/resourcesv1writecontroller_createuploaddraft.md) | POST /v1/resources/drafts |
 | [ResourcesV1WriteController_getUploadDraft](./v1resourceuploads/resourcesv1writecontroller_getuploaddraft.md) | GET /v1/resources/drafts/{draftId} |
@@ -312,6 +334,7 @@ requires:
 
 | 接口 | 说明 |
 | --- | --- |
+| [listResourceEmbedCardsV2](./v1resourcesv2/listresourceembedcardsv2.md) | 批量读取富文本资源卡片 |
 | [listResourceVersionsV2](./v1resourcesv2/listresourceversionsv2.md) | 列出 Resource 的已发布 V2 版本 |
 | [listResourceRelationsV2](./v1resourcesv2/listresourcerelationsv2.md) | 列出 Resource 的公开关联资源 |
 | [getResourceStatsV2](./v1resourcesv2/getresourcestatsv2.md) | 读取 Resource 聚合统计 |
@@ -331,6 +354,7 @@ requires:
 | [listModRelationsV2](./v1resourcesv2/listmodrelationsv2.md) | 列出 Mod Resource 的公开关联资源 |
 | [getModAnalysisV2](./v1resourcesv2/getmodanalysisv2.md) | 读取 Mod 静态分析结果与作者忽略记录 |
 | [getModVersionDiffV2](./v1resourcesv2/getmodversiondiffv2.md) | 读取 Mod 版本差异；缺少结构化 diff 时返回 null |
+| [searchSchematicLogicV2](./v1resourcesv2/searchschematiclogicv2.md) | 检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本） |
 | [getSchematicResourceV2](./v1resourcesv2/getschematicresourcev2.md) | 读取蓝图 Resource 与选定版本元数据 |
 | [listSchematicVersionsV2](./v1resourcesv2/listschematicversionsv2.md) | 列出蓝图 Resource 的已发布版本 |
 | [getSchematicManifestV2](./v1resourcesv2/getschematicmanifestv2.md) | 读取聚合蓝图 manifest |
@@ -341,7 +365,7 @@ requires:
 | [listSchematicLogicV2](./v1resourcesv2/listschematiclogicv2.md) | 读取蓝图 Logic Processor 的静态链接与变量元数据 |
 | [listSchematicDependenciesV2](./v1resourcesv2/listschematicdependenciesv2.md) | 读取蓝图版本依赖 |
 | [listSchematicRelationsV2](./v1resourcesv2/listschematicrelationsv2.md) | 列出蓝图 Resource 的公开关联资源 |
-| [getSchematicVersionDiffV2](./v1resourcesv2/getschematicversiondiffv2.md) | 读取蓝图版本结构差异；未生成时返回 null |
+| [getSchematicVersionDiffV2](./v1resourcesv2/getschematicversiondiffv2.md) | 读取蓝图版本可视化差异；计算中返回 202 |
 | [getMapResourceV2](./v1resourcesv2/getmapresourcev2.md) | 读取地图 Resource 与选定版本元数据 |
 | [listMapVersionsV2](./v1resourcesv2/listmapversionsv2.md) | 列出地图 Resource 的已发布版本 |
 | [getMapManifestV2](./v1resourcesv2/getmapmanifestv2.md) | 读取聚合地图 manifest |
@@ -352,7 +376,9 @@ requires:
 | [listMapSpawnsV2](./v1resourcesv2/listmapspawnsv2.md) | 读取地图出生点坐标 |
 | [listMapDependenciesV2](./v1resourcesv2/listmapdependenciesv2.md) | 读取地图版本依赖 |
 | [listMapRelationsV2](./v1resourcesv2/listmaprelationsv2.md) | 列出地图 Resource 的公开关联资源 |
-| [getMapVersionDiffV2](./v1resourcesv2/getmapversiondiffv2.md) | 读取地图版本差异；未生成时返回 null |
+| [getMapVersionDiffV2](./v1resourcesv2/getmapversiondiffv2.md) | 读取地图版本可视化差异；计算中返回 202 |
+| [getMapDiffChunkV2](./v1resourcesv2/getmapdiffchunkv2.md) | 读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202 |
+| [getMapDiffOverlayV2](./v1resourcesv2/getmapdiffoverlayv2.md) | 读取地图版本差异的透明叠加层 PNG |
 
 ### v1ResourcesV2Community
 
@@ -408,6 +434,47 @@ requires:
 | [SocialPrivacyV1Controller_get](./v1socialprivacy/socialprivacyv1controller_get.md) | GET /v1/social/privacy |
 | [SocialPrivacyV1Controller_patch](./v1socialprivacy/socialprivacyv1controller_patch.md) | PATCH /v1/social/privacy |
 
+### v1SquadSaves
+
+| 接口 | 说明 |
+| --- | --- |
+| [SquadsController_list](./v1squadsaves/squadscontroller_list.md) | 列出我的小队 |
+| [SquadsController_create](./v1squadsaves/squadscontroller_create.md) | 创建小队 |
+| [SquadsController_invitations](./v1squadsaves/squadscontroller_invitations.md) | 列出收到的小队邀请 |
+| [SquadsController_get](./v1squadsaves/squadscontroller_get.md) | 查看小队详情 |
+| [SquadsController_remove](./v1squadsaves/squadscontroller_remove.md) | 删除小队 |
+| [SquadsController_rename](./v1squadsaves/squadscontroller_rename.md) | 重命名小队 |
+| [SquadsController_members](./v1squadsaves/squadscontroller_members.md) | 列出小队成员 |
+| [SquadsController_invite](./v1squadsaves/squadscontroller_invite.md) | 邀请好友加入小队 |
+| [SquadsController_acceptInvite](./v1squadsaves/squadscontroller_acceptinvite.md) | 接受小队邀请 |
+| [SquadsController_declineInvite](./v1squadsaves/squadscontroller_declineinvite.md) | 拒绝小队邀请 |
+| [SquadsController_removeMember](./v1squadsaves/squadscontroller_removemember.md) | 退出或移除小队成员 |
+| [SquadsController_setRole](./v1squadsaves/squadscontroller_setrole.md) | 设置成员角色 |
+| [SquadsController_createTransfer](./v1squadsaves/squadscontroller_createtransfer.md) | 发起队长转让 |
+| [SquadsController_acceptTransfer](./v1squadsaves/squadscontroller_accepttransfer.md) | 接受队长转让 |
+| [SquadsController_declineTransfer](./v1squadsaves/squadscontroller_declinetransfer.md) | 拒绝队长转让 |
+| [SquadsController_cancelTransfer](./v1squadsaves/squadscontroller_canceltransfer.md) | 取消队长转让 |
+| [SquadsController_slots](./v1squadsaves/squadscontroller_slots.md) | 列出共享存档槽 |
+| [SquadsController_createSlot](./v1squadsaves/squadscontroller_createslot.md) | 创建共享存档槽 |
+| [SquadsController_getSlot](./v1squadsaves/squadscontroller_getslot.md) | 查看共享存档槽 |
+| [SquadsController_deleteSlot](./v1squadsaves/squadscontroller_deleteslot.md) | 删除共享存档槽 |
+| [SquadsController_renameSlot](./v1squadsaves/squadscontroller_renameslot.md) | 重命名共享存档槽 |
+| [SquadsController_leaseStatus](./v1squadsaves/squadscontroller_leasestatus.md) | 查看写租约状态 |
+| [SquadsController_releaseLease](./v1squadsaves/squadscontroller_releaselease.md) | 释放写租约 |
+| [SquadsController_acquireLease](./v1squadsaves/squadscontroller_acquirelease.md) | 获取写租约 |
+| [SquadsController_renewLease](./v1squadsaves/squadscontroller_renewlease.md) | 续期写租约 |
+| [SquadsController_snapshots](./v1squadsaves/squadscontroller_snapshots.md) | 查看快照链 |
+| [SquadsController_commitSnapshot](./v1squadsaves/squadscontroller_commitsnapshot.md) | 提交共享存档快照 |
+| [SquadsController_manifest](./v1squadsaves/squadscontroller_manifest.md) | 读取快照文件清单 |
+| [SquadsController_restore](./v1squadsaves/squadscontroller_restore.md) | 恢复历史或冲突分支 |
+| [SquadsController_deleteSnapshot](./v1squadsaves/squadscontroller_deletesnapshot.md) | 删除历史或冲突快照 |
+| [SquadsController_pin](./v1squadsaves/squadscontroller_pin.md) | 置顶或取消置顶快照 |
+| [SquadsController_checkBlobs](./v1squadsaves/squadscontroller_checkblobs.md) | 查询小队已持有的文件 |
+| [SquadsController_createBlobUpload](./v1squadsaves/squadscontroller_createblobupload.md) | 创建小队文件上传会话 |
+| [SquadsController_uploadBlobFile](./v1squadsaves/squadscontroller_uploadblobfile.md) | 上传小队文件字节 |
+| [SquadsController_blobDownloads](./v1squadsaves/squadscontroller_blobdownloads.md) | 获取快照文件下载地址 |
+| [SquadsController_blobFile](./v1squadsaves/squadscontroller_blobfile.md) | 下载单个小队存档文件 |
+
 ### v1ThreadInteractions
 
 | 接口 | 说明 |
@@ -437,6 +504,18 @@ requires:
 | [ThreadsV1Controller_getReplies](./v1threads/threadsv1controller_getreplies.md) | GET /v1/threads/{id}/replies |
 | [ThreadsV1Controller_getReplyChildren](./v1threads/threadsv1controller_getreplychildren.md) | GET /v1/threads/{id}/replies/{replyId}/children |
 
+### v1Timelapses
+
+| 接口 | 说明 |
+| --- | --- |
+| [TimelapsesController_createUpload](./v1timelapses/timelapsescontroller_createupload.md) | 创建延时战报上传会话 |
+| [TimelapsesController_uploadFile](./v1timelapses/timelapsescontroller_uploadfile.md) | 上传 .mreplay.zip 原始帧包 |
+| [TimelapsesController_commit](./v1timelapses/timelapsescontroller_commit.md) | 提交渲染 |
+| [TimelapsesController_get](./v1timelapses/timelapsescontroller_get.md) | 查询延时战报 |
+| [TimelapsesController_video](./v1timelapses/timelapsescontroller_video.md) | 播放战报视频 |
+| [TimelapsesController_poster](./v1timelapses/timelapsescontroller_poster.md) | 读取战报封面 |
+| [TimelapsesController_draftPost](./v1timelapses/timelapsescontroller_draftpost.md) | 生成战报草稿帖 |
+
 ### v1Uploads
 
 | 接口 | 说明 |
@@ -448,6 +527,7 @@ requires:
 | 接口 | 说明 |
 | --- | --- |
 | [UsersV1Controller_getMe](./v1users/usersv1controller_getme.md) | GET /v1/me |
+| [UsersV1Controller_searchPublicUsers](./v1users/usersv1controller_searchpublicusers.md) | GET /v1/users/search |
 | [UsersV1Controller_getPublic](./v1users/usersv1controller_getpublic.md) | GET /v1/users/{id} |
 | [UsersV1Controller_updateMe](./v1users/usersv1controller_updateme.md) | PUT /v1/me/profile |
 | [UsersV1Controller_uploadAvatar](./v1users/usersv1controller_uploadavatar.md) | POST /v1/me/avatar |

@@ -25,19 +25,14 @@ HTTP 状态码：
 
 | 状态 | 说明 |
 | --- | --- |
-| `201` | Checks the verified RES object server-side, creates a pending ResourceFile, and binds it privately. |
+| `201` | Checks the verified RES object server-side. With background=true, returns processing promptly; poll the owner-bound status endpoint for the final result. |
 | `401` | 需要有效的 MindAuth access token 或 MDTBBS 登录会话。 |
 | `403` | 访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。 |
 | `default` | Public V1 error envelope（公开 V1 错误响应结构；见 [errors-v1.md](../errors-v1.md)） |
 
-**响应结构：** ResourceDirectUploadCompleteResponseDto
+**响应结构：** 以下两种形态之一
 
-```json
-{
-  "completed": 0.0,
-  "file_public_id": "string"
-}
-```
+该接口按查询参数返回两种分页形态中的一种：
 
 ## 调用示例
 

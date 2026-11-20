@@ -63,6 +63,11 @@
     "to_x": 0.0,
     "to_y": 0.0
   }],
+  "rotate_positions": [{
+    "rotation_quarters": 0.0, // Clockwise quarter turns applied to one block.
+    "x": 0.0,
+    "y": 0.0
+  }], // Rotate individual blocks whose configs do not contain coordinate links.
   "rotation_quarters": 0.0 // Number of 90 degree counter-clockwise rotations.
 }
 ```
@@ -123,6 +128,11 @@ curl --fail-with-body -X POST \
     "from_y": 0.0,
     "to_x": 0.0,
     "to_y": 0.0
+  }],
+  "rotate_positions": [{
+    "rotation_quarters": 0.0,
+    "x": 0.0,
+    "y": 0.0
   }],
   "rotation_quarters": 0.0
 }

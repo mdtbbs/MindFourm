@@ -28,13 +28,42 @@ HTTP 状态码：
 
 | 状态 | 说明 |
 | --- | --- |
+| `200` | 成功响应使用标准 {data, meta} 信封；本 schema 描述 data 中的分页业务对象，标准分页摘要同时位于 meta.pagination。 |
 | `401` | 需要有效的 MindAuth access token 或 MDTBBS 登录会话。 |
 | `403` | 访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。 |
 | `default` | Public V1 error envelope（公开 V1 错误响应结构；见 [errors-v1.md](../errors-v1.md)） |
 
-> 契约未声明成功响应：该接口是否可用、返回什么，取决于站点策略与运行时状态。
+**响应结构：** V1SocialFriendsPresenceGetResponse
 
-调用方应按状态码分支处理，不要假设返回 JSON 结构。
+```json
+{
+  "data": [{
+    "actions": {
+      "can_invite": false,
+      "can_join": false,
+      "can_request_join": false,
+      "invite_session_id": "string",
+      "session_visible": false
+    },
+    "activity": {}, // 当前可见的富活动状态；不可见或无活动时为 null。
+    "presence": {
+      "last_seen_at": 0, // 允许展示时提供的 Unix 秒时间戳。
+      "status": "string"
+    },
+    "user": {
+      "avatar_url": "string", // 头像引用。绝对 URL 可直接使用；以 / 开头的站内路径须相对于请求所用的 API origin 解析。无头像时为 null。
+      "id": 0,
+      "username": "string"
+    }
+  }],
+  "pagination": {
+    "limit": 0,
+    "page": 0,
+    "total": 0,
+    "totalPages": 0
+  }
+}
+```
 
 ## 调用示例
 
