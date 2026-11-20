@@ -3535,6 +3535,191 @@
         }
       }
     },
+    "/v1/resources/embeds/cards": {
+      "get": {
+        "operationId": "listResourceEmbedCardsV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "批量读取富文本资源卡片",
+        "description": "批量读取富文本资源卡片 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "ids",
+            "required": true,
+            "in": "query",
+            "description": "逗号分隔的 Resource public UUID，最多 10 个。",
+            "schema": {
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "批量读取富文本资源卡片。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2EmbedCardsDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/{id}/versions": {
       "get": {
         "operationId": "listResourceVersionsV2",
@@ -7321,6 +7506,30 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -7339,6 +7548,242 @@
                       "properties": {
                         "data": {
                           "$ref": "#/components/schemas/ResourceV2DiffDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/schematics/logic-search": {
+      "get": {
+        "operationId": "searchSchematicLogicV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本）",
+        "description": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本） 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "maxLength": 1024,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "全文检索词；匹配资源标题、处理器类型、opcode、单位/方块名与源码。",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "opcode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "example": "ubind",
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "example": "flare",
+              "type": "string"
+            }
+          },
+          {
+            "name": "processor_type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "example": "logic-processor",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本）。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2LogicSearchPageDto"
                         },
                         "meta": {
                           "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
@@ -9583,8 +10028,8 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "summary": "读取蓝图版本结构差异；未生成时返回 null",
-        "description": "读取蓝图版本结构差异；未生成时返回 null 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "summary": "读取蓝图版本可视化差异；计算中返回 202",
+        "description": "读取蓝图版本可视化差异；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
         "parameters": [
           {
             "name": "id",
@@ -9616,11 +10061,35 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "读取蓝图版本结构差异；未生成时返回 null。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "description": "读取蓝图版本可视化差异；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
             "content": {
               "application/json": {
                 "schema": {
@@ -11878,8 +12347,8 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "summary": "读取地图版本差异；未生成时返回 null",
-        "description": "读取地图版本差异；未生成时返回 null 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "summary": "读取地图版本可视化差异；计算中返回 202",
+        "description": "读取地图版本可视化差异；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
         "parameters": [
           {
             "name": "id",
@@ -11911,11 +12380,35 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "读取地图版本差异；未生成时返回 null。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "description": "读取地图版本可视化差异；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
             "content": {
               "application/json": {
                 "schema": {
@@ -12050,6 +12543,368 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/maps/{id}/diff/chunk": {
+      "get": {
+        "operationId": "getMapDiffChunkV2",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202",
+        "description": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202 匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。公开对象以 public UUID 标识。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Source version public UUID. If omitted, the previous published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Target version public UUID. If omitted, the recommended/latest published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cx",
+            "required": true,
+            "in": "query",
+            "description": "128×128 分区列号。",
+            "schema": {
+              "minimum": 0,
+              "maximum": 32767,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cy",
+            "required": true,
+            "in": "query",
+            "description": "128×128 分区行号。",
+            "schema": {
+              "minimum": 0,
+              "maximum": 32767,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202。响应使用 MDTBBS V1 { data, meta } 包装。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "data",
+                        "meta"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResourceV2MapDiffChunkDto"
+                        },
+                        "meta": {
+                          "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+                        }
+                      }
+                    }
+                  ],
+                  "example": {
+                    "data": {},
+                    "meta": {
+                      "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效或分页游标无效。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "携带的登录凭据无效。",
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "需要有效的访问令牌或登录会话。",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "需要有效的访问令牌或登录会话。",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不存在、不可见或类型不匹配。",
+            "example": {
+              "error": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "资源不存在或不可见",
+                "retryable": false,
+                "details": [],
+                "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+              },
+              "meta": {
+                "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ApiErrorEnvelopeDto"
+                },
+                "example": {
+                  "error": {
+                    "code": "RESOURCE_NOT_FOUND",
+                    "message": "资源不存在或不可见",
+                    "retryable": false,
+                    "details": [],
+                    "documentation_url": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+                  },
+                  "meta": {
+                    "request_id": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/maps/{id}/diff/overlay": {
+      "get": {
+        "operationId": "getMapDiffOverlayV2",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取地图版本差异的透明叠加层 PNG",
+        "description": "匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。叠加层由 renderer 生成并与当前版本对绑定。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Source version public UUID. If omitted, the previous published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to_version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Target version public UUID. If omitted, the recommended/latest published version is selected.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset_x",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset_y",
+            "required": false,
+            "in": "query",
+            "description": "蓝图坐标对齐微调；非 0 时不写入缓存。",
+            "schema": {
+              "minimum": -127,
+              "maximum": 127,
+              "default": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG 差异叠加层。",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源、版本对或叠加层不存在。"
           },
           "default": {
             "description": "Public V1 error envelope",
@@ -28007,6 +28862,201 @@
           "object_public_id"
         ]
       },
+      "ResourceV2EmbedAuthorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "username": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "avatar_url"
+        ]
+      },
+      "ResourceV2EmbedCardDto": {
+        "type": "object",
+        "properties": {
+          "resource_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "pending_review",
+              "unavailable"
+            ]
+          },
+          "resource_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "schematic",
+              "map",
+              "mod",
+              "pack"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "preview_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "download_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceV2EmbedAuthorDto"
+              }
+            ]
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "schematic": {
+            "type": "object",
+            "nullable": true
+          },
+          "map": {
+            "type": "object",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "resource_public_id",
+          "version_public_id",
+          "status",
+          "resource_kind",
+          "title",
+          "summary",
+          "url",
+          "preview_url",
+          "download_url",
+          "author",
+          "version",
+          "schematic",
+          "map",
+          "reason"
+        ]
+      },
+      "ResourceV2EmbedCardsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2EmbedCardDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ResourceV2ApiMetaDto": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "example": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "pagination": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "request_id"
+        ]
+      },
+      "ResourceV2ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "RESOURCE_NOT_FOUND"
+          },
+          "message": {
+            "type": "string",
+            "example": "资源不存在或不可见"
+          },
+          "retryable": {
+            "type": "boolean",
+            "example": false
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "documentation_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "details",
+          "documentation_url"
+        ]
+      },
+      "ResourceV2ApiErrorEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ResourceV2ApiErrorDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
+          }
+        },
+        "required": [
+          "error",
+          "meta"
+        ]
+      },
       "ResourceV2CompatibilityDto": {
         "type": "object",
         "properties": {
@@ -28344,75 +29394,6 @@
         "required": [
           "items",
           "pagination"
-        ]
-      },
-      "ResourceV2ApiMetaDto": {
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "example": "req_01J9XZ4B9Y4Y8V1JXK5Z7Q0W12"
-          },
-          "next_cursor": {
-            "type": "string",
-            "nullable": true
-          },
-          "pagination": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "request_id"
-        ]
-      },
-      "ResourceV2ApiErrorDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "RESOURCE_NOT_FOUND"
-          },
-          "message": {
-            "type": "string",
-            "example": "资源不存在或不可见"
-          },
-          "retryable": {
-            "type": "boolean",
-            "example": false
-          },
-          "details": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "documentation_url": {
-            "type": "string",
-            "format": "uri",
-            "example": "https://mdtbbs.cn/api/v1/docs/errors#resource-not-found"
-          }
-        },
-        "required": [
-          "code",
-          "message",
-          "retryable",
-          "details",
-          "documentation_url"
-        ]
-      },
-      "ResourceV2ApiErrorEnvelopeDto": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ResourceV2ApiErrorDto"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ResourceV2ApiMetaDto"
-          }
-        },
-        "required": [
-          "error",
-          "meta"
         ]
       },
       "ResourceV2ResourceRefDto": {
@@ -29429,7 +30410,15 @@
           },
           "status": {
             "type": "string",
-            "example": "ready"
+            "enum": [
+              "completed",
+              "metadata_only",
+              "computing",
+              "unavailable",
+              "disabled",
+              "failed"
+            ],
+            "example": "completed"
           },
           "parser_version": {
             "type": "string",
@@ -29439,6 +30428,15 @@
             "type": "object",
             "nullable": true,
             "description": "Null when no stored diff exists for this version pair."
+          },
+          "retry_after_ms": {
+            "type": "number",
+            "nullable": true,
+            "description": "status=computing 时建议的重试间隔。"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -29447,6 +30445,117 @@
           "status",
           "parser_version",
           "diff"
+        ]
+      },
+      "ResourceV2LogicSearchItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "resource_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resource_url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "type": "object",
+            "nullable": true
+          },
+          "processor_type": {
+            "type": "string"
+          },
+          "position": {
+            "type": "object"
+          },
+          "instruction_count": {
+            "type": "number"
+          },
+          "estimated_cycle_ticks": {
+            "type": "number",
+            "nullable": true
+          },
+          "opcodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "referenced_units": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "referenced_blocks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "has_warnings": {
+            "type": "boolean"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "source_excerpt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "resource_public_id",
+          "resource_url",
+          "title",
+          "version_public_id",
+          "version",
+          "author",
+          "processor_type",
+          "position",
+          "instruction_count",
+          "estimated_cycle_ticks",
+          "opcodes",
+          "referenced_units",
+          "referenced_blocks",
+          "has_warnings",
+          "findings",
+          "source_excerpt"
+        ]
+      },
+      "ResourceV2LogicSearchPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2LogicSearchItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceV2CursorDto"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
         ]
       },
       "ResourceV2SchematicMetadataDto": {
@@ -30599,6 +31708,54 @@
         "required": [
           "items",
           "pagination"
+        ]
+      },
+      "ResourceV2MapDiffChunkDto": {
+        "type": "object",
+        "properties": {
+          "from_version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "to_version_public_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "cx": {
+            "type": "number"
+          },
+          "cy": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "computing",
+              "metadata_only",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "chunk": {
+            "type": "object",
+            "nullable": true,
+            "description": "128×128 分区 RLE；status=ready 时存在。"
+          },
+          "retry_after_ms": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "from_version_public_id",
+          "to_version_public_id",
+          "cx",
+          "cy",
+          "status",
+          "chunk"
         ]
       },
       "ResourceV2SchematicConfigEditDto": {

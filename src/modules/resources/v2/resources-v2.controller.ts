@@ -1,4 +1,4 @@
-import { applyDecorators, Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
+import { applyDecorators, BadRequestException, Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import {
   ApiBadRequestResponse, ApiExtraModels, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiProduces,
   ApiParam, ApiQuery, ApiResponse, ApiTags, ApiUnauthorizedResponse, getSchemaPath,
@@ -24,6 +24,12 @@ import {
   ResourceV2DependencyResolveQueryDto,
   ResourceV2DiffDto,
   ResourceV2DiffQueryDto,
+  ResourceV2EmbedCardsDto,
+  ResourceV2EmbedCardsQueryDto,
+  ResourceV2LogicSearchPageDto,
+  ResourceV2LogicSearchQueryDto,
+  ResourceV2MapDiffChunkDto,
+  ResourceV2MapDiffChunkQueryDto,
   ResourceV2IssueReportPageDto,
   ResourceV2LocalizationPageDto,
   ResourceV2ManifestDto,
@@ -46,6 +52,9 @@ import {
   ResourceWorkbenchV2Dto,
 } from './resources-v2.dto';
 import { ResourcesV2Service } from './resources-v2.service';
+import { ResourceEmbedService } from '../resource-embed.service';
+import { SchematicLogicIndexService } from '../schematic-logic-index.service';
+import { ResourceVisualDiffService } from './resource-visual-diff.service';
 
 function v2ReadResponse(dto: Type<unknown>, operationId: string, description: string, rateLimit = 60) {
   const successSchema = {
@@ -96,7 +105,28 @@ function pageQueries(version = false) {
 @ApiTags('v1-resources-v2')
 @Controller('v1/resources')
 export class ResourcesV2Controller {
-  constructor(private readonly resources: ResourcesV2Service) {}
+  constructor(
+    private readonly resources: ResourcesV2Service,
+    private readonly resourceEmbeds: ResourceEmbedService,
+    private readonly visualDiff: ResourceVisualDiffService,
+    private readonly logicIndex: SchematicLogicIndexService,
+  ) {}
+
+  /**
+   * 富文本资源卡片的批量水合。路径使用两段，避免与 V1 的 `GET /resources/:id`
+   * 单段路由按注册顺序冲突。匿名可读；携带 Bearer 时作者/管理员可看到自己的
+   * 审核中资源，响应仍只含公开 UUID。
+   */
+  @Get('embeds/cards')
+  @ApiQuery({ name: 'ids', required: true, type: String, description: '逗号分隔的 Resource public UUID，最多 10 个。' })
+  @v2ReadResponse(ResourceV2EmbedCardsDto, 'listResourceEmbedCardsV2', '批量读取富文本资源卡片', 60)
+  async embedCards(@Query() query: ResourceV2EmbedCardsQueryDto, @Req() req: any) {
+    const ids = String(query.ids || '').split(',').map((id) => id.trim()).filter(Boolean);
+    if (!ids.length || ids.length > 10 || ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
+      throw new BadRequestException('ids 必须是 1 到 10 个 Resource public UUID');
+    }
+    return { items: await this.resourceEmbeds.getCards(ids, req?.user ? { id: req.user.id, role: req.user.role } : null) };
+  }
 
   @Get(':id/versions')
   @publicUuidParam()
@@ -224,6 +254,10 @@ export class ResourcesV2Controller {
   @v2ReadResponse(ResourceV2DiffDto, 'getModVersionDiffV2', '读取 Mod 版本差异；缺少结构化 diff 时返回 null', 60)
   modDiff(@Param('id') id: string, @Query() query: ResourceV2DiffQueryDto) { return this.resources.getDiff(id, 'mod', query); }
 
+  @Get('schematics/logic-search')
+  @v2ReadResponse(ResourceV2LogicSearchPageDto, 'searchSchematicLogicV2', '检索公开已发布蓝图的 mlog 逻辑片段（纯静态，不执行脚本）', 60)
+  logicSearch(@Query() query: ResourceV2LogicSearchQueryDto) { return this.logicIndex.search(query); }
+
   @Get('schematics/:id')
   @publicUuidParam()
   @v2ReadResponse(ResourceV2SchematicDetailDto, 'getSchematicResourceV2', '读取蓝图 Resource 与选定版本元数据', 60)
@@ -284,8 +318,17 @@ export class ResourcesV2Controller {
 
   @Get('schematics/:id/diff')
   @publicUuidParam()
-  @v2ReadResponse(ResourceV2DiffDto, 'getSchematicVersionDiffV2', '读取蓝图版本结构差异；未生成时返回 null', 60)
-  schematicDiff(@Param('id') id: string, @Query() query: ResourceV2DiffQueryDto) { return this.resources.getDiff(id, 'schematic', query); }
+  @v2ReadResponse(ResourceV2DiffDto, 'getSchematicVersionDiffV2', '读取蓝图版本可视化差异；计算中返回 202', 60)
+  async schematicDiff(
+    @Param('id') id: string,
+    @Query() query: ResourceV2DiffQueryDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.visualDiff.getDiff(id, 'schematic', query, req?.user);
+    response.status(result.statusCode);
+    return result.data;
+  }
 
   @Get('maps/:id')
   @publicUuidParam()
@@ -347,8 +390,55 @@ export class ResourcesV2Controller {
 
   @Get('maps/:id/diff')
   @publicUuidParam()
-  @v2ReadResponse(ResourceV2DiffDto, 'getMapVersionDiffV2', '读取地图版本差异；未生成时返回 null', 60)
-  mapDiff(@Param('id') id: string, @Query() query: ResourceV2DiffQueryDto) { return this.resources.getDiff(id, 'map', query); }
+  @v2ReadResponse(ResourceV2DiffDto, 'getMapVersionDiffV2', '读取地图版本可视化差异；计算中返回 202', 60)
+  async mapDiff(
+    @Param('id') id: string,
+    @Query() query: ResourceV2DiffQueryDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.visualDiff.getDiff(id, 'map', query, req?.user);
+    response.status(result.statusCode);
+    return result.data;
+  }
+
+  @Get('maps/:id/diff/chunk')
+  @publicUuidParam()
+  @ApiQuery({ name: 'cx', required: true, type: Number, description: '128×128 分区列号。' })
+  @ApiQuery({ name: 'cy', required: true, type: Number, description: '128×128 分区行号。' })
+  @v2ReadResponse(ResourceV2MapDiffChunkDto, 'getMapDiffChunkV2', '读取地图版本差异的 128×128 分区 RLE 明细；计算中返回 202', 60)
+  async mapDiffChunk(
+    @Param('id') id: string,
+    @Query() query: ResourceV2MapDiffChunkQueryDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.visualDiff.getChunk(id, query, req?.user);
+    response.status(result.statusCode);
+    return result.data;
+  }
+
+  @Get('maps/:id/diff/overlay')
+  @RawHttpResponse()
+  @publicUuidParam()
+  @OAuthOptionalProtected('resource.read')
+  @RateLimit({ max: 30, window: 60 })
+  @ApiOperation({ operationId: 'getMapDiffOverlayV2', summary: '读取地图版本差异的透明叠加层 PNG', description: '匿名可读；携带 MindAuth Bearer 时需有 resource.read scope。叠加层由 renderer 生成并与当前版本对绑定。' })
+  @ApiProduces('image/png')
+  @ApiResponse({ status: 200, description: 'PNG 差异叠加层。', content: { 'image/png': { schema: { type: 'string', format: 'binary' } } } })
+  @ApiNotFoundResponse({ description: '资源、版本对或叠加层不存在。' })
+  async mapDiffOverlay(
+    @Param('id') id: string,
+    @Query() query: ResourceV2DiffQueryDto,
+    @Req() req: any,
+    @Res() response: Response,
+  ) {
+    const buffer = await this.visualDiff.readOverlay(id, query, req?.user);
+    response.setHeader('Content-Type', 'image/png');
+    response.setHeader('Cache-Control', 'public, max-age=3600');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    return response.send(buffer);
+  }
 }
 
 @ApiV1()

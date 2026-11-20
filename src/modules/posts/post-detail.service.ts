@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
@@ -7,6 +7,7 @@ import { Reply } from '@entities/reply.entity';
 import { ContentRelation } from '@entities/content-relation.entity';
 import { Resource } from '@entities/resource.entity';
 import { getPrefixMetadata, parsePrefixCatalog, DEFAULT_POST_PREFIXES } from './post-prefixes.util';
+import { ResourceEmbedService, type ResourceEmbedCard } from '../resources/resource-embed.service';
 
 export interface PostDetailTag {
   id: number;
@@ -27,6 +28,7 @@ export interface PostDetailReply {
   content_json: Record<string, unknown> | null;
   content_schema_version: number;
   content_text: string | null;
+  resource_embeds: ResourceEmbedCard[];
   status: string;
   like_count: number;
   created_at: Date;
@@ -53,6 +55,7 @@ export interface PostDetailDto {
   content_json: Record<string, unknown> | null;
   content_schema_version: number;
   content_text: string | null;
+  resource_embeds: ResourceEmbedCard[];
   status: string;
   is_pinned: boolean;
   is_locked: boolean;
@@ -106,13 +109,15 @@ export class PostDetailService {
     private readonly relationRepository: Repository<ContentRelation>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    @Optional() private readonly resourceEmbeds?: ResourceEmbedService,
   ) {}
 
   async toDetail(post: Post, prefixCatalog?: string | null): Promise<PostDetailDto> {
-    const [tags, serverRelation, resourceHeader] = await Promise.all([
+    const [tags, serverRelation, resourceHeader, embedProjection] = await Promise.all([
       this.loadTags(post.id),
       this.relationRepository.findOne({ where: { source_type: 'post', source_id: post.id, target_type: 'game_server', relation_type: 'related' } }),
       this.loadResourceHeader(post.id, post.post_type),
+      this.resourceEmbeds?.hydrateDocument(post.content_json) ?? Promise.resolve(null),
     ]);
 
     const catalog = parsePrefixCatalog(prefixCatalog ?? undefined);
@@ -131,10 +136,11 @@ export class PostDetailService {
       title: post.title,
       content: post.content,
       content_format: 'tiptap_json',
-      content_html: post.content_html || null,
+      content_html: embedProjection?.content_html ?? (post.content_html || null),
       content_json: post.content_json || null,
       content_schema_version: post.content_schema_version || 2,
-      content_text: post.content_text || null,
+      content_text: embedProjection?.content_text ?? (post.content_text || null),
+      resource_embeds: embedProjection?.embeds ?? [],
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
       is_locked: Boolean(post.is_locked),
@@ -192,17 +198,19 @@ export class PostDetailService {
       return [];
     }
 
-    return replies.map((reply) => ({
+    const projections = this.resourceEmbeds ? await this.resourceEmbeds.hydrateMany(replies.map((reply) => reply.content_json)) : replies.map(() => null);
+    return replies.map((reply, index) => ({
       id: reply.id,
       post_id: reply.post_id,
       user_id: reply.user_id,
       parent_reply_id: reply.parent_reply_id ?? null,
       content: reply.content,
       content_format: 'tiptap_json',
-      content_html: reply.content_html || null,
+      content_html: projections[index]?.content_html ?? (reply.content_html || null),
       content_json: reply.content_json || null,
       content_schema_version: reply.content_schema_version || 2,
-      content_text: reply.content_text || null,
+      content_text: projections[index]?.content_text ?? (reply.content_text || null),
+      resource_embeds: projections[index]?.embeds ?? [],
       status: reply.status,
       like_count: reply.like_count,
       created_at: reply.created_at,

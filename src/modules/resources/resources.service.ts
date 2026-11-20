@@ -36,6 +36,7 @@ import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-det
 import { ResourceStorageService } from './resource-storage.service';
 import { ResourceStorageClientService } from './resource-storage-client.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
+import { SchematicLogicIndexService } from './schematic-logic-index.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
@@ -149,6 +150,7 @@ export class ResourcesService {
     @Optional() private customEmojis?: CustomEmojisService,
     @Optional() private resClient?: ResourceStorageClientService,
     @Optional() private dependencyRead?: ResourceDependencyReadService,
+    @Optional() private logicIndex?: SchematicLogicIndexService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -2511,6 +2513,11 @@ export class ResourcesService {
         WHERE id = ?`, [targetId, sourceId]);
       await manager.query(`INSERT INTO resource_merge_logs (source_resource_id, target_resource_id, admin_user_id, migrated_counts)
         VALUES (?, ?, ?, ?)`, [sourceId, targetId, adminUserId, JSON.stringify({ ...migrated, preview_counts: counts, version_collision_mappings: versionCollisionMappings })]);
+      // 合并后源资源不可公开，目标资源可能获得新的推荐版本；两者都在同一事务内同步。
+      if (this.logicIndex) {
+        await this.logicIndex.removeResource(sourceId, manager);
+        await this.logicIndex.syncResource(targetId, manager);
+      }
       return { source_id: sourceId, target_id: targetId, status: 'merged', migrated_counts: migrated, version_collision_mappings: versionCollisionMappings };
     });
     } catch (error) {
@@ -2847,6 +2854,10 @@ export class ResourcesService {
       throw error;
     }
 
+    if (updateResult.resource.resource_kind === 'schematic') {
+      void this.logicIndex?.syncResource(id).catch(() => undefined);
+    }
+
     if (this.contentSafety) {
       await this.contentSafety.recordFlag({
         userId,
@@ -2927,6 +2938,9 @@ export class ResourcesService {
       await this.setResFileVisibility(resource.id, priorVisibility).catch(() => undefined);
       await this.resourcePreviewService?.setResPreviewVisibility(resource, priorVisibility).catch(() => undefined);
       throw error;
+    }
+    if (resource.resource_kind === 'schematic') {
+      await this.logicIndex?.removeResource(resource.id).catch(() => undefined);
     }
     if (resource.content_hash) await this.releaseContentHashClaim(resource.content_hash);
     if (resource.structure_hash) await this.releaseStructureHashClaim(resource.structure_hash);
@@ -3146,6 +3160,10 @@ export class ResourcesService {
           );
         }
       }
+    }
+
+    if (existingResource.resource_kind === 'schematic' && existingResource.status !== status) {
+      void this.logicIndex?.syncResource(id).catch(() => undefined);
     }
 
     const resource = existingResource.status === status

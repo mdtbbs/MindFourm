@@ -32,7 +32,7 @@ export const mdtbbsSite: SiteConfiguration = {
   features: {
     resources: true, gameVersions: true, servers: true, serversDirectory: true,
     serverApplications: true, lanlink: true, developerFeed: true, phoneVerification: true,
-    resourcePreModeration: true, contentLanguageSearch: false, developers: false, domesticFiling: true,
+    resourcePreModeration: true, contentLanguageSearch: false, developers: false, domesticFiling: true, resourceVisualDiff: true,
   },
   modules: ['community', 'mdtbbs'],
   navigation: ['home', 'posts', 'resources', 'servers', 'wiki'],
@@ -53,7 +53,7 @@ export const mindustryClubSite: SiteConfiguration = {
   features: {
     resources: true, gameVersions: true, servers: false, serversDirectory: true,
     serverApplications: false, lanlink: false, developerFeed: false, phoneVerification: false,
-    resourcePreModeration: false, contentLanguageSearch: true, developers: true, domesticFiling: false,
+    resourcePreModeration: false, contentLanguageSearch: true, developers: true, domesticFiling: false, resourceVisualDiff: true,
   },
   modules: ['community', 'international'],
   navigation: ['home', 'posts', 'resources', 'discover', 'developers', 'servers', 'wiki'],

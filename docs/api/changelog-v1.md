@@ -1,5 +1,26 @@
 # 公开 API 更新记录
 
+## 2026-11-20 — 蓝图/地图可视化 Diff、资源卡片与 mlog 逻辑检索
+
+### Added
+
+- `GET /api/v1/resources/schematics/{id}/diff` 与 `GET /api/v1/resources/maps/{id}/diff` 升级为 `schema_version: 2` 的可视化 Diff：蓝图包含方块增删改（旋转/typed config 摘要/点链接）、材料与理论电力差值、处理器 `mlog` unified diff hunks；地图包含规则、波次组、Core/Spawn/建筑对象、矿脉统计、128×128 分区地形摘要与差异叠加层。并发计算时返回 `202`、`status: "computing"` 和 `retry_after_ms`。
+- `GET /api/v1/resources/maps/{id}/diff/chunk?cx=&cy=`：读取指定 128×128 分区的 floor/overlay 变动 RLE，供前端高倍放大检查。
+- `GET /api/v1/resources/maps/{id}/diff/overlay`：读取 renderer 生成的透明差异叠加层 PNG。
+- `GET /api/v1/resources/schematics/logic-search`：公开检索已审核发布蓝图的 `mlog` 静态逻辑片段；支持 `q`、`opcode`、`unit`、`processor_type`、`cursor`、`limit`，返回作者署名、资源/版本 public UUID、指令数、估算周期、opcode、引用单位/方块、静态审计结果与源码摘要。匿名可读，60 次/60 秒。
+- `GET /api/v1/resources/embeds/cards?ids=...`：批量水合 Rich Content `resourceEmbed` 卡片（最多 10 个 public UUID）。私有、审核中（非作者）、拒绝、删除或不支持的资源只返回不可见占位，不泄漏标题或预览。
+- Rich Content Schema v2 新增块级 `resourceEmbed` 节点（`resourcePublicId` / `versionPublicId` / `displayMode`），单篇最多 10 个，允许引用 `schematic`、`map`、`mod`、`pack`。
+
+### Changed
+
+- 蓝图/地图版本审核通过后会异步预计算与上一推荐版本的 Diff，并自动重建公开逻辑片段索引；资源下架、删除、转私有或合并时同步清理索引。
+- 含 Mod 内容的蓝图/地图 Diff 不再报错，而是持久化 `mode: "metadata_only"` 的元数据、体积、SHA-256 变更标记与依赖清单差异。
+- 新增运行时开关 `resource_visual_diff_enabled`（两个站点默认开启）；关闭时 Diff 接口返回 `status: "disabled"`。
+
+### Clarified
+
+- 所有电力、波次强度与难度数值均为理论估算，不代表游戏内实测结果。
+- `mlog` 仅做纯静态词法/CFG 审计，服务端从不执行用户脚本。
 ## 2026-10-30 — 云存档文件级差量上传
 
 ### Added

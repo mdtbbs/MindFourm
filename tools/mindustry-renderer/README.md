@@ -56,6 +56,14 @@ consumer, recipe and probability definitions, with game-tick values converted
 to per-second rates. Terrain- and environment-dependent blocks are warnings;
 the worker does not infer map ore, simulate logistics or load user mods.
 
+The worker also exposes authenticated static diff operations used by the forum workbench:
+
+- `POST /v2/schematic-diff` compares two `.msch` files (block add/remove/modify, typed-config digests, materials, theoretical power and `mlog` unified hunks). Mod content returns `mode=metadata_only`.
+- `POST /v2/map-diff` compares rules, spawn groups, cores/spawns/buildings, resource tile counts and 128×128 terrain chunks, and writes a transparent overlay PNG under `resources/map-diff/`.
+- `POST /v2/map-diff-chunk` returns the floor/overlay RLE runs for one 128×128 chunk.
+
+These operations parse files with the same official runtime and never execute schematic logic. The forum persists the result as `schema_version: 2` and falls back to metadata-only output for Mod content.
+
 The worker also exposes authenticated `GET /v1/content-metadata?items=...&blocks=...&liquids=...`
 for batched schematic labels and icons. It uses the bundled Mindustry v160.5
 Simplified Chinese localization file and the same official sprite atlas used by

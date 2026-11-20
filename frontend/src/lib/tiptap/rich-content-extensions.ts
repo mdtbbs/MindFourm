@@ -5,6 +5,7 @@ import { BLOCK_ALIGNMENTS, FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, blockAlign
 import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 import { Plugin } from '@tiptap/pm/state';
 import { normalizePastedRichHtml } from './paste-normalization';
+import { ResourceEmbed } from './resource-embed';
 
 const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
 const FONT_FAMILIES = Object.keys(FONT_STACKS);
@@ -338,8 +339,11 @@ export const RICH_CONTENT_EXTENSIONS = [
   PostQuote,
   ReplyQuote,
   HtmlBlock,
+  ResourceEmbed,
   RichPasteSanitizer,
 ];
+
+export { ResourceEmbed } from './resource-embed';
 
 export const richContentEditorDefaults = {
   fontSizes: FONT_SIZES,

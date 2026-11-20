@@ -17,7 +17,10 @@ import { normalizeEditorLink } from "@/lib/tiptap/editor-link";
 import { confirmDialog, promptDialog } from "@/store/interaction-dialog-store";
 import { useAuth } from "@/store/user-store";
 import HtmlBlockDialog from "@/components/rich-content/html-block-dialog";
+import { ResourceEmbedPasteDialog } from "@/components/rich-content/resource-embed-paste-dialog";
 import { roleAllowsHtmlBlocks } from "@/lib/tiptap/roles";
+import { countResourceEmbedNodes, parseSchematicPaste, type ParsedSchematicPaste } from "@/lib/tiptap/resource-embed";
+import { RESOURCE_EMBED_LIMIT } from "@/lib/api/v1/resource-embeds";
 import {
   Bold,
   Italic,
@@ -127,6 +130,7 @@ export default function TiptapEditor({
   const [mentionLoading, setMentionLoading] = useState(false);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const [htmlBlockOpen, setHtmlBlockOpen] = useState(false);
+  const [schematicPaste, setSchematicPaste] = useState<ParsedSchematicPaste | null>(null);
   // The server decides who may *write* a block; this only keeps the button out of
   // a non-staff toolbar. A hidden button is not a permission check.
   const { user } = useAuth();
@@ -193,6 +197,15 @@ export default function TiptapEditor({
       },
       handlePaste(_view, event) {
         const plainText = event.clipboardData?.getData('text/plain')?.trim() || '';
+        // A Mindustry blueprint paste is intercepted before the generic rich
+        // embed/video handling: it must never travel through the normal text
+        // pipeline (a multi-MB Base64 run would be re-parsed and tokenized).
+        const pastedSchematic = parseSchematicPaste(plainText);
+        if (pastedSchematic) {
+          event.preventDefault();
+          setSchematicPaste(pastedSchematic);
+          return true;
+        }
         const embed = parseRichEmbed(plainText);
         if (embed && context !== 'resource' && typeof window !== 'undefined') {
           event.preventDefault();
@@ -269,6 +282,31 @@ export default function TiptapEditor({
     setHtmlBlockEditing(Boolean(editor?.isActive("htmlBlock")));
     setHtmlBlockOpen(true);
   }, [editor]);
+
+  /* ── Resource embeds ─────────────────────────────────── */
+
+  const insertResourceEmbedCard = useCallback((attrs: {
+    resourcePublicId: string;
+    versionPublicId: string | null;
+    displayMode: "card";
+  }) => {
+    if (!editor) return false;
+    return editor.chain().focus().insertResourceEmbed(attrs).run();
+  }, [editor]);
+
+  const canInsertResourceEmbedCard = useCallback(
+    () => Boolean(editor && countResourceEmbedNodes(editor.state.doc) < RESOURCE_EMBED_LIMIT),
+    [editor],
+  );
+
+  const keepSchematicPasteAsText = useCallback(() => {
+    if (!editor || !schematicPaste) return;
+    editor.chain().focus().insertContent({
+      type: "codeBlock",
+      content: [{ type: "text", text: schematicPaste.raw }],
+    }).run();
+    setSchematicPaste(null);
+  }, [editor, schematicPaste]);
 
   /* ── Image upload ────────────────────────────────────── */
 
@@ -606,6 +644,14 @@ export default function TiptapEditor({
         onOpenChange={setHtmlBlockOpen}
         initialHtml={htmlBlockEditing && editor ? String(editor.getAttributes("htmlBlock").html || "") : ""}
         onSubmit={insertHtmlBlock}
+      />
+
+      <ResourceEmbedPasteDialog
+        paste={schematicPaste}
+        onClose={() => setSchematicPaste(null)}
+        canInsertCard={canInsertResourceEmbedCard}
+        onInsertCard={insertResourceEmbedCard}
+        onKeepPlainText={keepSchematicPasteAsText}
       />
 
       {/* ── Editor area ─────────────────────────────────── */}

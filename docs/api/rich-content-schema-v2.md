@@ -18,7 +18,7 @@
 
 ## 节点与文本样式
 
-块级节点包括 `doc`、`paragraph`、`heading`、`blockquote`、`bulletList`、`orderedList`、`listItem`、`taskList`、`taskItem`、`codeBlock`、`horizontalRule`、`table`、`tableRow`、`tableHeader`、`tableCell`、`spoiler`、`video`、`attachment`、`postQuote`、`replyQuote` 和 `htmlBlock`。行内节点包括 `text`、`hardBreak`、`image`、`mention` 和 `customEmoji`。
+块级节点包括 `doc`、`paragraph`、`heading`、`blockquote`、`bulletList`、`orderedList`、`listItem`、`taskList`、`taskItem`、`codeBlock`、`horizontalRule`、`table`、`tableRow`、`tableHeader`、`tableCell`、`spoiler`、`video`、`attachment`、`postQuote`、`replyQuote`、`htmlBlock` 和 `resourceEmbed`。行内节点包括 `text`、`hardBreak`、`image`、`mention` 和 `customEmoji`。
 
 文本样式（marks）包括 `bold`、`italic`、`strike`、`underline`、`code`、`link`、`textColor`、`highlight`、`fontSize`、`fontFamily`、`superscript` 和 `subscript`。颜色只接受 HEX，并规范为大写 `#RRGGBB` 或 `#RRGGBBAA`；高亮、字号和字体只能使用预设值。
 
@@ -54,6 +54,28 @@ HTML 区块支持两种呈现方式：
 每种节点和样式只允许指定属性。未知节点、样式或属性，无效 URL、不支持的站点视频来源以及超出范围的值都会被拒绝。错误详情会指出 JSON 路径、节点或样式、属性和数据结构版本，不会包含内部堆栈。
 
 资源说明使用同一格式，但不接受 `video`、`attachment`、`postQuote` 和 `replyQuote`；`htmlBlock` 同样可用。附件节点必须引用当前用户拥有的草稿令牌，或已绑定到同一内容对象的附件；上传文件会先进入隔离区并经过审核。提及节点使用用户 ID，每篇内容最多包含 20 个不同用户；服务端会将其规范为用户当前名称。提及通知会去重并遵循用户屏蔽设置。引用只保存对象 ID，读写时都会检查可见性。
+
+## 资源卡片（`resourceEmbed`，Schema v2）
+
+`resourceEmbed` 是块级原子节点，用于在帖子、回复和资源说明中引用已发布资源，而不是把 Base64、标题或预览图写进正文：
+
+```json
+{
+  "type": "resourceEmbed",
+  "attrs": {
+    "resourcePublicId": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+    "versionPublicId": "16d81bd0-90c7-48ed-a371-a81059aaddc9",
+    "displayMode": "card"
+  }
+}
+```
+
+- `resourcePublicId` 必填，`versionPublicId` 可为 `null`（读取时使用推荐/最新已发布版本），`displayMode` 仅允许 `"card"`。
+- 单篇帖子、回复或资源说明最多 10 个 `resourceEmbed`；超出返回 `RESOURCE_EMBED_LIMIT_EXCEEDED`。只接受 Schema v2；v1 文档返回 `UNSUPPORTED_CONTENT_NODE`。
+- 允许引用 `schematic`、`map`、`mod`、`pack`。节点本身不缓存标题、作者、预览或统计；这些字段由读接口批量水合，避免过期与越权。
+- 写入时的 `content_html` 是语义化降级容器（`<aside data-resource-embed=...><a href="/resources/{uuid}">资源卡片</a></aside>`），`content_text` 为 `[资源卡片: <uuid>]`。帖子/回复详情读接口会批量查询引用资源，将可用卡片投影为 `[资源卡片: <title> (<kind>)]`；私有、审核中（非作者）、拒绝、删除或不支持的资源统一降级为“资源卡片不可用”，不泄漏标题或预览。
+- 批量水合接口为 `GET /api/v1/resources/embeds/cards?ids=...`（最多 10 个 public UUID）。作者、维护者、管理员和审核员可看到自己资源的 `pending_review` 预览态；匿名请求只得到公开资源或不可用占位。
+- 编辑器粘贴 `bXNja...` 蓝图串时走预览浮层，用户确认后才通过 metadata-first RES direct upload 创建 `pending_review` 资源并插入卡片；取消或选择“保留为普通文本”时写入普通 `codeBlock`，绝不把 Base64 存入本节点。
 
 ## 视频来源与部署迁移
 

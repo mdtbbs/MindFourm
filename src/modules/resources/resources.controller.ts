@@ -448,9 +448,15 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(resourcePreviewDraftInterceptor)
   @RateLimit({ max: 5, window: 60 })
-  async analyzeEditorFile(@Param('kind') kind: string, @UploadedFile() file: Express.Multer.File | undefined) {
+  async analyzeEditorFile(
+    @Param('kind') kind: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Query('include_preview') includePreview?: string,
+  ) {
     return this.withEditorFile(kind, file, async (stored, editorKind) => {
-      const result = await this.resourcePreviewService.analyzeEditorFile(editorKind, stored);
+      const result = await this.resourcePreviewService.analyzeEditorFile(editorKind, stored, {
+        includePreview: includePreview === '1' || includePreview === 'true',
+      });
       return { ...result, blocks: editorKind === 'schematic' ? analyzeSchematicMetadata(result.metadata).blocks.map(block => ({
         internal_name: block.internal_name, display_name: block.display_name, count: block.count, positions: block.positions_json || [],
       })) : [] };

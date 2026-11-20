@@ -303,6 +303,7 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
+    'resource_visual_diff_enabled',
     'terms_summary',
     'site_favicon_url',
     'sidebar_title',
@@ -452,6 +453,7 @@ export class SettingsService implements OnModuleInit {
       'feature_multiplayer_invites_v1_enabled',
       'feature_multiplayer_relay_v1_enabled',
       'feature_third_party_multiplayer_v1_enabled',
+      'resource_visual_diff_enabled',
     ]),
     'cloud-saves': new Set([
       'cloud_saves_enabled',
@@ -623,6 +625,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_multiplayer_invites_v1_enabled', value: 'false', category: 'features', description: 'Enable multiplayer invites and join requests' },
       { key: 'feature_multiplayer_relay_v1_enabled', value: 'false', category: 'features', description: 'Enable allocation of official Relay Agents' },
       { key: 'feature_third_party_multiplayer_v1_enabled', value: 'false', category: 'features', description: 'Allow reviewed third-party OAuth apps to use Multiplayer APIs' },
+      { key: 'resource_visual_diff_enabled', value: 'true', category: 'features', description: 'Enable schematic/map visual version diff and the mlog logic snippet index' },
       { key: 'cloud_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable private Mindustry cloud saves' },
       { key: 'cloud_saves_storage_path', value: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'), category: 'cloud-saves', description: 'Persistent local directory for private save files' },
       { key: 'cloud_saves_user_quota_bytes', value: process.env.CLOUD_SAVES_MAX_BYTES_PER_USER || '524288000', category: 'cloud-saves', description: 'Cloud save quota per user in bytes' },

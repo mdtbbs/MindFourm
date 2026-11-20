@@ -20,8 +20,14 @@ import mindustry.core.Platform;
 import mindustry.core.Version;
 import mindustry.ctype.ContentType;
 import mindustry.entities.units.BuildPlan;
+import mindustry.game.Rules;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
+import mindustry.game.SpawnGroup;
+import mindustry.type.Item;
+import mindustry.type.ItemSeq;
+import mindustry.type.ItemStack;
+import mindustry.world.blocks.storage.CoreBlock;
 import mindustry.io.MapIO;
 import mindustry.io.SaveIO;
 import mindustry.io.SaveMeta;
@@ -56,8 +62,16 @@ import java.nio.file.Path;
 import java.util.Properties;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.ArrayDeque;
 import java.util.Map.Entry;
 import java.util.List;
 import java.util.HexFormat;
@@ -140,6 +154,9 @@ public final class MapRenderer {
         server.createContext("/v1/content-metadata", MapRenderer::contentMetadata);
         server.createContext("/v2/editor-catalog", MapRenderer::editorCatalog);
         server.createContext("/v2/map-region", MapRenderer::mapRegion);
+        server.createContext("/v2/schematic-diff", MapRenderer::schematicDiff);
+        server.createContext("/v2/map-diff", MapRenderer::mapDiff);
+        server.createContext("/v2/map-diff-chunk", MapRenderer::mapDiffChunk);
         server.setExecutor(Executors.newSingleThreadExecutor());
         server.start();
         System.out.println("MindFourm renderer listening on loopback");
@@ -2897,6 +2914,1356 @@ public final class MapRenderer {
         return result;
     }
     private static String result(String metadata, String key) { return "{\"metadata\":" + metadata + ",\"previewKey\":" + quote(key) + ",\"parserVersion\":\"mindfourm-renderer-" + VERSION + "\"}"; }
+    // ---------------------------------------------------------------------
+    // Static diff operations. Blueprints and maps are only parsed and compared;
+    // no uploaded content is executed and no full configuration value is emitted.
+    // ---------------------------------------------------------------------
+
+    private static final int DIFF_ITEM_LIMIT = 500;
+    /**
+     * Rule keys the editor and the typed projection understand. Unknown or
+     * structurally opaque rule keys (teams, attributes, objectives, ...) are
+     * deliberately not compared; unknown_rules_changed stays false.
+     */
+    private static final Set<String> RECOGNIZED_RULE_KEYS = Set.of(
+        "allowEditRules", "infiniteResources", "coreBuildAndConfig", "waveTimer", "waveSending", "waves",
+        "airUseSpawns", "wavesSpawnAtCores", "pvp", "pvpAutoPause", "pauseDisabled", "waitEnemies",
+        "attackMode", "editor", "derelictRepair", "canGameOver", "coreCapture", "reactorExplosions",
+        "possessionAllowed", "schematicsAllowed", "damageExplosions", "fire", "randomWaveAI",
+        "unitPayloadUpdate", "unitPayloadsExplode", "unitCapVariable", "hideSpawns", "ghostBlocks",
+        "showOtherTeamPings", "logicUnitControl", "logicUnitBuild", "logicUnitDeconstruct",
+        "worldProcessorPlayerLink", "allowEditWorldProcessors", "disableWorldProcessors",
+        "polygonCoreProtection", "placeRangeCheck", "cleanupDeadTeams", "onlyDepositCore",
+        "allowCoreUnloaders", "coreDestroyClear", "hideBannedBlocks", "allowEnvironmentDeconstruct",
+        "instantBuild", "blockWhitelist", "unitWhitelist", "disableUnitCap", "lighting",
+        "unitCap", "winWave", "environment", "modeName", "planet",
+        "solarMultiplier", "unitBuildSpeedMultiplier", "unitCostMultiplier", "unitDamageMultiplier",
+        "unitHealthMultiplier", "unitCrashDamageMultiplier", "unitMineSpeedMultiplier",
+        "unitFactoryActivationDelay", "blockHealthMultiplier", "blockDamageMultiplier",
+        "buildCostMultiplier", "buildSpeedMultiplier", "deconstructRefundMultiplier",
+        "enemyCoreBuildRadius", "dropZoneRadius", "waveSpacing", "initialWaveSpacing",
+        "itemDepositCooldown",
+        // Typed fallback projection keys used when a map has no raw rules tag.
+        "wave_timer", "wave_sending", "attack_mode", "infinite_resources", "schematics_allowed",
+        "unit_cap", "disable_unit_cap", "wave_spacing"
+    );
+    private static final int RULES_DIFF_LIMIT = 200;
+    private static final int LOGIC_HUNK_LIMIT = 200;
+    private static final int LOGIC_LINE_LIMIT = 2_000;
+    private static final int LOGIC_LINK_LIMIT = 100;
+    private static final int LOGIC_TOTAL_CHARS = 2_000_000;
+    private static final int DIFF_CHUNK_SIZE = 128;
+    private static final int DIFF_CHUNK_LIMIT = 2_000;
+    private static final int DIFF_RUN_LIMIT = 16_384;
+    private static final int LCS_CELL_LIMIT = 4_000_000;
+    private static final String MODDED_FALLBACK_REASON = "MODDED_CONTENT_NOT_SUPPORTED_BY_VANILLA_RENDERER";
+
+    static final class RenderDiffException extends Exception {
+        final String errorCode;
+        RenderDiffException(String errorCode) { super(errorCode); this.errorCode = errorCode; }
+    }
+
+    private record DiffPosition(int x, int y) {}
+    private record ConfigDigest(String type, String sha256) {}
+    private record LogicHunks(List<String> hunks, boolean truncated) {}
+    private record LogicDiffResult(List<String> entries, boolean truncated) {}
+    private record DiffOp(char type, String text, int beforeLine, int afterLine) {}
+    private record DiffOps(List<DiffOp> ops, boolean truncated) {}
+    private record LogicEntry(DiffPosition position, Schematic.Stile stile) {}
+    private record LogicPair(LogicEntry before, LogicEntry after) {}
+    private record MapHeader(Map map, SaveMeta meta) {}
+
+    private static void schematicDiff(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path from = null, to = null;
+        try {
+            JsonValue request = parseDiffRequest(exchange);
+            if (request == null) { send(exchange, 422, error("INVALID_REQUEST")); return; }
+            String fromEncoded = request.getString("fromBase64", "");
+            String toEncoded = request.getString("toBase64", "");
+            String fromHash = request.getString("fromSha256", "").toLowerCase(java.util.Locale.ROOT);
+            String toHash = request.getString("toSha256", "").toLowerCase(java.util.Locale.ROOT);
+            int offsetX = request.getInt("offset_x", 0), offsetY = request.getInt("offset_y", 0);
+            if (fromEncoded.isEmpty() || toEncoded.isEmpty()
+                || !fromHash.matches("[a-f0-9]{64}") || !toHash.matches("[a-f0-9]{64}")
+                || offsetX < -127 || offsetX > 127 || offsetY < -127 || offsetY > 127) {
+                send(exchange, 422, error("INVALID_REQUEST")); return;
+            }
+            byte[] fromBytes = decodeBase64(fromEncoded), toBytes = decodeBase64(toEncoded);
+            if (fromBytes == null || toBytes == null || fromBytes.length == 0 || toBytes.length == 0
+                || fromBytes.length > MAX_BYTES || toBytes.length > MAX_BYTES
+                || !sha256Hex(fromBytes).equals(fromHash) || !sha256Hex(toBytes).equals(toHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            from = Files.createTempFile(inputs, "schematic-diff-from-", ".msch");
+            to = Files.createTempFile(inputs, "schematic-diff-to-", ".msch");
+            Files.write(from, fromBytes);
+            Files.write(to, toBytes);
+            validateInflated(from, MAX_INFLATED_SCHEMATIC_BYTES, 5);
+            validateInflated(to, MAX_INFLATED_SCHEMATIC_BYTES, 5);
+            send(exchange, 200, schematicDiffJson(from, to, offsetX, offsetY));
+        } catch (RenderDiffException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_REQUEST"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_SCHEMATIC"));
+        } finally {
+            if (from != null) Files.deleteIfExists(from);
+            if (to != null) Files.deleteIfExists(to);
+        }
+    }
+
+    private static void mapDiff(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path from = null, to = null;
+        try {
+            JsonValue request = parseDiffRequest(exchange);
+            if (request == null) { send(exchange, 422, error("INVALID_REQUEST")); return; }
+            String fromEncoded = request.getString("fromBase64", "");
+            String toEncoded = request.getString("toBase64", "");
+            String fromHash = request.getString("fromSha256", "").toLowerCase(java.util.Locale.ROOT);
+            String toHash = request.getString("toSha256", "").toLowerCase(java.util.Locale.ROOT);
+            if (fromEncoded.isEmpty() || toEncoded.isEmpty()
+                || !fromHash.matches("[a-f0-9]{64}") || !toHash.matches("[a-f0-9]{64}")) {
+                send(exchange, 422, error("INVALID_REQUEST")); return;
+            }
+            byte[] fromBytes = decodeBase64(fromEncoded), toBytes = decodeBase64(toEncoded);
+            if (fromBytes == null || toBytes == null || fromBytes.length < 8 || toBytes.length < 8
+                || fromBytes.length > MAX_BYTES || toBytes.length > MAX_BYTES
+                || !sha256Hex(fromBytes).equals(fromHash) || !sha256Hex(toBytes).equals(toHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            from = Files.createTempFile(inputs, "map-diff-from-", ".msav");
+            to = Files.createTempFile(inputs, "map-diff-to-", ".msav");
+            Files.write(from, fromBytes);
+            Files.write(to, toBytes);
+            send(exchange, 200, mapDiffJson(from, to, fromHash, toHash));
+        } catch (RenderDiffException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_REQUEST"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_MAP"));
+        } finally {
+            if (from != null) Files.deleteIfExists(from);
+            if (to != null) Files.deleteIfExists(to);
+        }
+    }
+
+    private static void mapDiffChunk(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path from = null, to = null;
+        try {
+            JsonValue request = parseDiffRequest(exchange);
+            if (request == null) { send(exchange, 422, error("INVALID_REQUEST")); return; }
+            String fromEncoded = request.getString("fromBase64", "");
+            String toEncoded = request.getString("toBase64", "");
+            String fromHash = request.getString("fromSha256", "").toLowerCase(java.util.Locale.ROOT);
+            String toHash = request.getString("toSha256", "").toLowerCase(java.util.Locale.ROOT);
+            JsonValue rawCx = request.get("cx"), rawCy = request.get("cy");
+            if (fromEncoded.isEmpty() || toEncoded.isEmpty()
+                || !fromHash.matches("[a-f0-9]{64}") || !toHash.matches("[a-f0-9]{64}")
+                || rawCx == null || !rawCx.isNumber() || rawCy == null || !rawCy.isNumber()) {
+                send(exchange, 422, error("INVALID_REQUEST")); return;
+            }
+            int cx = rawCx.asInt(), cy = rawCy.asInt();
+            if (cx < 0 || cy < 0 || cx > 1_000_000 || cy > 1_000_000) { send(exchange, 422, error("INVALID_REQUEST")); return; }
+            byte[] fromBytes = decodeBase64(fromEncoded), toBytes = decodeBase64(toEncoded);
+            if (fromBytes == null || toBytes == null || fromBytes.length < 8 || toBytes.length < 8
+                || fromBytes.length > MAX_BYTES || toBytes.length > MAX_BYTES
+                || !sha256Hex(fromBytes).equals(fromHash) || !sha256Hex(toBytes).equals(toHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            from = Files.createTempFile(inputs, "map-diff-chunk-from-", ".msav");
+            to = Files.createTempFile(inputs, "map-diff-chunk-to-", ".msav");
+            Files.write(from, fromBytes);
+            Files.write(to, toBytes);
+            send(exchange, 200, mapDiffChunkJson(from, to, cx, cy));
+        } catch (RenderDiffException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_REQUEST"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_MAP"));
+        } finally {
+            if (from != null) Files.deleteIfExists(from);
+            if (to != null) Files.deleteIfExists(to);
+        }
+    }
+
+    private static JsonValue parseDiffRequest(HttpExchange exchange) {
+        try {
+            JsonValue value = JSON.parse(new String(readLimited(exchange, MAX_BYTES * 2), StandardCharsets.UTF_8));
+            return value != null && value.isObject() ? value : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static byte[] decodeBase64(String encoded) {
+        try { return Base64.getDecoder().decode(encoded); }
+        catch (IllegalArgumentException exception) { return null; }
+    }
+
+    private static String sha256Hex(byte[] bytes) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
+        catch (java.security.NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); }
+    }
+
+    private static String sha256Hex(String text) { return sha256Hex(text.getBytes(StandardCharsets.UTF_8)); }
+
+    private static String schematicMetadataOnlyResponse(List<String> unknownContent) {
+        return "{\"schemaVersion\":2,\"mode\":\"metadata_only\",\"fallbackReason\":" + quote(MODDED_FALLBACK_REASON)
+            + ",\"unknownContent\":" + stringArray(unknownContent) + ",\"diff\":null,\"diffOverlayKey\":null}";
+    }
+
+    private static String mapMetadataOnlyResponse() {
+        return "{\"schemaVersion\":2,\"mode\":\"metadata_only\",\"fallbackReason\":" + quote(MODDED_FALLBACK_REASON)
+            + ",\"unknownContent\":[],\"diff\":null,\"diffOverlayKey\":null}";
+    }
+
+    private static String mapChunkMetadataOnlyResponse() {
+        return "{\"schemaVersion\":2,\"mode\":\"metadata_only\",\"fallbackReason\":" + quote(MODDED_FALLBACK_REASON) + ",\"chunk\":null}";
+    }
+
+    /** Compares two official .msch files; unknown content produces a metadata-only response. */
+    static String schematicDiffJson(Path fromFile, Path toFile, int offsetX, int offsetY) throws Exception {
+        Schematic from = Schematics.read(new Fi(fromFile.toFile()));
+        Schematic to = Schematics.read(new Fi(toFile.toFile()));
+        if (!isSafeSchematicSize(from) || !isSafeSchematicSize(to)) throw new RenderDiffException("UNSUPPORTED_SIZES");
+        LinkedHashSet<String> unknown = new LinkedHashSet<>();
+        unknown.addAll(unknownSchematicBlocks(fromFile));
+        unknown.addAll(unknownSchematicBlocks(toFile));
+        if (!unknown.isEmpty()) return schematicMetadataOnlyResponse(List.copyOf(unknown));
+        return fullSchematicDiffJson(from, to, offsetX, offsetY);
+    }
+
+    private static String fullSchematicDiffJson(Schematic from, Schematic to, int offsetX, int offsetY) {
+        HashMap<DiffPosition, Schematic.Stile> fromTiles = new HashMap<>();
+        for (Schematic.Stile stile : from.tiles) fromTiles.put(new DiffPosition(stile.x + offsetX, stile.y + offsetY), stile);
+        HashMap<DiffPosition, Schematic.Stile> toTiles = new HashMap<>();
+        for (Schematic.Stile stile : to.tiles) toTiles.put(new DiffPosition(stile.x, stile.y), stile);
+
+        TreeSet<DiffPosition> positions = new TreeSet<>(Comparator.comparingInt(DiffPosition::x).thenComparingInt(DiffPosition::y));
+        positions.addAll(fromTiles.keySet());
+        positions.addAll(toTiles.keySet());
+
+        List<String> added = new ArrayList<>(), removed = new ArrayList<>(), modified = new ArrayList<>();
+        int addedCount = 0, removedCount = 0, modifiedCount = 0;
+        for (DiffPosition position : positions) {
+            Schematic.Stile before = fromTiles.get(position);
+            Schematic.Stile after = toTiles.get(position);
+            if (before == null) {
+                addedCount++;
+                if (added.size() < DIFF_ITEM_LIMIT) added.add(blockChangeJson(position, after, to.width, to.height));
+                continue;
+            }
+            if (after == null) {
+                removedCount++;
+                if (removed.size() < DIFF_ITEM_LIMIT) removed.add(blockChangeJson(position, before, from.width, from.height));
+                continue;
+            }
+            if (before.block != after.block) {
+                removedCount++;
+                if (removed.size() < DIFF_ITEM_LIMIT) removed.add(blockChangeJson(position, before, from.width, from.height));
+                addedCount++;
+                if (added.size() < DIFF_ITEM_LIMIT) added.add(blockChangeJson(position, after, to.width, to.height));
+                continue;
+            }
+            ConfigDigest beforeDigest = configDigest(before, from.width, from.height);
+            ConfigDigest afterDigest = configDigest(after, to.width, to.height);
+            boolean rotationChanged = (before.rotation & 3) != (after.rotation & 3);
+            boolean configChanged = !Objects.equals(beforeDigest.type, afterDigest.type)
+                || !Objects.equals(beforeDigest.sha256, afterDigest.sha256);
+            if (rotationChanged || configChanged) {
+                modifiedCount++;
+                if (modified.size() < DIFF_ITEM_LIMIT) modified.add(modifiedBlockJson(position, before, after, beforeDigest, afterDigest));
+            }
+        }
+        boolean blocksTruncated = addedCount > DIFF_ITEM_LIMIT || removedCount > DIFF_ITEM_LIMIT || modifiedCount > DIFF_ITEM_LIMIT;
+        LogicDiffResult logic = logicDiffs(from, to, offsetX, offsetY);
+
+        return "{\"schemaVersion\":2,\"mode\":\"full\",\"fallbackReason\":null,\"unknownContent\":[],\"diffOverlayKey\":null,\"diff\":{"
+            + "\"schema_version\":2,\"mode\":\"full\",\"kind\":\"schematic\","
+            + "\"offset\":{\"x\":" + offsetX + ",\"y\":" + offsetY + "},"
+            + "\"blocks\":{\"added\":" + jsonArray(added) + ",\"removed\":" + jsonArray(removed)
+            + ",\"modified\":" + jsonArray(modified) + ",\"truncated\":" + blocksTruncated + "},"
+            + "\"materials_delta\":" + materialsDeltaJson(from, to) + ","
+            + "\"power_delta\":" + powerDeltaJson(from, to) + ","
+            + "\"logic_diffs\":" + jsonArray(logic.entries()) + ","
+            + "\"logic_truncated\":" + logic.truncated() + ","
+            + "\"metadata\":{\"width\":{\"before\":" + from.width + ",\"after\":" + to.width + "},"
+            + "\"height\":{\"before\":" + from.height + ",\"after\":" + to.height + "},"
+            + "\"block_count\":{\"before\":" + from.tiles.size + ",\"after\":" + to.tiles.size + "}},"
+            + "\"estimated\":true}}";
+    }
+
+    private static String blockChangeJson(DiffPosition position, Schematic.Stile stile, int width, int height) {
+        ConfigDigest digest = configDigest(stile, width, height);
+        return "{\"x\":" + position.x() + ",\"y\":" + position.y() + ",\"block\":" + quote(stile.block.name)
+            + ",\"rotation\":" + (stile.rotation & 3)
+            + ",\"config_type\":" + (digest.type() == null ? "null" : quote(digest.type())) + "}";
+    }
+
+    private static String modifiedBlockJson(DiffPosition position, Schematic.Stile before, Schematic.Stile after,
+        ConfigDigest beforeDigest, ConfigDigest afterDigest) {
+        return "{\"x\":" + position.x() + ",\"y\":" + position.y() + ",\"block\":" + quote(after.block.name)
+            + ",\"before\":" + digestJson(before.rotation, beforeDigest)
+            + ",\"after\":" + digestJson(after.rotation, afterDigest) + "}";
+    }
+
+    private static String digestJson(byte rotation, ConfigDigest digest) {
+        return "{\"rotation\":" + (rotation & 3)
+            + ",\"config_type\":" + (digest.type() == null ? "null" : quote(digest.type()))
+            + ",\"config_sha256\":" + (digest.sha256() == null ? "null" : quote(digest.sha256()))
+            + ",\"config_summary\":null}";
+    }
+
+    private static ConfigDigest configDigest(Schematic.Stile stile, int width, int height) {
+        if (stile.block instanceof LogicBlock) {
+            LogicConfigData data = parseLogicConfigOrNull(stile.config);
+            if (data == null) return new ConfigDigest("logic", null);
+            return new ConfigDigest("logic", sha256Hex(data.source() + "\n" + canonicalLogicLinks(data.links())));
+        }
+        String json = schematicConfigJson(stile.config, stile.block, stile.x, stile.y, width, height);
+        if (json == null) return new ConfigDigest(null, null);
+        String type = null;
+        try {
+            JsonValue parsed = JSON.parse(json);
+            if (parsed != null && parsed.isObject()) type = parsed.getString("type", null);
+        } catch (Exception ignored) { /* unreadable projections stay untyped */ }
+        return new ConfigDigest(type, sha256Hex(json));
+    }
+
+    private static LogicConfigData parseLogicConfigOrNull(Object config) {
+        try { return parseLogicConfig(config); }
+        catch (Exception exception) { return null; }
+    }
+
+    private static String canonicalLogicLinks(List<LogicLinkData> links) {
+        List<String> values = new ArrayList<>(links.size());
+        for (LogicLinkData link : links) values.add(link.name() + "," + link.x() + "," + link.y());
+        values.sort(String::compareTo);
+        return String.join("\n", values);
+    }
+
+    private static String materialsDeltaJson(Schematic from, Schematic to) {
+        TreeMap<String, Integer> before = schematicRequirements(from), after = schematicRequirements(to);
+        TreeSet<String> names = new TreeSet<>(before.keySet());
+        names.addAll(after.keySet());
+        List<String> entries = new ArrayList<>();
+        for (String name : names) {
+            int beforeAmount = before.getOrDefault(name, 0), afterAmount = after.getOrDefault(name, 0);
+            if (beforeAmount == afterAmount) continue;
+            entries.add("{\"item\":" + quote(name) + ",\"before\":" + beforeAmount + ",\"after\":" + afterAmount
+                + ",\"delta\":" + (afterAmount - beforeAmount) + "}");
+        }
+        return jsonArray(entries);
+    }
+
+    private static TreeMap<String, Integer> schematicRequirements(Schematic schematic) {
+        TreeMap<String, Integer> result = new TreeMap<>();
+        ItemSeq requirements = schematic.requirements();
+        for (ItemStack stack : requirements) {
+            if (stack == null || stack.item == null) continue;
+            result.merge(stack.item.name, stack.amount, Integer::sum);
+        }
+        return result;
+    }
+
+    private static String powerDeltaJson(Schematic from, Schematic to) {
+        double fromProduction = from.powerProduction(), fromConsumption = from.powerConsumption();
+        double toProduction = to.powerProduction(), toConsumption = to.powerConsumption();
+        double fromNet = fromProduction - fromConsumption, toNet = toProduction - toConsumption;
+        return "{\"production\":{\"before\":" + number(round2(fromProduction)) + ",\"after\":" + number(round2(toProduction))
+            + ",\"delta\":" + number(round2(toProduction - fromProduction)) + "},"
+            + "\"consumption\":{\"before\":" + number(round2(fromConsumption)) + ",\"after\":" + number(round2(toConsumption))
+            + ",\"delta\":" + number(round2(toConsumption - fromConsumption)) + "},"
+            + "\"net\":{\"before\":" + number(round2(fromNet)) + ",\"after\":" + number(round2(toNet))
+            + ",\"delta\":" + number(round2(toNet - fromNet)) + "},\"estimated\":true}";
+    }
+
+    private static double round2(double value) { return Math.round(value * 100d) / 100d; }
+
+    private static String jsonArray(List<String> values) {
+        return "[" + String.join(",", values) + "]";
+    }
+
+    private static LogicDiffResult logicDiffs(Schematic from, Schematic to, int offsetX, int offsetY) {
+        List<LogicEntry> fromEntries = logicEntries(from, offsetX, offsetY);
+        List<LogicEntry> toEntries = logicEntries(to, 0, 0);
+        HashMap<DiffPosition, LogicEntry> toByPosition = new HashMap<>();
+        for (LogicEntry entry : toEntries) toByPosition.put(entry.position(), entry);
+
+        List<LogicPair> pairs = new ArrayList<>();
+        List<LogicEntry> fromRemaining = new ArrayList<>(), toRemaining = new ArrayList<>();
+        LinkedHashSet<DiffPosition> matchedTo = new LinkedHashSet<>();
+        for (LogicEntry entry : fromEntries) {
+            LogicEntry match = toByPosition.get(entry.position());
+            if (match != null && match.stile().block == entry.stile().block) {
+                pairs.add(new LogicPair(entry, match));
+                matchedTo.add(match.position());
+            } else {
+                fromRemaining.add(entry);
+            }
+        }
+        for (LogicEntry entry : toEntries) if (!matchedTo.contains(entry.position())) toRemaining.add(entry);
+
+        // Unmatched processors are paired by block type and order, which keeps
+        // moved processors in the same logic diff entry.
+        TreeMap<String, List<LogicEntry>> fromGroups = groupLogicEntries(fromRemaining);
+        TreeMap<String, List<LogicEntry>> toGroups = groupLogicEntries(toRemaining);
+        TreeSet<String> blockNames = new TreeSet<>(fromGroups.keySet());
+        blockNames.addAll(toGroups.keySet());
+        List<LogicEntry> added = new ArrayList<>(), removed = new ArrayList<>();
+        for (String blockName : blockNames) {
+            List<LogicEntry> fromGroup = fromGroups.getOrDefault(blockName, List.of());
+            List<LogicEntry> toGroup = toGroups.getOrDefault(blockName, List.of());
+            int paired = Math.min(fromGroup.size(), toGroup.size());
+            for (int index = 0; index < paired; index++) pairs.add(new LogicPair(fromGroup.get(index), toGroup.get(index)));
+            for (int index = paired; index < fromGroup.size(); index++) removed.add(fromGroup.get(index));
+            for (int index = paired; index < toGroup.size(); index++) added.add(toGroup.get(index));
+        }
+
+        List<String> entries = new ArrayList<>();
+        boolean truncated = false, budgetExhausted = false;
+        int totalChars = 0;
+        for (LogicPair pair : pairs) {
+            String entry = logicPairJson(pair, from.width, from.height, to.width, to.height);
+            if (entry == null) continue;
+            if (totalChars + entry.length() > LOGIC_TOTAL_CHARS) {
+                truncated = true;
+                budgetExhausted = true;
+                break;
+            }
+            entries.add(entry);
+            totalChars += entry.length();
+            if (entry.contains("\"truncated\":true")) truncated = true;
+        }
+        if (!budgetExhausted) {
+            for (LogicEntry entry : added) {
+                String json = logicSingleJson(entry, "added");
+                if (totalChars + json.length() > LOGIC_TOTAL_CHARS) { truncated = true; break; }
+                entries.add(json);
+                totalChars += json.length();
+            }
+        }
+        if (!budgetExhausted) {
+            for (LogicEntry entry : removed) {
+                String json = logicSingleJson(entry, "removed");
+                if (totalChars + json.length() > LOGIC_TOTAL_CHARS) { truncated = true; break; }
+                entries.add(json);
+                totalChars += json.length();
+            }
+        }
+        return new LogicDiffResult(entries, truncated);
+    }
+
+    private static List<LogicEntry> logicEntries(Schematic schematic, int offsetX, int offsetY) {
+        List<LogicEntry> result = new ArrayList<>();
+        for (Schematic.Stile stile : schematic.tiles) {
+            if (stile.block instanceof LogicBlock) {
+                result.add(new LogicEntry(new DiffPosition(stile.x + offsetX, stile.y + offsetY), stile));
+            }
+        }
+        result.sort(Comparator.comparingInt((LogicEntry entry) -> entry.position().x())
+            .thenComparingInt(entry -> entry.position().y()));
+        return result;
+    }
+
+    private static TreeMap<String, List<LogicEntry>> groupLogicEntries(List<LogicEntry> entries) {
+        TreeMap<String, List<LogicEntry>> groups = new TreeMap<>();
+        for (LogicEntry entry : entries) {
+            groups.computeIfAbsent(entry.stile().block.name, ignored -> new ArrayList<>()).add(entry);
+        }
+        return groups;
+    }
+
+    private static String logicPairJson(LogicPair pair, int beforeWidth, int beforeHeight, int afterWidth, int afterHeight) {
+        LogicEntry before = pair.before(), after = pair.after();
+        ConfigDigest beforeDigest = configDigest(before.stile(), beforeWidth, beforeHeight);
+        ConfigDigest afterDigest = configDigest(after.stile(), afterWidth, afterHeight);
+        java.util.Set<String> beforeLinks = logicLinks(before.stile());
+        java.util.Set<String> afterLinks = logicLinks(after.stile());
+        boolean rotationChanged = (before.stile().rotation & 3) != (after.stile().rotation & 3);
+        boolean configChanged = !Objects.equals(beforeDigest.type(), afterDigest.type())
+            || !Objects.equals(beforeDigest.sha256(), afterDigest.sha256());
+        boolean linksChanged = beforeLinks != null && afterLinks != null && !beforeLinks.equals(afterLinks);
+        boolean moved = !before.position().equals(after.position());
+        if (!rotationChanged && !configChanged && !linksChanged && !moved) return null;
+
+        LogicHunks hunks = logicHunks(before.stile().config, after.stile().config);
+        DiffPosition display = after.position();
+        String key = display.x() + ":" + display.y() + ":" + after.stile().block.name;
+        return "{\"key\":" + quote(key) + ",\"status\":\"modified\""
+            + ",\"before\":" + logicSideJson(before) + ",\"after\":" + logicSideJson(after)
+            + ",\"hunks\":" + jsonArray(hunks.hunks())
+            + ",\"links\":" + logicLinksJson(beforeLinks, afterLinks)
+            + ",\"truncated\":" + hunks.truncated() + "}";
+    }
+
+    private static String logicSingleJson(LogicEntry entry, String status) {
+        String key = entry.position().x() + ":" + entry.position().y() + ":" + entry.stile().block.name;
+        return "{\"key\":" + quote(key) + ",\"status\":" + quote(status)
+            + ",\"before\":" + ("removed".equals(status) ? logicSideJson(entry) : "null")
+            + ",\"after\":" + ("added".equals(status) ? logicSideJson(entry) : "null")
+            + ",\"hunks\":[],\"links\":{\"added\":[],\"removed\":[]},\"truncated\":false}";
+    }
+
+    private static String logicSideJson(LogicEntry entry) {
+        return "{\"x\":" + entry.position().x() + ",\"y\":" + entry.position().y()
+            + ",\"processor_type\":" + quote(entry.stile().block.name) + "}";
+    }
+
+    private static java.util.Set<String> logicLinks(Schematic.Stile stile) {
+        LogicConfigData data = parseLogicConfigOrNull(stile.config);
+        if (data == null) return null;
+        TreeSet<String> result = new TreeSet<>();
+        for (LogicLinkData link : data.links()) result.add(link.name() + "," + link.x() + "," + link.y());
+        return result;
+    }
+
+    private static String logicLinksJson(java.util.Set<String> before, java.util.Set<String> after) {
+        List<String> added = new ArrayList<>(), removed = new ArrayList<>();
+        if (before != null && after != null) {
+            int addedCount = 0, removedCount = 0;
+            for (String link : after) if (!before.contains(link) && addedCount++ < LOGIC_LINK_LIMIT) added.add(quote(link));
+            for (String link : before) if (!after.contains(link) && removedCount++ < LOGIC_LINK_LIMIT) removed.add(quote(link));
+        }
+        return "{\"added\":" + jsonArray(added) + ",\"removed\":" + jsonArray(removed) + "}";
+    }
+
+    private static LogicHunks logicHunks(Object beforeConfig, Object afterConfig) {
+        LogicConfigData before = parseLogicConfigOrNull(beforeConfig), after = parseLogicConfigOrNull(afterConfig);
+        if (before == null || after == null) return new LogicHunks(List.of(), false);
+        DiffOps diff = lineDiff(logicLines(before.source()), logicLines(after.source()));
+        LogicHunks hunks = unifiedHunks(diff.ops());
+        return new LogicHunks(hunks.hunks(), hunks.truncated() || diff.truncated());
+    }
+
+    private static List<String> logicLines(String source) {
+        if (source == null || source.isEmpty()) return List.of();
+        String[] parts = source.split("\n", -1);
+        ArrayList<String> lines = new ArrayList<>(java.util.Arrays.asList(parts));
+        if (!lines.isEmpty() && lines.get(lines.size() - 1).isEmpty()) lines.remove(lines.size() - 1);
+        return lines;
+    }
+
+    /** Row-based LCS diff. Very large inputs fall back to delete-all/add-all and are marked truncated. */
+    private static DiffOps lineDiff(List<String> before, List<String> after) {
+        int prefix = 0;
+        while (prefix < before.size() && prefix < after.size() && before.get(prefix).equals(after.get(prefix))) prefix++;
+        int suffix = 0;
+        while (suffix < before.size() - prefix && suffix < after.size() - prefix
+            && before.get(before.size() - 1 - suffix).equals(after.get(after.size() - 1 - suffix))) suffix++;
+
+        int beforeStart = prefix, beforeEnd = before.size() - suffix;
+        int afterStart = prefix, afterEnd = after.size() - suffix;
+        int n = beforeEnd - beforeStart, m = afterEnd - afterStart;
+        List<DiffOp> ops = new ArrayList<>(before.size() + after.size());
+        for (int index = 0; index < prefix; index++) ops.add(new DiffOp(' ', before.get(index), index + 1, index + 1));
+
+        boolean truncated = false;
+        if (n > 0 || m > 0) {
+            if ((long)n * m > LCS_CELL_LIMIT) {
+                truncated = true;
+                for (int index = 0; index < n; index++) {
+                    ops.add(new DiffOp('-', before.get(beforeStart + index), beforeStart + index + 1, 0));
+                }
+                for (int index = 0; index < m; index++) {
+                    ops.add(new DiffOp('+', after.get(afterStart + index), 0, afterStart + index + 1));
+                }
+            } else {
+                int[][] lcs = new int[n + 1][m + 1];
+                for (int i = n - 1; i >= 0; i--) {
+                    for (int j = m - 1; j >= 0; j--) {
+                        lcs[i][j] = before.get(beforeStart + i).equals(after.get(afterStart + j))
+                            ? lcs[i + 1][j + 1] + 1
+                            : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+                    }
+                }
+                int i = 0, j = 0;
+                while (i < n && j < m) {
+                    if (before.get(beforeStart + i).equals(after.get(afterStart + j))) {
+                        ops.add(new DiffOp(' ', before.get(beforeStart + i), beforeStart + i + 1, afterStart + j + 1));
+                        i++; j++;
+                    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+                        ops.add(new DiffOp('-', before.get(beforeStart + i), beforeStart + i + 1, 0));
+                        i++;
+                    } else {
+                        ops.add(new DiffOp('+', after.get(afterStart + j), 0, afterStart + j + 1));
+                        j++;
+                    }
+                }
+                while (i < n) {
+                    ops.add(new DiffOp('-', before.get(beforeStart + i), beforeStart + i + 1, 0));
+                    i++;
+                }
+                while (j < m) {
+                    ops.add(new DiffOp('+', after.get(afterStart + j), 0, afterStart + j + 1));
+                    j++;
+                }
+            }
+        }
+        for (int index = 0; index < suffix; index++) {
+            int beforeIndex = before.size() - suffix + index;
+            int afterIndex = after.size() - suffix + index;
+            ops.add(new DiffOp(' ', before.get(beforeIndex), beforeIndex + 1, afterIndex + 1));
+        }
+        return new DiffOps(ops, truncated);
+    }
+
+    private static LogicHunks unifiedHunks(List<DiffOp> ops) {
+        int[] beforeConsumed = new int[ops.size() + 1];
+        int[] afterConsumed = new int[ops.size() + 1];
+        for (int index = 0; index < ops.size(); index++) {
+            DiffOp op = ops.get(index);
+            beforeConsumed[index + 1] = beforeConsumed[index] + (op.type() != '+' ? 1 : 0);
+            afterConsumed[index + 1] = afterConsumed[index] + (op.type() != '-' ? 1 : 0);
+        }
+        List<Integer> changes = new ArrayList<>();
+        for (int index = 0; index < ops.size(); index++) if (ops.get(index).type() != ' ') changes.add(index);
+
+        List<String> hunks = new ArrayList<>();
+        boolean truncated = false;
+        int emittedLines = 0, cursor = 0;
+        while (cursor < changes.size()) {
+            if (hunks.size() >= LOGIC_HUNK_LIMIT) { truncated = true; break; }
+            int first = changes.get(cursor), last = first, next = cursor + 1;
+            while (next < changes.size() && changes.get(next) - last - 1 <= 6) {
+                last = changes.get(next);
+                next++;
+            }
+            int start = Math.max(0, first - 3), end = Math.min(ops.size(), last + 4);
+            int lineCount = end - start;
+            if (emittedLines + lineCount > LOGIC_LINE_LIMIT) { truncated = true; break; }
+            int beforeCount = beforeConsumed[end] - beforeConsumed[start];
+            int afterCount = afterConsumed[end] - afterConsumed[start];
+            int beforeStart = beforeCount == 0 ? beforeConsumed[start] : beforeConsumed[start] + 1;
+            int afterStart = afterCount == 0 ? afterConsumed[start] : afterConsumed[start] + 1;
+            StringBuilder hunk = new StringBuilder("{\"header\":")
+                .append(quote("@@ -" + beforeStart + "," + beforeCount + " +" + afterStart + "," + afterCount + " @@"))
+                .append(",\"lines\":[");
+            for (int index = start; index < end; index++) {
+                if (index > start) hunk.append(',');
+                DiffOp op = ops.get(index);
+                hunk.append("{\"type\":").append(quote(String.valueOf(op.type())))
+                    .append(",\"text\":").append(jsonQuoteStrict(op.text()));
+                if (op.type() != '+') hunk.append(",\"before_line\":").append(op.beforeLine());
+                if (op.type() != '-') hunk.append(",\"after_line\":").append(op.afterLine());
+                hunk.append('}');
+            }
+            hunks.add(hunk.append("]}").toString());
+            emittedLines += lineCount;
+            cursor = next;
+        }
+        return new LogicHunks(hunks, truncated);
+    }
+
+    private static String jsonQuoteStrict(String value) {
+        StringBuilder result = new StringBuilder("\"");
+        for (char character : value.toCharArray()) {
+            switch (character) {
+                case '\\' -> result.append("\\\\");
+                case '"' -> result.append("\\\"");
+                case '\n' -> result.append("\\n");
+                case '\r' -> result.append("\\r");
+                case '\t' -> result.append("\\t");
+                case '\b' -> result.append("\\b");
+                case '\f' -> result.append("\\f");
+                default -> {
+                    if (character < 0x20) result.append(String.format(java.util.Locale.ROOT, "\\u%04x", (int)character));
+                    else result.append(character);
+                }
+            }
+        }
+        return result.append('"').toString();
+    }
+
+    private static final class MapSnapshot {
+        final int width, height;
+        final short[] floorIds, overlayIds;
+        final java.util.Map<String, Integer> resources = new LinkedHashMap<>();
+        final List<MapObjectData> objects = new ArrayList<>();
+        long objectCount;
+        int coreCount, spawnCount, buildingCount;
+        Rules rules;
+        JsonValue rawRules;
+
+        MapSnapshot(int width, int height) {
+            this.width = width;
+            this.height = height;
+            this.floorIds = new short[width * height];
+            this.overlayIds = new short[width * height];
+        }
+    }
+
+    private record MapObjectData(String kind, int x, int y, String name, String team, int rotation, int size) {
+        String key() { return x + ":" + y + ":" + name; }
+        String moveSignature() { return kind + "|" + name + "|" + team + "|" + rotation + "|" + size; }
+        String json() {
+            return "{\"x\":" + x + ",\"y\":" + y + ",\"name\":" + quote(name)
+                + ",\"team\":" + quote(team) + ",\"rotation\":" + rotation + ",\"size\":" + size + "}";
+        }
+    }
+
+    private record ObjectChange(MapObjectData before, MapObjectData after) {}
+
+    private record WaveData(String unit, int begin, int end, int spacing, int amount, float shields, boolean boss, String team) {
+        String key() { return unit + "|" + begin + "|" + end + "|" + spacing; }
+        String json() {
+            return "{\"unit\":" + quote(unit) + ",\"begin\":" + begin + ",\"end\":" + end
+                + ",\"spacing\":" + spacing + ",\"amount\":" + amount + ",\"shields\":" + number(shields)
+                + ",\"boss\":" + boss + ",\"team\":" + quote(team) + "}";
+        }
+    }
+
+    private record LoadoutData(String item, int amount) {
+        String key() { return item + "\u0000" + amount; }
+        String json() { return "{\"item\":" + quote(item) + ",\"amount\":" + amount + "}"; }
+    }
+
+    private static final class RulesSnapshot {
+        JsonValue raw;
+        final List<WaveData> waves = new ArrayList<>();
+        Set<String> bannedBlocks = new TreeSet<>();
+        Set<String> bannedUnits = new TreeSet<>();
+        final List<LoadoutData> loadout = new ArrayList<>();
+    }
+
+    private record TerrainChunkSummary(String json, boolean truncated) {}
+    private record ChunkRuns(String json, boolean changed, boolean truncated) {}
+
+    /** Compares two official .msav files. Modded maps are reported as metadata-only. */
+    static String mapDiffJson(Path fromFile, Path toFile, String fromSha, String toSha) throws Exception {
+        MapHeader fromHeader = readMapHeader(fromFile), toHeader = readMapHeader(toFile);
+        if (!isSafeMapSize(fromHeader.map().width, fromHeader.map().height)
+            || !isSafeMapSize(toHeader.map().width, toHeader.map().height)) {
+            throw new RenderDiffException("UNSUPPORTED_SIZES");
+        }
+        if (isModdedMap(fromHeader.map(), fromHeader.meta()) || isModdedMap(toHeader.map(), toHeader.meta())) {
+            return mapMetadataOnlyResponse();
+        }
+        MapSnapshot from = loadMapSnapshot(fromHeader.map()), to = loadMapSnapshot(toHeader.map());
+        return fullMapDiffJson(from, to, fromSha, toSha);
+    }
+
+    static String mapDiffChunkJson(Path fromFile, Path toFile, int cx, int cy) throws Exception {
+        MapHeader fromHeader = readMapHeader(fromFile), toHeader = readMapHeader(toFile);
+        if (!isSafeMapSize(fromHeader.map().width, fromHeader.map().height)
+            || !isSafeMapSize(toHeader.map().width, toHeader.map().height)) {
+            throw new RenderDiffException("UNSUPPORTED_SIZES");
+        }
+        if (isModdedMap(fromHeader.map(), fromHeader.meta()) || isModdedMap(toHeader.map(), toHeader.meta())) {
+            return mapChunkMetadataOnlyResponse();
+        }
+        MapSnapshot from = loadMapSnapshot(fromHeader.map()), to = loadMapSnapshot(toHeader.map());
+        return fullMapChunkJson(from, to, cx, cy);
+    }
+
+    private static MapHeader readMapHeader(Path file) throws Exception {
+        validateInflated(file, MAX_INFLATED_MAP_BYTES, 0);
+        Map map = MapIO.createMap(new Fi(file.toFile()), true);
+        SaveMeta meta = SaveIO.getMeta(new Fi(file.toFile()));
+        return new MapHeader(map, meta);
+    }
+
+    private static boolean isModdedMap(Map map, SaveMeta meta) {
+        return hasMods(meta) || map.mod != null || !map.tags.get("mod", "").isBlank();
+    }
+
+    private static MapSnapshot loadMapSnapshot(Map map) throws RenderDiffException {
+        MapIO.loadMap(map);
+        if (Vars.world == null || Vars.world.tiles == null
+            || Vars.world.tiles.width != map.width || Vars.world.tiles.height != map.height) {
+            throw new RenderDiffException("INVALID_MAP");
+        }
+        MapSnapshot snapshot = new MapSnapshot(map.width, map.height);
+        for (mindustry.world.Tile tile : Vars.world.tiles) {
+            int index = tile.x + tile.y * map.width;
+            if (index < 0 || index >= snapshot.floorIds.length) throw new RenderDiffException("INVALID_MAP");
+            snapshot.floorIds[index] = tile.floorID();
+            snapshot.overlayIds[index] = tile.overlayID();
+
+            Item drop = tile.drop();
+            if (drop != null) increment(snapshot.resources, drop.name + "\u0000ore");
+            if (tile.overlay() != null && tile.overlay().wallOre && tile.overlay().itemDrop != null) {
+                increment(snapshot.resources, tile.overlay().itemDrop.name + "\u0000wall_ore");
+            }
+            if (tile.floor() != null && tile.floor().liquidDrop != null) {
+                increment(snapshot.resources, tile.floor().liquidDrop.name + "\u0000liquid");
+            }
+
+            if (!tile.isCenter()) continue;
+            boolean core = tile.build instanceof CoreBlock.CoreBuild;
+            boolean spawn = isA(tile.block(), "SpawnBlock");
+            if (!core && !spawn && tile.build == null) continue;
+            snapshot.objectCount++;
+            if (core) snapshot.coreCount++;
+            else if (spawn) snapshot.spawnCount++;
+            else snapshot.buildingCount++;
+            if (snapshot.objects.size() < MAX_MAP_LAYER_ITEMS) {
+                mindustry.game.Team team = tile.team();
+                snapshot.objects.add(new MapObjectData(core ? "cores" : spawn ? "spawns" : "buildings",
+                    tile.x, tile.y, tile.block().name,
+                    team == null ? "" : team.name,
+                    tile.build == null ? 0 : tile.build.rotation & 3,
+                    tile.block().size));
+            }
+        }
+        snapshot.rules = map.rules();
+        snapshot.rawRules = parseRulesObject(map, snapshot.rules);
+        return snapshot;
+    }
+
+    private static void increment(java.util.Map<String, Integer> counts, String key) {
+        counts.merge(key, 1, Integer::sum);
+    }
+
+    private static JsonValue parseRulesObject(Map map, Rules rules) {
+        String raw = map.tags.get("rules", "");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                JsonValue value = JSON.parse(raw);
+                if (value != null && value.isObject()) return value;
+            } catch (Exception ignored) { /* fall through to the typed projection */ }
+        }
+        try {
+            JsonValue value = JSON.parse(rulesJson(rules, map));
+            if (value != null && value.isObject()) return value;
+        } catch (Exception ignored) { /* keep an empty object */ }
+        return new arc.util.serialization.JsonValue(arc.util.serialization.JsonValue.ValueType.object);
+    }
+
+    private static String fullMapDiffJson(MapSnapshot from, MapSnapshot to, String fromSha, String toSha) {
+        TerrainChunkSummary chunks = terrainChunksSummary(from, to);
+        String overlayKey = writeMapDiffOverlay(from, to, fromSha, toSha);
+        return "{\"schemaVersion\":2,\"mode\":\"full\",\"fallbackReason\":null,\"unknownContent\":[],"
+            + "\"diffOverlayKey\":" + (overlayKey == null ? "null" : quote(overlayKey)) + ",\"diff\":{"
+            + "\"schema_version\":2,\"mode\":\"full\",\"kind\":\"map\","
+            + "\"rules_diff\":" + rulesDiffJson(from, to) + ","
+            + "\"waves_diff\":" + wavesDiffJson(from, to) + ","
+            + "\"objects_diff\":" + objectsDiffJson(from, to) + ","
+            + "\"resources_delta\":" + resourcesDeltaJson(from, to) + ","
+            + "\"terrain_chunks_summary\":" + chunks.json() + ","
+            + "\"chunk_size\":" + DIFF_CHUNK_SIZE + ","
+            + "\"chunks_truncated\":" + chunks.truncated() + ","
+            + "\"objects_truncated\":" + (from.objectCount + to.objectCount > MAX_MAP_LAYER_ITEMS) + ","
+            + "\"estimated\":true}}";
+    }
+
+    private static RulesSnapshot rulesSnapshot(MapSnapshot snapshot) {
+        RulesSnapshot result = new RulesSnapshot();
+        result.raw = snapshot.rawRules;
+        if (snapshot.rules != null && snapshot.rules.spawns != null) {
+            for (SpawnGroup group : snapshot.rules.spawns) {
+                result.waves.add(new WaveData(
+                    group.type == null ? "" : group.type.name,
+                    group.begin, group.end, group.spacing, group.unitAmount, group.shields,
+                    group.effect != null && "boss".equals(group.effect.name),
+                    group.team == null ? "" : group.team.name));
+            }
+        }
+        Set<String> rawBannedBlocks = rawStringSet(result.raw, "bannedBlocks");
+        if (rawBannedBlocks != null) {
+            result.bannedBlocks = rawBannedBlocks;
+        } else if (snapshot.rules != null && snapshot.rules.bannedBlocks != null) {
+            for (Block block : snapshot.rules.bannedBlocks) result.bannedBlocks.add(block.name);
+        }
+        Set<String> rawBannedUnits = rawStringSet(result.raw, "bannedUnits");
+        if (rawBannedUnits != null) {
+            result.bannedUnits = rawBannedUnits;
+        } else if (snapshot.rules != null && snapshot.rules.bannedUnits != null) {
+            for (mindustry.type.UnitType unit : snapshot.rules.bannedUnits) result.bannedUnits.add(unit.name);
+        }
+        List<LoadoutData> rawLoadout = rawLoadout(result.raw);
+        if (rawLoadout != null) {
+            result.loadout.addAll(rawLoadout);
+        } else if (snapshot.rules != null && snapshot.rules.loadout != null) {
+            for (ItemStack stack : snapshot.rules.loadout) {
+                if (stack != null && stack.item != null) result.loadout.add(new LoadoutData(stack.item.name, stack.amount));
+            }
+        }
+        result.loadout.sort(Comparator.comparing(LoadoutData::item).thenComparingInt(LoadoutData::amount));
+        return result;
+    }
+
+    private static Set<String> rawStringSet(JsonValue raw, String key) {
+        JsonValue value = raw == null ? null : raw.get(key);
+        if (value == null || !value.isArray()) return null;
+        TreeSet<String> result = new TreeSet<>();
+        for (JsonValue child = value.child; child != null; child = child.next) {
+            if (!child.isString()) return null;
+            result.add(child.asString());
+        }
+        return result;
+    }
+
+    private static List<LoadoutData> rawLoadout(JsonValue raw) {
+        JsonValue value = raw == null ? null : raw.get("loadout");
+        if (value == null || !value.isArray()) return null;
+        List<LoadoutData> result = new ArrayList<>();
+        for (JsonValue child = value.child; child != null; child = child.next) {
+            if (child.isObject()) {
+                result.add(new LoadoutData(child.getString("item", ""), child.getInt("amount", 0)));
+            } else if (child.isString()) {
+                result.add(new LoadoutData(child.asString(), 0));
+            } else {
+                return null;
+            }
+        }
+        return result;
+    }
+
+    private static String rulesDiffJson(MapSnapshot fromSnapshot, MapSnapshot toSnapshot) {
+        RulesSnapshot from = rulesSnapshot(fromSnapshot), to = rulesSnapshot(toSnapshot);
+        TreeMap<String, JsonValue> fromFlat = flattenRules(from.raw), toFlat = flattenRules(to.raw);
+        TreeSet<String> keys = new TreeSet<>(fromFlat.keySet());
+        keys.addAll(toFlat.keySet());
+        List<String> added = new ArrayList<>(), removed = new ArrayList<>(), changed = new ArrayList<>();
+        int addedCount = 0, removedCount = 0, changedCount = 0;
+        for (String key : keys) {
+            JsonValue before = fromFlat.get(key), after = toFlat.get(key);
+            if (before == null) {
+                if (addedCount++ < RULES_DIFF_LIMIT) {
+                    added.add("{\"key\":" + quote(key) + ",\"value\":" + after.toJson(JsonWriter.OutputType.minimal) + "}");
+                }
+            } else if (after == null) {
+                if (removedCount++ < RULES_DIFF_LIMIT) {
+                    removed.add("{\"key\":" + quote(key) + ",\"value\":" + before.toJson(JsonWriter.OutputType.minimal) + "}");
+                }
+            } else if (!canonicalJson(before).equals(canonicalJson(after))) {
+                if (changedCount++ < RULES_DIFF_LIMIT) {
+                    changed.add("{\"key\":" + quote(key) + ",\"before\":" + before.toJson(JsonWriter.OutputType.minimal)
+                        + ",\"after\":" + after.toJson(JsonWriter.OutputType.minimal) + "}");
+                }
+            }
+        }
+        return "{\"added\":" + jsonArray(added) + ",\"removed\":" + jsonArray(removed)
+            + ",\"changed\":" + jsonArray(changed)
+            + ",\"banned_blocks\":{\"added\":" + jsonArray(quoteAll(minus(to.bannedBlocks, from.bannedBlocks)))
+            + ",\"removed\":" + jsonArray(quoteAll(minus(from.bannedBlocks, to.bannedBlocks))) + "}"
+            + ",\"banned_units\":{\"added\":" + jsonArray(quoteAll(minus(to.bannedUnits, from.bannedUnits)))
+            + ",\"removed\":" + jsonArray(quoteAll(minus(from.bannedUnits, to.bannedUnits))) + "}"
+            + ",\"loadout\":{\"added\":" + loadoutDiffJson(from.loadout, to.loadout, true)
+            + ",\"removed\":" + loadoutDiffJson(from.loadout, to.loadout, false) + "}"
+            + ",\"unknown_rules_changed\":false}";
+    }
+
+    private static TreeMap<String, JsonValue> flattenRules(JsonValue root) {
+        TreeMap<String, JsonValue> result = new TreeMap<>();
+        if (root == null || !root.isObject()) return result;
+        for (JsonValue child = root.child; child != null; child = child.next) {
+            if (child.name != null && RECOGNIZED_RULE_KEYS.contains(child.name)) result.put(child.name, child);
+        }
+        return result;
+    }
+
+    private static String canonicalJson(JsonValue value) {
+        if (value == null) return "null";
+        if (value.isObject()) {
+            TreeMap<String, String> fields = new TreeMap<>();
+            for (JsonValue child = value.child; child != null; child = child.next) {
+                fields.put(child.name, canonicalJson(child));
+            }
+            StringBuilder result = new StringBuilder("{");
+            boolean first = true;
+            for (var entry : fields.entrySet()) {
+                if (!first) result.append(',');
+                first = false;
+                result.append(jsonQuoteStrict(entry.getKey())).append(':').append(entry.getValue());
+            }
+            return result.append('}').toString();
+        }
+        if (value.isArray()) {
+            StringBuilder result = new StringBuilder("[");
+            boolean first = true;
+            for (JsonValue child = value.child; child != null; child = child.next) {
+                if (!first) result.append(',');
+                first = false;
+                result.append(canonicalJson(child));
+            }
+            return result.append(']').toString();
+        }
+        if (value.isNumber()) return Double.toString(value.asDouble());
+        if (value.isString()) return jsonQuoteStrict(value.asString());
+        if (value.isBoolean()) return Boolean.toString(value.asBoolean());
+        return "null";
+    }
+
+    private static List<String> minus(Set<String> left, Set<String> right) {
+        List<String> result = new ArrayList<>();
+        for (String value : left) if (!right.contains(value)) result.add(value);
+        return result;
+    }
+
+    private static List<String> quoteAll(List<String> values) {
+        List<String> result = new ArrayList<>(values.size());
+        for (String value : values) result.add(quote(value));
+        return result;
+    }
+
+    private static String loadoutDiffJson(List<LoadoutData> from, List<LoadoutData> to, boolean added) {
+        java.util.Map<String, LoadoutData> fromMap = loadoutMap(from), toMap = loadoutMap(to);
+        TreeSet<String> keys = new TreeSet<>(added ? toMap.keySet() : fromMap.keySet());
+        List<String> entries = new ArrayList<>();
+        int count = 0;
+        for (String key : keys) {
+            boolean present = added ? !fromMap.containsKey(key) : !toMap.containsKey(key);
+            if (present && count++ < RULES_DIFF_LIMIT) entries.add(added ? toMap.get(key).json() : fromMap.get(key).json());
+        }
+        return jsonArray(entries);
+    }
+
+    private static java.util.Map<String, LoadoutData> loadoutMap(List<LoadoutData> values) {
+        LinkedHashMap<String, LoadoutData> result = new LinkedHashMap<>();
+        for (LoadoutData value : values) result.put(value.key(), value);
+        return result;
+    }
+
+    private static String wavesDiffJson(MapSnapshot fromSnapshot, MapSnapshot toSnapshot) {
+        RulesSnapshot from = rulesSnapshot(fromSnapshot), to = rulesSnapshot(toSnapshot);
+        TreeMap<String, WaveData> fromGroups = uniqueWaveGroups(from.waves), toGroups = uniqueWaveGroups(to.waves);
+        TreeSet<String> keys = new TreeSet<>(fromGroups.keySet());
+        keys.addAll(toGroups.keySet());
+        List<String> added = new ArrayList<>(), removed = new ArrayList<>(), changed = new ArrayList<>();
+        int addedCount = 0, removedCount = 0, changedCount = 0;
+        for (String key : keys) {
+            WaveData before = fromGroups.get(key), after = toGroups.get(key);
+            if (before == null) {
+                if (addedCount++ < RULES_DIFF_LIMIT) added.add(after.json());
+            } else if (after == null) {
+                if (removedCount++ < RULES_DIFF_LIMIT) removed.add(before.json());
+            } else if (!before.json().equals(after.json())) {
+                if (changedCount++ < RULES_DIFF_LIMIT) changed.add("{\"before\":" + before.json() + ",\"after\":" + after.json() + "}");
+            }
+        }
+        boolean truncated = addedCount > RULES_DIFF_LIMIT || removedCount > RULES_DIFF_LIMIT || changedCount > RULES_DIFF_LIMIT;
+        return "{\"groups\":{\"added\":" + jsonArray(added) + ",\"removed\":" + jsonArray(removed)
+            + ",\"changed\":" + jsonArray(changed) + ",\"truncated\":" + truncated + "},"
+            + "\"wave_count\":{\"before\":" + from.waves.size() + ",\"after\":" + to.waves.size() + "}}";
+    }
+
+    private static TreeMap<String, WaveData> uniqueWaveGroups(List<WaveData> groups) {
+        TreeMap<String, WaveData> result = new TreeMap<>();
+        for (WaveData group : groups) {
+            String key = group.key();
+            int suffix = 2;
+            while (result.containsKey(key)) key = group.key() + "#" + suffix++;
+            result.put(key, group);
+        }
+        return result;
+    }
+
+    private static String objectsDiffJson(MapSnapshot fromSnapshot, MapSnapshot toSnapshot) {
+        List<MapObjectData> fromObjects = sortedObjects(fromSnapshot.objects), toObjects = sortedObjects(toSnapshot.objects);
+        java.util.Map<String, MapObjectData> fromByKey = objectMap(fromObjects), toByKey = objectMap(toObjects);
+        List<MapObjectData> addedRemaining = new ArrayList<>(), removedRemaining = new ArrayList<>();
+        List<ObjectChange> changes = new ArrayList<>();
+        for (MapObjectData after : toObjects) {
+            MapObjectData before = fromByKey.get(after.key());
+            if (before == null) addedRemaining.add(after);
+            else if (!before.team().equals(after.team()) || before.rotation() != after.rotation()) {
+                changes.add(new ObjectChange(before, after));
+            }
+        }
+        for (MapObjectData before : fromObjects) if (!toByKey.containsKey(before.key())) removedRemaining.add(before);
+
+        TreeMap<String, ArrayDeque<MapObjectData>> removedGroups = objectGroups(removedRemaining);
+        TreeMap<String, ArrayDeque<MapObjectData>> addedGroups = objectGroups(addedRemaining);
+        List<ObjectChange> moves = new ArrayList<>();
+        for (var entry : removedGroups.entrySet()) {
+            ArrayDeque<MapObjectData> addedGroup = addedGroups.get(entry.getKey());
+            if (addedGroup == null) continue;
+            while (!entry.getValue().isEmpty() && !addedGroup.isEmpty()) {
+                moves.add(new ObjectChange(entry.getValue().pollFirst(), addedGroup.pollFirst()));
+            }
+        }
+        List<MapObjectData> added = new ArrayList<>(), removed = new ArrayList<>();
+        for (ArrayDeque<MapObjectData> group : addedGroups.values()) added.addAll(group);
+        for (ArrayDeque<MapObjectData> group : removedGroups.values()) removed.addAll(group);
+        added.sort(OBJECT_ORDER);
+        removed.sort(OBJECT_ORDER);
+        moves.sort(Comparator.comparing((ObjectChange move) -> move.before().kind())
+            .thenComparingInt(move -> move.before().x()).thenComparingInt(move -> move.before().y())
+            .thenComparing(move -> move.before().name()));
+        changes.sort(Comparator.comparing((ObjectChange change) -> change.after().kind())
+            .thenComparingInt(change -> change.after().x()).thenComparingInt(change -> change.after().y())
+            .thenComparing(change -> change.after().name()));
+
+        StringBuilder out = new StringBuilder("{\"cores\":");
+        appendObjectCategory(out, "cores", added, removed, moves, changes);
+        out.append(",\"spawns\":");
+        appendObjectCategory(out, "spawns", added, removed, moves, changes);
+        out.append(",\"buildings\":");
+        appendObjectCategory(out, "buildings", added, removed, moves, changes);
+        boolean categoryTruncated = objectCategoryOverflow(added, removed, moves, changes)
+            || fromSnapshot.objectCount + toSnapshot.objectCount > MAX_MAP_LAYER_ITEMS;
+        out.append(",\"truncated\":").append(categoryTruncated).append(",\"counts\":{\"cores\":{\"before\":").append(fromSnapshot.coreCount)
+            .append(",\"after\":").append(toSnapshot.coreCount)
+            .append("},\"spawns\":{\"before\":").append(fromSnapshot.spawnCount)
+            .append(",\"after\":").append(toSnapshot.spawnCount)
+            .append("},\"buildings\":{\"before\":").append(fromSnapshot.buildingCount)
+            .append(",\"after\":").append(toSnapshot.buildingCount).append("}}}");
+        return out.toString();
+    }
+
+    private static boolean objectCategoryOverflow(List<MapObjectData> added, List<MapObjectData> removed,
+        List<ObjectChange> moves, List<ObjectChange> changes) {
+        for (String kind : List.of("cores", "spawns", "buildings")) {
+            if (filterObjects(added, kind).size() > DIFF_ITEM_LIMIT
+                || filterObjects(removed, kind).size() > DIFF_ITEM_LIMIT) return true;
+        }
+        for (String kind : List.of("cores", "spawns", "buildings")) {
+            int moved = 0, changed = 0;
+            for (ObjectChange move : moves) if (move.before().kind().equals(kind)) moved++;
+            for (ObjectChange change : changes) if (change.after().kind().equals(kind)) changed++;
+            if (moved > DIFF_ITEM_LIMIT || changed > DIFF_ITEM_LIMIT) return true;
+        }
+        return false;
+    }
+
+    private static void appendObjectCategory(StringBuilder out, String kind, List<MapObjectData> added,
+        List<MapObjectData> removed, List<ObjectChange> moves, List<ObjectChange> changes) {
+        out.append("{\"added\":").append(jsonArray(objectJsonList(filterObjects(added, kind))))
+            .append(",\"removed\":").append(jsonArray(objectJsonList(filterObjects(removed, kind))))
+            .append(",\"moved\":").append(jsonArray(objectMoveJson(moves, kind)))
+            .append(",\"changed\":").append(jsonArray(objectChangeJson(changes, kind))).append('}');
+    }
+
+    private static List<MapObjectData> filterObjects(List<MapObjectData> objects, String kind) {
+        List<MapObjectData> result = new ArrayList<>();
+        for (MapObjectData object : objects) if (object.kind().equals(kind)) result.add(object);
+        return result;
+    }
+
+    private static List<String> objectMoveJson(List<ObjectChange> moves, String kind) {
+        List<String> result = new ArrayList<>();
+        int count = 0;
+        for (ObjectChange move : moves) {
+            if (!move.before().kind().equals(kind)) continue;
+            if (count++ >= DIFF_ITEM_LIMIT) break;
+            result.add("{\"before\":" + move.before().json() + ",\"after\":" + move.after().json() + "}");
+        }
+        return result;
+    }
+
+    private static List<String> objectChangeJson(List<ObjectChange> changes, String kind) {
+        List<String> result = new ArrayList<>();
+        int count = 0;
+        for (ObjectChange change : changes) {
+            if (!change.after().kind().equals(kind)) continue;
+            if (count++ >= DIFF_ITEM_LIMIT) break;
+            result.add("{\"before\":" + change.before().json() + ",\"after\":" + change.after().json() + "}");
+        }
+        return result;
+    }
+
+    private static final Comparator<MapObjectData> OBJECT_ORDER = Comparator.comparingInt(MapObjectData::x)
+        .thenComparingInt(MapObjectData::y).thenComparing(MapObjectData::name);
+
+    private static List<MapObjectData> sortedObjects(List<MapObjectData> objects) {
+        List<MapObjectData> result = new ArrayList<>(objects);
+        result.sort(OBJECT_ORDER);
+        return result;
+    }
+
+    private static java.util.Map<String, MapObjectData> objectMap(List<MapObjectData> objects) {
+        LinkedHashMap<String, MapObjectData> result = new LinkedHashMap<>();
+        for (MapObjectData object : objects) result.put(object.key(), object);
+        return result;
+    }
+
+    private static TreeMap<String, ArrayDeque<MapObjectData>> objectGroups(List<MapObjectData> objects) {
+        TreeMap<String, ArrayDeque<MapObjectData>> result = new TreeMap<>();
+        for (MapObjectData object : objects) {
+            result.computeIfAbsent(object.moveSignature(), ignored -> new ArrayDeque<>()).addLast(object);
+        }
+        return result;
+    }
+
+    private static List<String> objectJsonList(List<MapObjectData> objects) {
+        List<String> result = new ArrayList<>();
+        for (int index = 0; index < objects.size() && index < DIFF_ITEM_LIMIT; index++) result.add(objects.get(index).json());
+        return result;
+    }
+
+    private static String resourcesDeltaJson(MapSnapshot fromSnapshot, MapSnapshot toSnapshot) {
+        TreeSet<String> keys = new TreeSet<>(fromSnapshot.resources.keySet());
+        keys.addAll(toSnapshot.resources.keySet());
+        List<String> entries = new ArrayList<>();
+        int count = 0;
+        for (String key : keys) {
+            int before = fromSnapshot.resources.getOrDefault(key, 0);
+            int after = toSnapshot.resources.getOrDefault(key, 0);
+            if (before == after) continue;
+            if (count++ >= DIFF_ITEM_LIMIT) break;
+            int separator = key.lastIndexOf('\u0000');
+            String name = key.substring(0, separator), kind = key.substring(separator + 1);
+            entries.add("{\"name\":" + quote(name) + ",\"kind\":" + quote(kind)
+                + ",\"before_tiles\":" + before + ",\"after_tiles\":" + after + ",\"delta\":" + (after - before) + "}");
+        }
+        return jsonArray(entries);
+    }
+
+    private static TerrainChunkSummary terrainChunksSummary(MapSnapshot from, MapSnapshot to) {
+        int width = Math.max(from.width, to.width), height = Math.max(from.height, to.height);
+        List<String> chunks = new ArrayList<>();
+        boolean truncated = false;
+        for (int startY = 0; startY < height; startY += DIFF_CHUNK_SIZE) {
+            for (int startX = 0; startX < width; startX += DIFF_CHUNK_SIZE) {
+                boolean floorChanged = false, overlayChanged = false;
+                int endX = Math.min(startX + DIFF_CHUNK_SIZE, width), endY = Math.min(startY + DIFF_CHUNK_SIZE, height);
+                for (int y = startY; y < endY && (!floorChanged || !overlayChanged); y++) {
+                    for (int x = startX; x < endX; x++) {
+                        if (layerIdAt(from, x, y, true) != layerIdAt(to, x, y, true)) floorChanged = true;
+                        if (layerIdAt(from, x, y, false) != layerIdAt(to, x, y, false)) overlayChanged = true;
+                        if (floorChanged && overlayChanged) break;
+                    }
+                }
+                if (!floorChanged && !overlayChanged) continue;
+                if (chunks.size() >= DIFF_CHUNK_LIMIT) { truncated = true; continue; }
+                chunks.add("{\"cx\":" + (startX / DIFF_CHUNK_SIZE) + ",\"cy\":" + (startY / DIFF_CHUNK_SIZE)
+                    + ",\"floor_changed\":" + floorChanged + ",\"overlay_changed\":" + overlayChanged + "}");
+            }
+        }
+        return new TerrainChunkSummary(jsonArray(chunks), truncated);
+    }
+
+    private static short layerIdAt(MapSnapshot snapshot, int x, int y, boolean floor) {
+        if (x < 0 || y < 0 || x >= snapshot.width || y >= snapshot.height) return -1;
+        int index = x + y * snapshot.width;
+        return floor ? snapshot.floorIds[index] : snapshot.overlayIds[index];
+    }
+
+    private static String writeMapDiffOverlay(MapSnapshot from, MapSnapshot to, String fromSha, String toSha) {
+        try {
+            if (storageRoot == null) return null;
+            String pair = sha256Hex(fromSha + ":" + toSha);
+            BufferedImage image = new BufferedImage(to.width, to.height, BufferedImage.TYPE_INT_ARGB);
+            int floorColor = new Color(0, 200, 80, 110).getRGB();
+            int overlayColor = new Color(240, 170, 20, 120).getRGB();
+            int bothColor = new Color(220, 40, 40, 140).getRGB();
+            for (int y = 0; y < to.height; y++) {
+                for (int x = 0; x < to.width; x++) {
+                    boolean floorChanged = layerIdAt(from, x, y, true) != layerIdAt(to, x, y, true);
+                    boolean overlayChanged = layerIdAt(from, x, y, false) != layerIdAt(to, x, y, false);
+                    if (!floorChanged && !overlayChanged) continue;
+                    image.setRGB(x, y, floorChanged && overlayChanged ? bothColor : floorChanged ? floorColor : overlayColor);
+                }
+            }
+            String relative = "resources/map-diff/" + pair.substring(0, 2) + "/" + pair + "/overlay.png";
+            Path file = storageRoot.resolve(relative).normalize();
+            Files.createDirectories(file.getParent());
+            ImageIO.write(image, "png", file.toFile());
+            return relative;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static String fullMapChunkJson(MapSnapshot from, MapSnapshot to, int cx, int cy) {
+        long startXLong = (long)cx * DIFF_CHUNK_SIZE, startYLong = (long)cy * DIFF_CHUNK_SIZE;
+        int startX = (int)Math.min(startXLong, to.width), startY = (int)Math.min(startYLong, to.height);
+        int endX = (int)Math.min(startXLong + DIFF_CHUNK_SIZE, to.width);
+        int endY = (int)Math.min(startYLong + DIFF_CHUNK_SIZE, to.height);
+        int tileWidth = Math.max(0, endX - startX), tileHeight = Math.max(0, endY - startY);
+        ChunkRuns floor = chunkRuns(from, to, startX, endX, startY, endY, true);
+        ChunkRuns overlay = chunkRuns(from, to, startX, endX, startY, endY, false);
+        return "{\"schemaVersion\":2,\"mode\":\"full\",\"chunk\":{\"cx\":" + cx + ",\"cy\":" + cy
+            + ",\"tileWidth\":" + tileWidth + ",\"tileHeight\":" + tileHeight
+            + ",\"floorChanged\":" + floor.changed() + ",\"overlayChanged\":" + overlay.changed()
+            + ",\"floorRuns\":" + floor.json() + ",\"overlayRuns\":" + overlay.json()
+            + ",\"truncated\":" + (floor.truncated() || overlay.truncated()) + "}}";
+    }
+
+    private static ChunkRuns chunkRuns(MapSnapshot from, MapSnapshot to, int startX, int endX, int startY, int endY, boolean floor) {
+        StringBuilder json = new StringBuilder("[");
+        int runCount = 0;
+        boolean changed = false, truncated = false;
+        String runFrom = null, runTo = null;
+        int runX = 0, runY = 0, runLength = 0;
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < endX; x++) {
+                String before = tileLayerName(from, x, y, floor), after = tileLayerName(to, x, y, floor);
+                if (before.equals(after)) {
+                    if (runLength > 0) {
+                        if (runCount < DIFF_RUN_LIMIT) {
+                            if (runCount++ > 0) json.append(',');
+                            json.append(runJson(runX, runY, runLength, runFrom, runTo));
+                        } else {
+                            truncated = true;
+                        }
+                        runLength = 0;
+                    }
+                    continue;
+                }
+                changed = true;
+                if (runLength > 0 && x == runX + runLength && before.equals(runFrom) && after.equals(runTo)) {
+                    runLength++;
+                } else {
+                    if (runLength > 0) {
+                        if (runCount < DIFF_RUN_LIMIT) {
+                            if (runCount++ > 0) json.append(',');
+                            json.append(runJson(runX, runY, runLength, runFrom, runTo));
+                        } else {
+                            truncated = true;
+                        }
+                    }
+                    runFrom = before;
+                    runTo = after;
+                    runX = x;
+                    runY = y;
+                    runLength = 1;
+                }
+            }
+            if (runLength > 0) {
+                if (runCount < DIFF_RUN_LIMIT) {
+                    if (runCount++ > 0) json.append(',');
+                    json.append(runJson(runX, runY, runLength, runFrom, runTo));
+                } else {
+                    truncated = true;
+                }
+                runLength = 0;
+            }
+        }
+        if (runLength > 0) {
+            if (runCount < DIFF_RUN_LIMIT) {
+                if (runCount++ > 0) json.append(',');
+                json.append(runJson(runX, runY, runLength, runFrom, runTo));
+            } else {
+                truncated = true;
+            }
+        }
+        return new ChunkRuns(json.append(']').toString(), changed, truncated);
+    }
+
+    private static String runJson(int x, int y, int length, String from, String to) {
+        return "{\"x\":" + x + ",\"y\":" + y + ",\"length\":" + length
+            + ",\"from\":" + quote(from == null ? "" : from) + ",\"to\":" + quote(to == null ? "" : to) + "}";
+    }
+
+    private static String tileLayerName(MapSnapshot snapshot, int x, int y, boolean floor) {
+        if (x < 0 || y < 0 || x >= snapshot.width || y >= snapshot.height) return "";
+        int index = x + y * snapshot.width;
+        short id = floor ? snapshot.floorIds[index] : snapshot.overlayIds[index];
+        Block block = Vars.content.block(id & 0xFFFF);
+        return block == null ? "" : block.name;
+    }
+
     private static boolean authorized(HttpExchange exchange) { return token.isEmpty() || ("Bearer " + token).equals(exchange.getRequestHeaders().getFirst("Authorization")); }
     private static void validateInflated(Path file, long limit, long compressedPrefixBytes) throws IOException {
         try (var compressed = Files.newInputStream(file)) {
