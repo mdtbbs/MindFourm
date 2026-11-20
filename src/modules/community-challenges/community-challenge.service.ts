@@ -140,9 +140,9 @@ export class CommunityChallengeService {
     }
 
     const ticket = await this.consumeTicket(token);
-    if (!ticket) throw new ApiV1Exception('CHALLENGE_EXPIRED', HttpStatus.GONE, '挑战已过期或已使用，请重新提交。');
+    if (!ticket) throw new ApiV1Exception('CHALLENGE_EXPIRED', HttpStatus.GONE, 'CHALLENGE_EXPIRED');
     if (ticket.action !== input.action || ticket.actorId !== input.actorId || ticket.provider !== this.provider.id) {
-      throw new ApiV1Exception('CHALLENGE_INVALID', HttpStatus.BAD_REQUEST, '挑战凭证与当前操作不匹配。');
+      throw new ApiV1Exception('CHALLENGE_INVALID', HttpStatus.BAD_REQUEST, 'CHALLENGE_INVALID');
     }
     let verified = false;
     try {
@@ -153,9 +153,9 @@ export class CommunityChallengeService {
         remoteIp: input.remoteIp,
       });
     } catch {
-      throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '挑战验证暂时不可用，请稍后重试。', true);
+      throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'CHALLENGE_PROVIDER_UNAVAILABLE', true);
     }
-    if (!verified) throw new ApiV1Exception('CHALLENGE_INVALID', HttpStatus.BAD_REQUEST, '挑战验证未通过，请重新提交。');
+    if (!verified) throw new ApiV1Exception('CHALLENGE_INVALID', HttpStatus.BAD_REQUEST, 'CHALLENGE_INVALID');
     // A valid ticket is consumed even if this retry no longer matches a risk rule.
   }
 
@@ -196,7 +196,7 @@ export class CommunityChallengeService {
 
   private async throwRequired(action: CommunityChallengeAction, actorId: number): Promise<never> {
     if (this.provider.id === 'disabled') {
-      throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '挑战验证当前未启用。', true);
+      throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'CHALLENGE_PROVIDER_UNAVAILABLE', true);
     }
     const issue = this.provider.issue();
     const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
@@ -208,7 +208,7 @@ export class CommunityChallengeService {
       expiresAt: Date.now() + this.ticketTtlSeconds * 1000,
     };
     const stored = await this.redis.setIfNotExists(this.ticketKey(token), JSON.stringify(ticket), this.ticketTtlSeconds);
-    if (!stored) throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '挑战凭证暂时无法创建，请稍后重试。', true);
+    if (!stored) throw new ApiV1Exception('CHALLENGE_PROVIDER_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'CHALLENGE_PROVIDER_UNAVAILABLE', true);
     const challenge = {
       token,
       action,
@@ -216,7 +216,7 @@ export class CommunityChallengeService {
       expires_in: this.ticketTtlSeconds,
       ...issue.publicData,
     };
-    throw new ApiV1Exception('CHALLENGE_REQUIRED', HttpStatus.PRECONDITION_REQUIRED, '此操作需要完成一次安全验证。', true, [{ challenge }]);
+    throw new ApiV1Exception('CHALLENGE_REQUIRED', HttpStatus.PRECONDITION_REQUIRED, 'CHALLENGE_REQUIRED', true, [{ challenge }]);
   }
 
   private async consumeTicket(token: string): Promise<Ticket | null> {

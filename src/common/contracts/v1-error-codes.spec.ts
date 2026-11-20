@@ -1,4 +1,4 @@
-import { lookupV1ErrorCode, getAllV1ErrorCodes, V1_ERROR_CODES } from './v1-error-codes';
+import { lookupV1ErrorCode, getAllV1ErrorCodes, getV1ErrorPublicMessage, V1_ERROR_CODES, V1_ERROR_PUBLIC_MESSAGES } from './v1-error-codes';
 import { apiV1Error, v1ErrorCodeAnchor, v1ErrorDocumentationUrl } from './api-v1.contract';
 
 describe('V1 Error Code Registry', () => {
@@ -85,5 +85,55 @@ describe('Public V1 error documentation links', () => {
       .toBe('https://mdtbbs.cn/api/v1/docs/errors#resource-not-found');
     expect(apiV1Error('RATE_LIMITED', 'too many requests', true, [], 'req-1').error.documentation_url)
       .toBe('https://mdtbbs.cn/api/v1/docs/errors#rate-limited');
+  });
+});
+
+describe('V1 public error message language', () => {
+  it('never answers a public client with the registry default message', () => {
+    // The registry's `defaultMessage` is operator-facing and written in the
+    // repository's primary language. Public V1 responses must not use it, or an
+    // English site renders Chinese in the UI for every untranslated failure.
+    for (const definition of getAllV1ErrorCodes()) {
+      expect(getV1ErrorPublicMessage(definition.code)).not.toBe(definition.defaultMessage);
+    }
+  });
+
+  it('gives every registered code non-empty public copy', () => {
+    for (const definition of getAllV1ErrorCodes()) {
+      const message = getV1ErrorPublicMessage(definition.code);
+      expect(typeof message).toBe('string');
+      expect(message.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('replaces a machine code sent as the message', () => {
+    // Multiplayer and cloud-save services raise `{ code, message: code }`.
+    // The transport resolves the public copy instead of echoing the code back.
+    const body = apiV1Error('SESSION_FULL', 'SESSION_FULL', false, [], 'req-1');
+    expect(body.error.code).toBe('SESSION_FULL');
+    expect(body.error.message).toBe(getV1ErrorPublicMessage('SESSION_FULL'));
+    expect(body.error.message).not.toBe(body.error.code);
+  });
+
+  it('keeps caller-specific prose when the caller supplies it', () => {
+    const body = apiV1Error('RESOURCE_NOT_FOUND', 'Resource 42 was archived last week.', false, [], 'req-2');
+    expect(body.error.message).toBe('Resource 42 was archived last week.');
+  });
+
+  it('falls back to the code for an unregistered code', () => {
+    expect(getV1ErrorPublicMessage('NOT_A_REAL_CODE')).toBe('NOT_A_REAL_CODE');
+  });
+
+  it('keeps Chinese out of the public message table', () => {
+    for (const [code, message] of Object.entries(V1_ERROR_PUBLIC_MESSAGES)) {
+      expect({ code, hasChinese: /[\u4e00-\u9fff]/.test(message) }).toEqual({ code, hasChinese: false });
+    }
+  });
+
+  it('translates every registered code', () => {
+    const missing = getAllV1ErrorCodes()
+      .map((definition) => definition.code)
+      .filter((code) => V1_ERROR_PUBLIC_MESSAGES[code] === undefined);
+    expect(missing).toEqual([]);
   });
 });

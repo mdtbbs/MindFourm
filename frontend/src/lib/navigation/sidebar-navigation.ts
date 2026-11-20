@@ -61,20 +61,39 @@ export interface SidebarNavigationItem {
 export interface SidebarNavigationContext {
   settings: Record<string, string>;
   isAuthenticated: boolean;
+  /** Resolves a default item's locale key. Defaults to identity. */
+  translate?: (key: string) => string;
 }
 
 /**
  * Fallback defaults — kept in sync with the backend's
  * `getDefaultSidebarNavigation()` in
  * `src/common/utils/sidebar-navigation-defaults.ts`.
+ *
+ * `label` is a locale key, not display copy: `buildSidebarNavigation` resolves
+ * it and every consumer receives rendered text. Operators who edit the sidebar
+ * in the admin console store their own literal labels, which take precedence.
  */
 export const DEFAULT_SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
-  { id: 'home', label: '首页', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
-  { id: 'categories', label: '分类', href: '/categories', icon: 'Folder', enabled: true, requiresAuth: false },
-  { id: 'tags', label: '标签', href: '/tags', icon: 'Tag', enabled: true, requiresAuth: false },
-  { id: 'resources', label: '资源中心', href: '/resources', icon: 'Book', enabled: true, requiresAuth: false },
-  { id: 'notices', label: '公告中心', href: '/notices', icon: 'Bell', enabled: true, requiresAuth: false },
+  { id: 'home', label: 'navigation.home', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
+  { id: 'categories', label: 'navigation.categories', href: '/categories', icon: 'Folder', enabled: true, requiresAuth: false },
+  { id: 'tags', label: 'navigation.tags', href: '/tags', icon: 'Tag', enabled: true, requiresAuth: false },
+  { id: 'resources', label: 'navigation.resources', href: '/resources', icon: 'Book', enabled: true, requiresAuth: false },
+  { id: 'notices', label: 'navigation.announcements', href: '/notices', icon: 'Bell', enabled: true, requiresAuth: false },
 ];
+
+/** Locale keys for the shipped defaults, so "Reset to defaults" previews read naturally. */
+export const DEFAULT_SIDEBAR_NAVIGATION_KEYS = new Set(
+  DEFAULT_SIDEBAR_NAVIGATION.map((item) => item.label),
+);
+
+/**
+ * True when `label` is one of the shipped locale keys. Those are resolved
+ * against the active locale; anything else is operator copy and is kept as-is.
+ */
+export function isDefaultSidebarLabel(label: string): boolean {
+  return DEFAULT_SIDEBAR_NAVIGATION_KEYS.has(label);
+}
 
 const PROTECTED_SIDEBAR_ITEM_IDS = new Set(['home']);
 
@@ -145,17 +164,21 @@ export function buildSidebarNavigation(context: SidebarNavigationContext): Sideb
   if (!items.some((item) => item.id === 'home')) items.unshift(defaultHome);
   if (!items.some((item) => item.id === 'notices')) items.splice(1, 0, defaultNotices);
 
-  return items.filter((item) => {
-    if (!item.enabled) return false;
+  const translate = context.translate || ((key: string) => key);
 
-    if (item.requiresAuth && !context.isAuthenticated) return false;
+  return items
+    .filter((item) => {
+      if (!item.enabled) return false;
 
-    if (!context.isAuthenticated && !isAnonymousSafeHref(item.href)) return false;
+      if (item.requiresAuth && !context.isAuthenticated) return false;
 
-    if (!isFeatureEnabled(item.featureKey, context.settings)) return false;
+      if (!context.isAuthenticated && !isAnonymousSafeHref(item.href)) return false;
 
-    return true;
-  });
+      if (!isFeatureEnabled(item.featureKey, context.settings)) return false;
+
+      return true;
+    })
+    .map((item) => (isDefaultSidebarLabel(item.label) ? { ...item, label: translate(item.label) } : item));
 }
 
 // ─── Editor validation ──────────────────────────────────────────────────────
@@ -177,27 +200,27 @@ export function validateSidebarNavigation(
 
   items.forEach((item) => {
     if (!item.label || item.label.trim() === '') {
-      errors.push(`项目 "${item.id}" 标签不能为空`);
+      errors.push(`Item "${item.id}": label must not be empty`);
     }
 
     if (!item.href || item.href.trim() === '') {
-      errors.push(`项目 "${item.id}" 链接不能为空`);
+      errors.push(`Item "${item.id}": link must not be empty`);
     }
 
     if (seenIds.has(item.id)) {
-      errors.push(`重复 ID "${item.id}"`);
+      errors.push(`Duplicate item id "${item.id}"`);
     }
     seenIds.add(item.id);
 
     if (!ICON_SET.has(item.icon)) {
-      errors.push(`项目 "${item.id}" 使用了无效图标 "${item.icon}"`);
+      errors.push(`Item "${item.id}": unsupported icon "${item.icon}"`);
     }
 
     if (typeof item.href === 'string' && item.href.trim() !== '') {
       const isRelative = item.href.startsWith('/');
       const isHttps = item.href.startsWith('https://');
       if (!isRelative && !isHttps) {
-        errors.push(`项目 "${item.id}" 链接无效：必须以 / 或 https:// 开头`);
+        errors.push(`Item "${item.id}": link must start with / or https://`);
       }
     }
   });

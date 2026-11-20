@@ -17,19 +17,45 @@ export type TopNavigationItem =
       items: TopNavigationLink[];
     };
 
-export const DEFAULT_TOP_NAVIGATION_ITEMS: TopNavigationItem[] = [
-  { type: 'link', label: '资源中心', href: '/resources' },
+/**
+ * Default top navigation, expressed as locale keys rather than literal labels.
+ *
+ * Operators can override every entry with the `top_navigation_items` setting,
+ * but those overrides are free-form and stay in whatever language the operator
+ * typed. The defaults are rendered on every page of every profile, so they must
+ * follow the visitor's locale instead of the repository's primary language.
+ */
+export const DEFAULT_TOP_NAVIGATION_KEYS: TopNavigationItem[] = [
+  { type: 'link', label: 'navigation.resources', href: '/resources' },
   {
     type: 'group',
-    label: '社区',
+    label: 'navigation.community',
     items: [
-      { label: '用户组', href: '/groups' },
-      { label: '积分排行', href: '/leaderboard' },
-      { label: '积分商店', href: '/shop' },
+      { label: 'navigation.groups', href: '/groups' },
+      { label: 'navigation.leaderboard', href: '/leaderboard' },
+      { label: 'navigation.shop', href: '/shop' },
     ],
   },
-  { type: 'link', label: '在线房间', href: '/lanlink' },
+  { type: 'link', label: 'navigation.lanlink', href: '/lanlink' },
 ];
+
+const DEFAULT_NAVIGATION_HREFS = new Set(
+  DEFAULT_TOP_NAVIGATION_KEYS.flatMap((item) => item.type === 'group'
+    ? item.items.map((child) => child.href)
+    : [item.href]),
+);
+
+/**
+ * True when a stored navigation item is one of the shipped defaults the
+ * operator never edited. Such labels are locale keys; anything else is
+ * operator-authored copy and is rendered verbatim.
+ */
+export function isDefaultNavigationHref(href: string | undefined): boolean {
+  return typeof href === 'string' && DEFAULT_NAVIGATION_HREFS.has(href);
+}
+
+/** Backwards-compatible alias; the label values are locale keys. */
+export const DEFAULT_TOP_NAVIGATION_ITEMS = DEFAULT_TOP_NAVIGATION_KEYS;
 
 const FEATURE_SETTING_BY_HREF: Record<string, { key: string; defaultEnabled: boolean }> = {
   '/resources': { key: 'feature_resources_enabled', defaultEnabled: true },

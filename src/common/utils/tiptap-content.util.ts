@@ -831,7 +831,7 @@ export function resolveContentSource(markdown: string | undefined, json: unknown
   if (json !== undefined && json !== null) {
     const content_json = normalizeTiptapDocument(json, normalizeOptions);
     const content = serializeTiptapToMarkdown(content_json);
-    if (!content.trim()) throw new ApiV1Exception('CONTENT_REQUIRED', HttpStatus.BAD_REQUEST, '正文不能为空', false);
+    if (!content.trim()) throw new ApiV1Exception('CONTENT_REQUIRED', HttpStatus.BAD_REQUEST, 'CONTENT_REQUIRED', false);
     return {
       content,
       content_json,
@@ -840,8 +840,8 @@ export function resolveContentSource(markdown: string | undefined, json: unknown
       content_schema_version: RICH_CONTENT_SCHEMA_VERSION,
     };
   }
-  if (typeof markdown !== 'string' || !markdown.trim()) throw new ApiV1Exception('CONTENT_REQUIRED', HttpStatus.BAD_REQUEST, '正文不能为空', false);
-  if (markdown.length > MAX_TEXT_LENGTH) throw new ApiV1Exception('CONTENT_TOO_LARGE', HttpStatus.BAD_REQUEST, '正文过长', false);
+  if (typeof markdown !== 'string' || !markdown.trim()) throw new ApiV1Exception('CONTENT_REQUIRED', HttpStatus.BAD_REQUEST, 'CONTENT_REQUIRED', false);
+  if (markdown.length > MAX_TEXT_LENGTH) throw new ApiV1Exception('CONTENT_TOO_LARGE', HttpStatus.BAD_REQUEST, 'CONTENT_TOO_LARGE', false);
   const content_json = markdownToTiptapDocument(markdown);
   return {
     content: serializeTiptapToMarkdown(content_json),

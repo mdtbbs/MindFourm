@@ -144,15 +144,15 @@ export class ResourcesV2Service {
   }
 
   private notFound(): never {
-    throw new ApiV1Exception('RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, '资源不存在或不可见', false);
+    throw new ApiV1Exception('RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, 'RESOURCE_NOT_FOUND', false);
   }
 
   private invalidCursor(): never {
-    throw new ApiV1Exception('INVALID_CURSOR', HttpStatus.BAD_REQUEST, '分页游标无效', false);
+    throw new ApiV1Exception('INVALID_CURSOR', HttpStatus.BAD_REQUEST, 'INVALID_CURSOR', false);
   }
 
   private invalidIdentifier(): never {
-    throw new ApiV1Exception('VALIDATION_FAILED', HttpStatus.BAD_REQUEST, '公开标识无效', false);
+    throw new ApiV1Exception('VALIDATION_FAILED', HttpStatus.BAD_REQUEST, 'VALIDATION_FAILED', false);
   }
 
   private encodeCursor(cursor: CursorPayload): string {

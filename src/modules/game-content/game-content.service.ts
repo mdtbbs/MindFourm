@@ -359,7 +359,7 @@ export class GameContentService {
     let file: StoredResourceFile;
     try { file = await this.storage.storePastedSchematic(code); }
     catch (error) {
-      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_BLUEPRINT', HttpStatus.UNPROCESSABLE_ENTITY, '蓝图代码无效或超出大小限制');
+      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_BLUEPRINT', HttpStatus.UNPROCESSABLE_ENTITY, 'INVALID_BLUEPRINT');
       throw error;
     }
     try {
@@ -367,7 +367,7 @@ export class GameContentService {
       return await this.previews.createDraft(userId, 'schematic', file);
     } catch (error) {
       await this.storage.removeManaged(file.file_path).catch(() => undefined);
-      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_BLUEPRINT', HttpStatus.UNPROCESSABLE_ENTITY, '蓝图无法解析为有效的 Mindustry 蓝图');
+      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_BLUEPRINT', HttpStatus.UNPROCESSABLE_ENTITY, 'INVALID_BLUEPRINT');
       throw error;
     }
   }
@@ -397,7 +397,7 @@ export class GameContentService {
         if (unconsumed) await this.previews.discardConsumedDraft(unconsumed);
       }
       await this.storage.removeManaged(file.file_path).catch(() => undefined);
-      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_MAP', HttpStatus.UNPROCESSABLE_ENTITY, '地图文件无法解析或超出服务端限制');
+      if (error instanceof BadRequestException) throw new ApiV1Exception('INVALID_MAP', HttpStatus.UNPROCESSABLE_ENTITY, 'INVALID_MAP');
       throw error;
     }
   }

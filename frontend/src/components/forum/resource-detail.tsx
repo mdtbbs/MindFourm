@@ -19,13 +19,6 @@ import { useI18n } from '@/i18n/provider';
 
 interface ResourceDetailProps { resource: Resource; selectedVersionPublicId?: string; }
 
-const RESOURCE_FACT_KEYS: Record<string, string> = {
-  '地图尺寸': 'mapSize', '模式': 'mode', '星球': 'planet', '出生点': 'spawns', '核心': 'cores',
-  '蓝图尺寸': 'schematicSize', '方块': 'blocks', '净功率': 'netPower', 'Mod 版本': 'modVersion',
-  '支持游戏版本': 'supportedGameVersions', '平台': 'platform', '游戏版本': 'gameVersion', '渠道': 'channel',
-  '资源版本': 'resourceVersion', '适用版本': 'compatibleVersions',
-};
-
 export default function ResourceDetail({ resource, selectedVersionPublicId }: ResourceDetailProps) {
   const { t, locale } = useI18n();
   const { isAuthenticated, user } = useAuth();
@@ -231,7 +224,7 @@ export default function ResourceDetail({ resource, selectedVersionPublicId }: Re
               </div>
               <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
               <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || t('resourceDetail.emptyDescription')}</p>
-              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{t(`resourceKindDetails.fact.${RESOURCE_FACT_KEYS[fact.label] || 'resourceVersion'}`)}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
+              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{t(fact.label)}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
                 <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary-text)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || t('resourceDetail.unknownAuthor')}</span></Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(resourcePublicationDate(resource)))} {t('resourceDetail.published')}</span>

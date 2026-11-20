@@ -349,10 +349,10 @@ export class ResourcesV1WriteController {
 
   private async assertEnabled(user: any) {
     if (!await this.settings.getBoolean('feature_resources_v1_upload_enabled', true)) {
-      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_UPLOAD_DISABLED', false);
     }
     if (await this.auth.checkNeedsTermsAcceptance(user)) {
-      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, '请先接受社区条款', false);
+      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, 'TERMS_ACCEPTANCE_REQUIRED', false);
     }
   }
 

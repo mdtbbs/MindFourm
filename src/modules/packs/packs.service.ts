@@ -43,18 +43,18 @@ export class PacksService {
 
   async assertReadEnabled(): Promise<void> {
     const caps = await this.capabilities.getCapabilities();
-    if (!caps.resources.read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'V1 资源接口暂未启用', false);
+    if (!caps.resources.read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_V1_DISABLED', false);
   }
 
   async assertDownloadEnabled(): Promise<void> {
     const caps = await this.capabilities.getCapabilities();
-    if (!caps.resources.read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'V1 资源接口暂未启用', false);
-    if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
+    if (!caps.resources.read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_V1_DISABLED', false);
+    if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
   }
 
   private async assertUploadEnabled(): Promise<void> {
     const caps = await this.capabilities.getCapabilities();
-    if (!caps.resources.upload) throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+    if (!caps.resources.upload) throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_UPLOAD_DISABLED', false);
   }
 
   private async getPackVersion(packPublicId: string, versionPublicId: string, ownerUserId?: number) {

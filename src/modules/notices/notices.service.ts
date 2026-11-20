@@ -126,7 +126,7 @@ export class NoticesService {
       .andWhere('notice.published_at IS NOT NULL AND notice.published_at <= NOW()');
     this.idCondition(query, id);
     const notice = await query.getOne();
-    if (!notice) throw new ApiV1Exception('NOTICE_NOT_FOUND', 404, '公告不存在或不可见');
+    if (!notice) throw new ApiV1Exception('NOTICE_NOT_FOUND', 404, 'NOTICE_NOT_FOUND');
     return notice;
   }
 
@@ -134,7 +134,7 @@ export class NoticesService {
     const query = this.noticeRepository.createQueryBuilder('notice').withDeleted();
     this.idCondition(query, id);
     const notice = await query.getOne();
-    if (!notice) throw new ApiV1Exception('NOTICE_NOT_FOUND', 404, '公告不存在');
+    if (!notice) throw new ApiV1Exception('NOTICE_NOT_FOUND', 404, 'NOTICE_NOT_FOUND');
     return notice;
   }
 

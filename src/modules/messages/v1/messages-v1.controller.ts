@@ -105,12 +105,12 @@ export class MessagesV1Controller {
 
   private async assertAccess(req: any) {
     if (!await this.settings.getBoolean('feature_messages_enabled', true)) {
-      throw new ApiV1Exception('MESSAGING_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭私信功能', false);
+      throw new ApiV1Exception('MESSAGING_DISABLED', HttpStatus.FORBIDDEN, 'MESSAGING_DISABLED', false);
     }
     const auth = req.authContext;
     if (auth?.source === 'mindauth_oauth' && auth.partyType !== 'first_party'
       && !await this.settings.getBoolean('feature_messages_third_party_access_enabled', false)) {
-      throw new ApiV1Exception('THIRD_PARTY_ACCESS_DISABLED', HttpStatus.FORBIDDEN, '站点未开放第三方客户端私信访问', false);
+      throw new ApiV1Exception('THIRD_PARTY_ACCESS_DISABLED', HttpStatus.FORBIDDEN, 'THIRD_PARTY_ACCESS_DISABLED', false);
     }
   }
 

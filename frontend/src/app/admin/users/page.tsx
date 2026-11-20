@@ -1,5 +1,8 @@
 'use client';
 
+import { useI18n } from '@/i18n/provider';
+import { roleLabelKey } from '@/lib/display-labels';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -18,7 +21,7 @@ import Alert from '@/components/ui/alert';
 import Pagination from '@/components/ui/pagination';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
-import { roleLabel } from '@/lib/display-labels';
+
 import { promptDialog } from '@/store/interaction-dialog-store';
 
 const PAGE_SIZE = 20;
@@ -36,6 +39,11 @@ function userDisplayName(user: Pick<User, 'id' | 'username'> | UserProfile): str
 }
 
 export default function AdminUsersPage() {
+  const { t } = useI18n();
+  const roleLabelFor = (role?: string | null) => {
+    const key = roleLabelKey(role);
+    return key ? t(key) : (role || t('roles.user'));
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSearch = searchParams?.get('search') ?? '';
@@ -155,7 +163,7 @@ export default function AdminUsersPage() {
     const expected = profile.username || String(profile.id);
     const typed = await promptDialog({
       title: '确认修改用户角色',
-      message: `这是权限变更操作。请输入名称以确认将 ${userDisplayName(profile)} 的角色改为「${roleLabel(role)}」。`,
+      message: `这是权限变更操作。请输入名称以确认将 ${userDisplayName(profile)} 的角色改为「${roleLabelFor(role)}」。`,
       label: `请输入：${expected}`,
       required: true,
       validate: (value) => value === expected ? null : '输入内容不匹配',
@@ -260,7 +268,7 @@ export default function AdminUsersPage() {
                 </td>
                 <td className="px-4 py-3 text-surface-600">{user.email || '—'}</td>
                 <td className="px-4 py-3">
-                  <span className="border border-surface-200 px-2 py-1 text-xs text-surface-700">{roleLabel(user.role)}</span>
+                  <span className="border border-surface-200 px-2 py-1 text-xs text-surface-700">{roleLabelFor(user.role)}</span>
                 </td>
                 <td className="px-4 py-3 text-xs text-surface-500">{user.phone_verified ? '手机已验证' : '未验证 / 未提供'}</td>
                 <td className="px-4 py-3 font-mono text-xs text-surface-500">{new Date(user.createdAt).toLocaleDateString('zh-CN')}</td>
@@ -334,7 +342,7 @@ export default function AdminUsersPage() {
                       <div className="text-lg font-semibold text-surface-900">{userDisplayName(profile)}</div>
                       <div className="mt-1 text-sm text-surface-500">{profile.email || '未提供邮箱'}</div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <span className="border border-surface-200 px-2 py-1 text-[10px]">{roleLabel(profile.role)}</span>
+                        <span className="border border-surface-200 px-2 py-1 text-[10px]">{roleLabelFor(profile.role)}</span>
                         {profile.level ? <span className="border border-surface-200 px-2 py-1 text-[10px]">{profile.level.name}</span> : null}
                       </div>
                     </div>

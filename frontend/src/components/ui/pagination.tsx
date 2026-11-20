@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useI18n } from '@/i18n/provider';
 
 interface PaginationProps {
   currentPage: number;
@@ -17,6 +18,8 @@ export default function Pagination({
   className = '',
   queryParams = {},
 }: PaginationProps) {
+  const { t } = useI18n();
+
   if (totalPages <= 1) return null;
 
   const buildUrl = (page: number) => {
@@ -42,7 +45,7 @@ export default function Pagination({
 
   return (
     <nav
-      aria-label="分页"
+      aria-label={t('pagination.label')}
       className={`flex items-center justify-center space-x-1 ${className}`}
     >
       {currentPage > 1 && (
@@ -52,9 +55,9 @@ export default function Pagination({
           // set of unrelated near-duplicates.
           rel="prev"
           className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
-          aria-label="上一页"
+          aria-label={t('pagination.previous')}
         >
-          上一页
+          {t('pagination.previous')}
         </Link>
       )}
       {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -81,7 +84,7 @@ export default function Pagination({
                 <Link
                   href={buildUrl(page)}
                   className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
-                  aria-label={`第${page}页`}
+                  aria-label={t('pagination.page', { page })}
                 >
                   {page}
                 </Link>
@@ -94,9 +97,9 @@ export default function Pagination({
           href={buildUrl(currentPage + 1)}
           rel="next"
           className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
-          aria-label="下一页"
+          aria-label={t('pagination.next')}
         >
-          下一页
+          {t('pagination.next')}
         </Link>
       )}
     </nav>

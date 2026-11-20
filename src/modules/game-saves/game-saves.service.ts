@@ -1436,7 +1436,7 @@ export class GameSavesService {
     // Without this hint a client only learns the head moved after it has already
     // uploaded the whole file; the retry has to re-upload with a new session.
     if (suggestConflictCopy) details.suggested_resolution = 'create_conflict_copy';
-    throw new ApiV1Exception('SAVE_CONFLICT', HttpStatus.CONFLICT, '云存档自上次同步后已有更新。', false, [details]);
+    throw new ApiV1Exception('SAVE_CONFLICT', HttpStatus.CONFLICT, 'SAVE_CONFLICT', false, [details]);
   }
   private assertEnabled(): void {
     if (this.settings.getCached('cloud_saves_enabled') !== 'true') this.fail('CLOUD_SAVES_DISABLED', HttpStatus.FORBIDDEN, '云存档功能尚未启用。');
@@ -1459,7 +1459,7 @@ export class GameSavesService {
 function boundedOpaque(value: unknown): string | null {
   if (value == null || value === '') return null;
   if (typeof value !== 'string' || value.length > 128 || /[\u0000-\u001f\u007f]/.test(value)) {
-    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '设备标识无效。');
+    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, 'SAVE_INVALID_METADATA');
   }
   return value;
 }

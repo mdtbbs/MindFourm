@@ -1,34 +1,37 @@
 import { Metadata } from 'next';
 import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
-
-const DESCRIPTION = '感谢为 Mindustry 社区做出贡献的模组作者、地图作者、教程作者、服务器运营者与每一位参与者';
+import { resolveBrand } from '@/lib/theme/brand';
+import { fetchPublicSettings } from '@/lib/settings/server';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
 export async function generateMetadata(): Promise<Metadata> {
-  // Bare title — the root layout's `title.template` appends the site suffix.
+  const locale = await getRequestLocale();
+  const title = translate(locale, 'thanks.metaTitle');
+  const description = translate(locale, 'thanks.metaDescription');
   return {
-    title: '鸣谢',
-    description: DESCRIPTION,
+    title,
+    description,
     alternates: { canonical: '/thanks' },
-    openGraph: {
-      title: '鸣谢',
-      description: DESCRIPTION,
-      type: 'website',
-      url: '/thanks',
-    },
+    openGraph: { title, description, type: 'website', url: '/thanks' },
   };
 }
 
-export default function ThanksPage() {
+export default async function ThanksPage() {
+  const [settings, locale] = await Promise.all([fetchPublicSettings(), getRequestLocale()]);
+  const siteName = resolveBrand(settings).siteName;
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
+
   return (
     <ConfiguredFooterPage
-      eyebrow="鸣谢"
-      title="鸣谢"
+      eyebrow={t('thanks.eyebrow')}
+      title={t('thanks.title')}
       settingKey="footer_thanks_content"
       fallback={(
         <div className="space-y-4">
-          <p>感谢 Anuken 与 Mindustry 开源项目贡献者，为玩家和创作者建立了持续发展的游戏与模组生态。</p>
-          <p>感谢社区中的模组作者、地图作者、教程作者、服务器运营者，以及每一位认真讨论、测试资源和提交反馈的玩家。</p>
-          <p>也感谢所有为 MDTBBS、MindAuth、MindFileList 与 LanLink 提供设计、开发、测试和运行支持的参与者。</p>
+          <p>{t('thanks.fallback1')}</p>
+          <p>{t('thanks.fallback2')}</p>
+          <p>{t('thanks.fallback3', { site: siteName })}</p>
         </div>
       )}
     />

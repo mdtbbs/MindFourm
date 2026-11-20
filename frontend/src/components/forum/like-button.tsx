@@ -6,6 +6,7 @@ import { useLikes } from '@/lib/like/context';
 import { useLikeStore } from '@/store/like-store';
 import { useAuth } from '@/lib/auth/context';
 import { useToast } from '@/lib/toast/context';
+import { useI18n } from '@/i18n/provider';
 
 /** Tracks the shared normal interaction duration token (180ms). */
 const LIKE_ANIMATION_MS = 180;
@@ -21,6 +22,7 @@ interface LikeButtonProps {
 export function LikeButton({ type, id, initialCount = 0, className = '', showCount = true }: LikeButtonProps) {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const likes = useLikes();
 
   const seedLikeState = useLikeStore((store) => store.seedLikeState);
@@ -49,7 +51,7 @@ export function LikeButton({ type, id, initialCount = 0, className = '', showCou
     e.stopPropagation();
 
     if (!user) {
-      showToast('请登录后点赞', 'info');
+      showToast(t('cards.likeRequiresLogin'), 'info');
       return;
     }
 
@@ -74,9 +76,9 @@ export function LikeButton({ type, id, initialCount = 0, className = '', showCou
           ? 'text-red-500 dark:text-red-400'
           : 'text-[var(--text-secondary)] hover:text-red-500 dark:hover:text-red-400'
       } ${isAnimating ? 'scale-[1.04]' : 'scale-100'} ${className}`}
-      aria-label={liked ? '取消点赞' : '点赞'}
+      aria-label={liked ? t('cards.unlike') : t('cards.like')}
       aria-pressed={liked}
-      title={liked ? '取消点赞' : '点赞'}
+      title={liked ? t('cards.unlike') : t('cards.like')}
     >
       <Heart className={`w-4 h-4 transition-colors duration-[var(--motion-normal)] ${liked ? 'fill-current' : ''}`} />
       {showCount && count > 0 && (

@@ -83,7 +83,7 @@ export class NotificationsV1Controller {
 
   private async assertEnabled() {
     if (!await this.settings.getBoolean('feature_notifications_v1_enabled', true)) {
-      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭 Public Client 通知接口', false);
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     }
   }
 }

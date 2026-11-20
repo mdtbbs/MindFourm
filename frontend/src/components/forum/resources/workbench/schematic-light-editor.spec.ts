@@ -229,12 +229,12 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(mockGetBlocks).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, { limit: 100, cursor: undefined });
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体左转')) || null);
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('水平镜像')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.rotateAllLeft')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.mirrorHorizontal')) || null);
     await clickCell(0, 0);
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.deleteSelected')) || null);
 
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) as HTMLButtonElement | undefined;
     expect(exportButton?.disabled).toBe(false);
     await click(exportButton || null);
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
@@ -262,21 +262,21 @@ describe('SchematicLightEditor', () => {
     });
     expect(anchorClick).toHaveBeenCalledTimes(1);
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
-    expect(container.textContent).toContain('官方读写验证');
-    expect(container.textContent).toContain('解析方块数：1');
+    expect(container.textContent).toContain('editor.exportVerified');
+    expect(container.textContent).toContain('editor.analyzedBlocks');
   });
 
   it('exports a public visitor copy and restores its changes with undo and redo without publication rights', async () => {
     root = createRoot(container);
     await act(async () => { root?.render(createElement(SchematicLightEditor, { workbench: workbench(), version: version(), canEdit: true, canManage: false })); await flushEffects(); });
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '整体右转') || null);
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '撤销') || null);
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '重做') || null);
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '下载 .msch') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.rotateAllRight') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.undo') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.redo') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.downloadMsch') || null);
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, expect.objectContaining({ rotation_quarters: 3 }));
     expect(mockAnalyze).not.toHaveBeenCalled();
     expect(anchorClick).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain('保存为新版本');
+    expect(container.textContent).not.toContain('editor.saveNewVersion');
   });
 
   it('disables export when the server returns incomplete block positions', async () => {
@@ -287,7 +287,7 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(container.textContent).toContain('Some positions are missing');
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) as HTMLButtonElement | undefined;
     expect(exportButton).toBeUndefined();
     expect(mockExport).not.toHaveBeenCalled();
   });
@@ -311,10 +311,10 @@ describe('SchematicLightEditor', () => {
       await flushEffects();
     });
 
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '移动') || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'editor.toolMove') || null);
     await clickCell(2, 2);
     await clickCell(4, 2);
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [],
@@ -337,12 +337,12 @@ describe('SchematicLightEditor', () => {
     });
     await mount();
 
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '高级模式') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.advancedMode') || null);
     await clickCell(1, 1);
     expect(container.textContent).toContain('core → 2,3');
     const source = container.querySelector('#schematic-logic-source') as HTMLTextAreaElement;
     await act(async () => Simulate.change(source, { target: { value: 'print("after")' } as EventTarget & { value: string } }));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [],
@@ -367,12 +367,12 @@ describe('SchematicLightEditor', () => {
     });
     await mount();
 
-    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '高级模式') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'editor.advancedMode') || null);
     await clickCell(2, 3);
-    expect(container.textContent).toContain('官方配置类型');
+    expect(container.textContent).toContain('editor.configOfficialTypes');
     expect(container.textContent).toContain('铜');
     await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('铅')) || null);
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, expect.objectContaining({
       config_edits: [{ x: 2, y: 3, config: { type: 'content', content_type: 'item', name: 'lead' } }],
@@ -385,16 +385,16 @@ describe('SchematicLightEditor', () => {
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not load block positions');
     expect(container.querySelector('[role="alert"]')?.textContent).not.toContain('positions unavailable');
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch')) as HTMLButtonElement | undefined;
     expect(exportButton).toBeUndefined();
   });
 
   it('does not download the transformed bytes if server reanalysis fails', async () => {
     mockAnalyze.mockRejectedValueOnce(new Error('server parser unavailable'));
     await mount();
-    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体右转'));
+    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.rotateAllRight'));
     await click(rotateButton || null);
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch'));
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.downloadMsch'));
     await click(exportButton || null);
 
     expect(anchorClick).not.toHaveBeenCalled();

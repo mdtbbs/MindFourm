@@ -19,7 +19,7 @@ export class OAuthScopeGuard implements CanActivate {
     if (auth?.source !== 'mindauth_oauth') return true;
     const missing = required.filter(scope => !auth.scopes?.includes(scope));
     if (missing.length) {
-      throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: missing }]);
+      throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, 'INSUFFICIENT_SCOPE', false, [{ requiredScopes: missing }]);
     }
     return true;
   }

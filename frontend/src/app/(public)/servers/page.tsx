@@ -9,9 +9,11 @@ import ServerApplyForm from "@/components/forum/server-apply-form";
 import PublicServerGrid from "@/components/forum/public-server-grid";
 import FeatureGate from "@/components/forum/feature-gate";
 import { Lock } from "lucide-react";
+import { useI18n } from "@/i18n/provider";
 
 function AuthRequiredSection() {
-  // 获取当前页面路径作为登录后的跳转目标
+  const { t } = useI18n();
+  // Remember the current path so login returns the visitor here.
   const currentPath =
     typeof window !== "undefined"
       ? window.location.pathname + window.location.search
@@ -20,12 +22,12 @@ function AuthRequiredSection() {
   return (
     <div className="text-center py-16 bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)]">
       <Lock className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" />
-      <p className="text-[var(--text-secondary)] mb-4">请先登录后查看此内容</p>
+      <p className="text-[var(--text-secondary)] mb-4">{t('servers.loginRequired')}</p>
       <a
         href={`/login?redirect=${encodeURIComponent(currentPath)}`}
         className="inline-flex items-center px-4 py-2 bg-[var(--primary-button)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
       >
-        登录
+        {t('servers.login')}
       </a>
     </div>
   );
@@ -53,12 +55,13 @@ function SectionContent({
 function ServersContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
+  const { t } = useI18n();
   const section = searchParams?.get("section") || "";
 
   const currentSection = section || (isAuthenticated ? "my" : "public");
 
   return (
-    <FeatureGate settingKey="feature_servers_enabled" label="游戏服务器">
+    <FeatureGate settingKey="feature_servers_enabled" label={t('servers.title')}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex gap-8">
           <ServerSidebar />

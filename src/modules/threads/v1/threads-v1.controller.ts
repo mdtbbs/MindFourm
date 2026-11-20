@@ -65,7 +65,7 @@ export class ThreadsV1Controller {
     const limit = Math.min(Number(query.limit || 20), 50);
     const offset = Math.max(0, parseInt(query.offset || String(((query.page || 1) - 1) * limit), 10) || 0);
     if (query.q?.trim()) {
-      if (!this.searchService) throw new ApiV1Exception('SEARCH_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '搜索服务暂不可用', true);
+      if (!this.searchService) throw new ApiV1Exception('SEARCH_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'SEARCH_UNAVAILABLE', true);
       const result = await this.searchService.searchPosts(query.q.trim(), {
         page: query.page || Math.floor(offset / limit) + 1,
         limit,
@@ -101,7 +101,7 @@ export class ThreadsV1Controller {
     // Existing tests and isolated adapter consumers retain the old minimal form;
     // the running module returns that stable shape plus additive detail fields.
     const thread = await this.threadAdapter.getThreadV1(id, req?.user);
-    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
+    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, 'THREAD_NOT_FOUND', false);
     if (!this.postsService) return thread;
     const [detail, replies] = await Promise.all([
       this.postsService.findById(id, req?.user),
@@ -152,8 +152,8 @@ export class ThreadsV1Controller {
     @Req() req?: any,
   ) {
     const thread = await this.threadAdapter.getThreadV1(id, req?.user);
-    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
-    if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '回复暂不可用', true);
+    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, 'THREAD_NOT_FOUND', false);
+    if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'REPLIES_UNAVAILABLE', true);
     const page = Math.max(1, Number.parseInt(pageText, 10) || 1);
     const limit = Math.min(50, Math.max(1, Number.parseInt(limitText, 10) || 20));
     const result = await this.postsService.getReplies(id, limit, page);
@@ -178,8 +178,8 @@ export class ThreadsV1Controller {
     @Req() req?: any,
   ) {
     const thread = await this.threadAdapter.getThreadV1(id, req?.user);
-    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
-    if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '回复暂不可用', true);
+    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, 'THREAD_NOT_FOUND', false);
+    if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'REPLIES_UNAVAILABLE', true);
     const result = await this.postsService.getReplyChildren(id, replyId, Number(limitText), Number(pageText));
     return this.withPagination(result.data.map(reply => ({ ...reply, is_owner: req?.user?.id === reply.user_id })), {
       page: result.page, limit: result.limit, total: result.total, total_pages: result.totalPages, has_more: result.page < result.totalPages,

@@ -283,9 +283,9 @@ export default function ResourceSubmitForm({
         if (directDraft.draft_status === 'open') {
           await uploadResourceDirectDraft(directDraft.version_public_id, file, contentHash);
         } else if (directDraft.version_status !== 'pending_review') {
-          throw new Error('资源上传草稿状态已变化，请重新提交');
+          throw new Error(t('cards.draftChanged'));
         }
-        if (!Number.isSafeInteger(directDraft.resource_id)) throw new Error('资源已提交，但服务端没有返回资源导航 ID');
+        if (!Number.isSafeInteger(directDraft.resource_id)) throw new Error(t('cards.draftMissingId'));
         draft.clear();
         showSuccess(t('resourceSubmit.success'));
         router.push(`/resources/${directDraft.resource_id}`);

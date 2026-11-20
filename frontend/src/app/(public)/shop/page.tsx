@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ShoppingBag, Star, Lock, Package } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 import FeatureGate from '@/components/forum/feature-gate';
+import { useI18n } from '@/i18n/provider';
 
 interface ShopItem {
   id: number;
@@ -20,6 +21,7 @@ interface ShopItem {
 
 export default function ShopPage() {
   const { user, isAuthenticated } = useAuth();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [myPoints, setMyPoints] = useState(0);
@@ -37,12 +39,12 @@ export default function ShopPage() {
     } catch (err) {
       // Previously a `console.error` only, which made a failed load indistinguishable
       // from an empty shop — and the endpoint's response shape meant it always failed.
-      setError(err instanceof Error ? err.message : '商品加载失败，请稍后重试');
+      setError(err instanceof Error ? err.message : t('points.loadFailed'));
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchMyPoints = useCallback(async () => {
     if (!isAuthenticated || !user) return;
@@ -72,19 +74,19 @@ export default function ShopPage() {
     setError(null);
     try {
       await api.post(`/api/shop/purchase/${itemId}`);
-      setMessage('购买成功！');
+      setMessage(t('points.purchaseSuccess'));
       setTimeout(() => setMessage(null), 3000);
       fetchMyPoints();
       fetchMyPurchases();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '购买失败');
+      setError(err instanceof Error ? err.message : t('points.purchaseFailed'));
     } finally {
       setPurchasing(null);
     }
   };
 
   if (loading) return (
-    <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
+    <FeatureGate settingKey="feature_shop_enabled" label={t('points.shop')}>
     <div>
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -94,15 +96,15 @@ export default function ShopPage() {
   );
 
   return (
-    <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
+    <FeatureGate settingKey="feature_shop_enabled" label={t('points.shop')}>
     <div>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-primary">首页</Link>
+            <Link href="/" className="hover:text-primary">{t('navigation.home')}</Link>
             <span>/</span>
-            <span>积分商城</span>
+            <span>{t('points.shop')}</span>
           </nav>
         </div>
 
@@ -110,15 +112,15 @@ export default function ShopPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingBag className="w-7 h-7 text-primary" />
-              积分商城
+              {t('points.shop')}
             </h1>
-            <p className="text-muted-foreground mt-1">使用积分兑换精美礼品</p>
+            <p className="text-muted-foreground mt-1">{t('points.shopIntro')}</p>
           </div>
           {isAuthenticated && (
             <div className="card px-5 py-3 flex items-center gap-2">
               <Star className="w-5 h-5 text-yellow-500" />
               <span className="font-bold text-lg">{myPoints}</span>
-              <span className="text-sm text-muted-foreground">可用积分</span>
+              <span className="text-sm text-muted-foreground">{t('points.available')}</span>
             </div>
           )}
         </div>
@@ -143,7 +145,7 @@ export default function ShopPage() {
               }`}
               onClick={() => setTab('shop')}
             >
-              全部商品
+              {t('points.allItems')}
             </button>
             <button
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -151,7 +153,7 @@ export default function ShopPage() {
               }`}
               onClick={() => setTab('purchases')}
             >
-              我的兑换
+              {t('points.myRedemptions')}
             </button>
           </div>
         )}
@@ -177,10 +179,10 @@ export default function ShopPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1 text-primary font-bold">
                       <Star className="w-4 h-4" />
-                      {item.points_cost} 积分
+                      {item.points_cost} {t('points.points')}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {item.stock > 0 ? `库存 ${item.stock}` : '已售罄'}
+                      {item.stock > 0 ? `${t('points.stock')} ${item.stock}` : t('points.soldOut')}
                     </span>
                   </div>
                   {isAuthenticated ? (
@@ -189,14 +191,14 @@ export default function ShopPage() {
                       disabled={purchasing === item.id || item.stock === 0 || myPoints < item.points_cost}
                       className="mt-3 w-full btn btn-primary text-sm"
                     >
-                      {purchasing === item.id ? '兑换中...' : item.stock === 0 ? '已售罄' : myPoints < item.points_cost ? '积分不足' : '立即兑换'}
+                      {purchasing === item.id ? t('points.buying') : item.stock === 0 ? t('points.soldOut') : myPoints < item.points_cost ? t('points.insufficient') : t('points.buy')}
                     </button>
                   ) : (
                     <a
                       href={`/login?redirect=${encodeURIComponent('/shop')}`}
                       className="mt-3 w-full btn btn-secondary text-sm flex items-center justify-center gap-1"
                     >
-                      <Lock className="w-3 h-3" /> 登录后兑换
+                      <Lock className="w-3 h-3" /> {t('points.loginToRedeem')}
                     </a>
                   )}
                 </div>
@@ -210,7 +212,7 @@ export default function ShopPage() {
             {purchases.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <ShoppingBag className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                <p>暂无兑换记录</p>
+                <p>{t('points.noRedemptions')}</p>
               </div>
             ) : (
               purchases.map((p) => (
@@ -219,9 +221,9 @@ export default function ShopPage() {
                     <Package className="w-6 h-6 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium">{p.item?.name || '商品'}</h3>
+                    <h3 className="font-medium">{p.item?.name || t('points.item')}</h3>
                     <p className="text-sm text-muted-foreground">
-                      兑换于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
+                      {t('points.redeemedOn', { date: new Date(p.created_at).toLocaleDateString(locale) })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 text-primary font-bold">
@@ -237,7 +239,7 @@ export default function ShopPage() {
         {items.length === 0 && tab === 'shop' && (
           <div className="text-center py-16 text-muted-foreground">
             <ShoppingBag className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p>暂无商品，管理员可在后台添加</p>
+            <p>{t('points.empty')}</p>
           </div>
         )}
       </main>

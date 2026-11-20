@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Badge from '@/components/ui/badge';
 import type { UserRole } from '@/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/i18n/provider';
 
 type AuthorLinkSize = 'sm' | 'md' | 'lg';
 
@@ -18,13 +19,14 @@ interface AuthorLinkProps {
   className?: string;
 }
 
-const roleLabels: Record<string, string> = {
-  super_admin: '超管',
-  admin: '管理员',
-  moderator: '版主',
-  core_user: '核心用户',
-  active_user: '活跃用户',
-  user: '用户',
+/** Roles map to locale keys; the badge must read in the visitor's language. */
+const roleLabelKeys: Record<string, string> = {
+  super_admin: 'roles.super_admin',
+  admin: 'roles.admin',
+  moderator: 'roles.moderator',
+  core_user: 'roles.core_user',
+  active_user: 'roles.active_user',
+  user: 'roles.user',
 };
 
 const roleVariants: Record<string, 'default' | 'primary' | 'success' | 'warning'> = {
@@ -57,9 +59,10 @@ const sizeClasses: Record<AuthorLinkSize, { avatar: string; fallback: string; na
   },
 };
 
-function getRoleLabel(role?: UserRole | string | null) {
+function getRoleLabel(role: UserRole | string | null | undefined, t: (key: string) => string) {
   if (!role) return null;
-  return roleLabels[role as UserRole] || role;
+  const key = roleLabelKeys[role];
+  return key ? t(key) : role;
 }
 
 function getRoleVariant(role?: UserRole | string | null) {
@@ -76,11 +79,12 @@ export default function AuthorLink({
   showMeta = true,
   className = '',
 }: AuthorLinkProps) {
-  const displayName = name?.trim() || `用户 #${userId}`;
+  const { t } = useI18n();
+  const displayName = name?.trim() || t('cards.userFallback', { id: userId });
   const initial = displayName.trim().charAt(0).toUpperCase() || '#';
-  const roleLabel = getRoleLabel(role);
+  const roleLabel = getRoleLabel(role, t);
   const classes = sizeClasses[size];
-  const meta = `用户编号 ${userId}`;
+  const meta = t('cards.userMeta', { id: userId });
 
   return (
     <Link

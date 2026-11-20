@@ -17,15 +17,15 @@ export class GameContentAuthGuard implements CanActivate {
     const method = String(req.method || 'GET').toUpperCase();
     const uploadRoute = /\/uploads(?:\/|$)/i.test(path) || (method === 'POST' && /\/blueprints\/?$/i.test(path));
     if (uploadRoute && !await this.settings.getBoolean('feature_resources_v1_upload_enabled', true)) {
-      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_UPLOAD_DISABLED', false);
     }
     if (!uploadRoute && method === 'GET' && /\/download(?:\/|$)/i.test(path)
       && !await this.settings.getBoolean('feature_resources_v1_download_enabled', true)) {
-      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     }
     if (!uploadRoute && method === 'GET' && !/\/meta\/?$/i.test(path)
       && !await this.settings.getBoolean('feature_resources_v1_read_enabled', true)) {
-      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭 Game Content 读取', false);
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     }
     const authorization = req.headers?.authorization;
     if (!authorization) return true;
@@ -41,7 +41,7 @@ export class GameContentAuthGuard implements CanActivate {
             ? 'resource.download'
             : ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 'forum.write' : 'resource.read';
         if (!resolved.context.scopes.includes(requiredScope)) {
-          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: [requiredScope] }]);
+          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, 'INSUFFICIENT_SCOPE', false, [{ requiredScopes: [requiredScope] }]);
         }
       }
       await this.bans.assertUserNotBanned(user.id);
@@ -54,9 +54,9 @@ export class GameContentAuthGuard implements CanActivate {
         const response = error.getResponse() as any;
         if (response?.code === 'INSUFFICIENT_SCOPE') {
           const details = Array.isArray(response.details) ? response.details : [];
-          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, details);
+          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, 'INSUFFICIENT_SCOPE', false, details);
         }
-        throw new ApiV1Exception('USER_BANNED', HttpStatus.FORBIDDEN, '账号当前不可使用此服务', false);
+        throw new ApiV1Exception('USER_BANNED', HttpStatus.FORBIDDEN, 'USER_BANNED', false);
       }
       // Avoid putting the bearer value or upstream response into logs.
       this.logger.warn('MindAuth bearer validation failed');
@@ -87,7 +87,7 @@ export class GameContentRequiredAuthGuard implements CanActivate {
           ? 'resource.download'
           : ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 'forum.write' : 'resource.read';
       if (!req.authContext.scopes.includes(requiredScope)) {
-        throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: [requiredScope] }]);
+        throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, 'INSUFFICIENT_SCOPE', false, [{ requiredScopes: [requiredScope] }]);
       }
     }
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -99,10 +99,10 @@ export class GameContentRequiredAuthGuard implements CanActivate {
       }
     }
     if (await this.auth.checkNeedsTermsAcceptance(req.user)) {
-      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, '请先接受社区条款', false);
+      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, 'TERMS_ACCEPTANCE_REQUIRED', false);
     }
     if (uploadRoute && !await this.settings.getBoolean('feature_resources_v1_upload_enabled', true)) {
-      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_UPLOAD_DISABLED', false);
     }
     return true;
   }
