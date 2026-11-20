@@ -184,6 +184,13 @@ export default function CloudSavesPage() {
           <span>{t('cloudSaves.slotUsage', { used: quota.slots.used, limit: quota.slots.limit })}</span>
           <span>{t('cloudSaves.retention', { count: quota.retention.max_unpinned_versions_per_slot, days: quota.retention.max_unpinned_age_days })}</span>
         </div>
+        {quota.breakdown && <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text-muted)]">
+          <span>{t('cloudSaves.quotaBreakdown', {
+            personal: formatBytes(quota.breakdown.personal_bytes),
+            squads: formatBytes(quota.breakdown.owned_squads_bytes),
+            pending: formatBytes(quota.breakdown.pending_bytes),
+          })}</span>
+        </div>}
         {percent >= 80 && percent < 100 && <p className="mt-2 text-xs text-[var(--text-secondary)]">{t('cloudSaves.quotaHint')}</p>}
         {percent >= 100 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t('cloudSaves.quotaFull')}</p>}
       </section>}

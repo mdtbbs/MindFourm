@@ -21,6 +21,7 @@ export type GameSaveSlot = {
 
 export type GameSaveQuota = {
   used_bytes: number; limit_bytes: number; max_file_size_bytes: number;
+  breakdown?: { personal_bytes: number; owned_squads_bytes: number; pending_bytes: number };
   slots: { used: number; limit: number };
   retention: { max_unpinned_versions_per_slot: number; max_unpinned_age_days: number };
 };

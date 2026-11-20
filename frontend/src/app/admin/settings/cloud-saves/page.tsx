@@ -71,6 +71,18 @@ export default function CloudSavesSettingsPage() {
           </span>
         </label>
 
+        <label className="flex items-start gap-3 rounded border border-surface-200 bg-surface-50 p-4">
+          <input
+            type="checkbox"
+            checked={(values.squad_saves_enabled ?? 'false') === 'true'}
+            onChange={event => update('squad_saves_enabled', event.target.checked ? 'true' : 'false')}
+          />
+          <span>
+            <span className="block text-sm font-semibold text-surface-800">启用小队共享存档</span>
+            <span className="mt-1 block text-xs text-surface-500">依赖云存档，开启后小队成员可共享存档与接力开房。</span>
+          </span>
+        </label>
+
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-surface-600">服务器存储目录</label>
           <input

@@ -268,10 +268,13 @@ Content-Type: application/json
 | `max_players` | 否 | 2–64 整数 | 缺省 8。 |
 | `mod_pack_ref` | 否 | `{ "pack_public_id": "<uuid>", "version_public_id": "<uuid>" }` | 引用一个已发布 Pack 的固定版本；`version_public_id` 省略时使用当前推荐已发布版本。与 `mods` 互斥。 |
 | `mods` | 否 | 最多 64 项的对象数组 | 房主本地 Mod 清单，与 `mod_pack_ref` 互斥。每项必须含 `mod_id`（≤191），可选 `display_name`（≤255）、`version`（≤100）、`sha256`（64 位十六进制）与 `required`（缺省 true）。 |
+| `squad_save_ref` | 否 | 对象：`squad_id`、`slot_id`、`fencing_token`（整数 ≥ 1），可选 `lanlink_room_code`（≤ 16 字符） | 小队共享存档接力。调用者必须是该小队活跃成员并持有该槽位当前写租约；租约缺失、已到期、token 过期或已被接管返回 409 `SQUAD_SAVE_LEASE_STALE`（文件暂存接口另用 `SQUAD_SAVE_LEASE_REQUIRED`）。 |
 
 携带模组字段需要站点能力 `multiplayer.mod_sync_v1`；关闭时返回 403 `FEATURE_DISABLED`。两项同时提交、为空项、重复 `mod_id`、Pack 不可见或版本未发布返回 400 `SESSION_MODS_INVALID`。服务端只按公开资源目录解析；未过审、隔离、已删除、已合并或分类停用的资源不会留下可下载引用。
 
 创建响应包含 `session`、`peer`、`resume_token`；`join_policy = public` 的会话还包含一次性展示的 `join_code`。立即安全保存 `resume_token`；它绑定用户和 OAuth `client_id`、只能使用一次，断线恢复后会旋转出新令牌。
+
+带 `squad_save_ref` 创建会话时，服务端在同一事务内校验调用者仍是该小队活跃成员且租约仍由本人持有：租约缺失、已自然到期、`fencing_token` 过期或已被接管均返回 409 `SQUAD_SAVE_LEASE_STALE`；小队文件暂存接口 `POST /api/v1/squads/{squadId}/slots/{slotId}/blobs` 在未持租约时使用 409 `SQUAD_SAVE_LEASE_REQUIRED`。绑定失败会回滚整个会话创建。绑定成功后，新 `session_id` 回填到 `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`，响应原样回显 `squad_save_ref`。可选的 `lanlink_room_code` 会写入 `squad_save_slots.lanlink_room_code`；它只用于其他成员在 `lease/acquire` 收到 409 `SQUAD_SAVE_LEASE_HELD` 时，用 `error.details[0].lanlink_room_code` 一键加入当前房主房间，**不参与任何授权判断**。
 
 每个账号最多有一个 `active` 会话。再次创建时返回 HTTP 409 `SESSION_ALREADY_ACTIVE`，`error.details[0].session_id` 指向现有会话；客户端可打开该会话或结束后再建房。重复提交同一 `session_id` 与 `target_user_id` 的邀请时，如果仍有未过期邀请，服务端幂等返回原邀请且不再创建通知。每个发送者最多保留 50 个待处理邀请；超限返回 409 `INVITE_LIMIT_REACHED`，`error.details[0].retry_after_seconds` 表示最早何时可重试。每个 Presence 账号最多 32 条有效连接；这些限制也会出现在 `GET /multiplayer/capabilities.limits`。
 
@@ -519,6 +522,8 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
+小队共享存档事件也走用户事件流，发送给该小队每个活跃成员：`squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`。它们只是状态变化通知，收到后应重新读取小队详情、槽位租约或快照链；强制接管时还会额外通知原持有者（即使其已不再是活跃成员）。
+
 每个事件帧中的 `id` 都由服务端生成并保证存在；下表给出各用户流事件的确切 `data` 形状。用户事件不包含完整好友、邀请或 Presence 对象：
 
 | 事件 | `data` JSON 示例 | 获取完整当前状态 |
@@ -532,7 +537,14 @@ WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `he
 | `multiplayer.join_request.created` | `{"join_request_id":"jrq_…","session_id":"ses_…","requester_user_id":123}` | `GET /api/v1/multiplayer/sessions/{session_id}/join-requests` |
 | `multiplayer.join_request.approved` | `{"join_request_id":"jrq_…","session_id":"ses_…","intent_id":"jnt_…"}` | 直接消费 `intent_id`；不需要重新查意图 |
 | `multiplayer.join_request.rejected` | `{"join_request_id":"jrq_…","session_id":"ses_…"}` | 重新读取对应会话或请求状态 |
+| `squad_save.lease_acquired` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"previous_holder_user_id":null,"fencing_token":7,"expires_at":"2026-11-20T11:57:30.000Z"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.lease_released` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"fencing_token":7}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.lease_taken_over` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","lease_id":"<租约 UUID>","holder_user_id":123,"previous_holder_user_id":456,"fencing_token":8,"expires_at":"2026-11-20T11:57:30.000Z"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/lease` |
+| `squad_save.snapshot_committed` | `{"squad_id":"<小队 UUID>","slot_id":"<槽位 UUID>","snapshot_id":"<快照 UUID>","revision":12,"branch_type":"main","uploader_user_id":123,"fencing_token":7,"head_snapshot_id":"<快照 UUID>"}` | `GET /api/v1/squads/{squad_id}/slots/{slot_id}/snapshots` |
+| `squad_save.ownership_transferred` | `{"squad_id":"<小队 UUID>","from_user_id":123,"to_user_id":456,"transfer_id":"<转让 UUID>"}` | `GET /api/v1/squads/{squad_id}` |
 | `session.updated`（房主用户流） | `{"session_id":"ses_…","status":"active"}` | `GET /api/v1/multiplayer/sessions/{id}` |
+
+`squad_save.snapshot_committed` 在冲突救援分支上 `head_snapshot_id` 为 `null`；从历史快照恢复也复用同一事件，此时 `snapshot_id` 是新的 head。事件可能丢失或延迟，客户端收到后一律重新读取小队详情或快照链，不要仅凭事件推断主链状态。
 
 会话流事件包含定位所需的 `session_id`，对端事件包含 `peer_id`，候选事件包含 `candidate_id`；`candidate.created` 还带候选对象。`session.updated` 包含 `status`，进入关闭宽限期时还带 `grace_seconds`。`relay.allocated` / `relay.revoked` 包含 `session_id`、`peer_id` 和 `allocation_id`。收到会话流的 `resume_failed` 后，按需求读取 `GET /api/v1/multiplayer/sessions/{id}`、`.../peers` 或候选接口。
 

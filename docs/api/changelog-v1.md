@@ -1,6 +1,6 @@
 # 公开 API 更新记录
 
-## 2026-11-20 — 模组房与同步计划
+## 2026-11-20 — 模组房同步计划与小队共享存档接力
 
 Public V1 契约版本 1.9.0。
 
@@ -10,12 +10,26 @@ Public V1 契约版本 1.9.0。
 - `GET /api/v1/multiplayer/sessions` 新增 `modded`、`mod_id`、`pack_public_id` 筛选参数；每个会话对象新增 `is_modded`、`mod_count`、`mod_syncable_count` 与 `mod_summary`。列表中的 `mod_summary.mods` 最多 8 项并带 `mods_truncated`，完整清单通过 `GET /api/v1/multiplayer/sessions/{id}` 读取。
 - `POST /api/v1/multiplayer/sessions/{id}/mod-sync-plan`（`multiplayer.read` + `resource.read`）：按房主清单与客户端 `installed_mods`（最多 128 项）计算 `ready` / `sync_required` / `partial_sync_required`，返回 `to_download`、`to_enable`、`to_disable`、`preserved_client_mods`、`unresolved` 与完整 `mod_summary`。请求可携带可选 `join_code`，与加入接口同一校验，使持有房间码的客人在加入前也能读取计划。`to_download` 复用 `DownloadGrantService` 批量签发 60 秒滚动去重授权并写入下载事件；未收录或哈希不匹配项永不下发文件 ID 或下载地址。
 - `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities` 新增 `multiplayer_mod_sync_enabled`、`multiplayer.mod_sync_v1` 及 `mod_sync` 限额与状态枚举。
+- `GET /api/v1/squads`、`GET /api/v1/squads/invitations`、`POST /api/v1/squads`、`GET/PATCH/DELETE /api/v1/squads/{squadId}`：小队列表、收到的邀请、创建、详情、重命名与删除。
+- `GET/POST /api/v1/squads/{squadId}/members`、`POST .../members/accept`、`.../members/decline`、`PATCH/DELETE .../members/{userId}`：成员邀请、接受/拒绝邀请、角色调整、退出或被移除。
+- `POST /api/v1/squads/{squadId}/ownership-transfer` 及 `.../accept`、`.../decline`、`.../cancel`：24 小时有效的两步队长转让；接受时在事务内校验新队长配额。
+- `GET/POST /api/v1/squads/{squadId}/slots`、`GET/PATCH/DELETE .../slots/{slotId}`：共享存档槽的创建、详情、重命名与删除。
+- `GET .../slots/{slotId}/lease`、`POST .../lease/acquire`、`POST .../lease/renew`、`DELETE .../lease`：150 秒写租约、`fencing_token`、owner/admin 强制接管与释放。
+- `GET/POST .../slots/{slotId}/snapshots`、`GET .../snapshots/{snapshotId}/manifest`、`POST .../snapshots/{snapshotId}/restore`、`PATCH/DELETE .../snapshots/{snapshotId}`：manifest 快照提交、清单、恢复、置顶与删除；支持 `mode:"conflict_rescue"` 保存冲突救援分支。
+- `POST .../slots/{slotId}/blobs/check`、`POST .../slots/{slotId}/blobs`、`PUT /api/v1/squads/{squadId}/blobs/uploads/{uploadId}/file`、`POST .../snapshots/{snapshotId}/blobs/download`、`GET .../snapshots/{snapshotId}/blobs/{sha256}/file`：小队内文件级差量上传与下载。
+- `GET /api/v1/game-saves/quota` 新增 `breakdown: { personal_bytes, owned_squads_bytes, pending_bytes }`；`used_bytes` 为三项之和，小队用量记在创建者名下。
+- `POST /api/v1/multiplayer/sessions` 新增可选 `squad_save_ref: { squad_id, slot_id, fencing_token, lanlink_room_code? }`：成功后回填 `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`，并在响应中回显。
+- 用户实时事件新增 `squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`，发送给该小队每个活跃成员。
 
 ### Clarified
 
 - 站点开关 `feature_multiplayer_mod_sync_enabled` 双站默认开启，可由运营热关闭；关闭时携带模组字段建房与同步计划接口返回 403 `FEATURE_DISABLED`，旧客户端不传模组字段时行为不变。
 - 纯客户端辅助 Mod（`mod.hjson` 的 `hidden: true`，或内置 `mdtbbsaddon` / `lanlink` 白名单）默认保留，不因房主清单缺少而进入 `to_disable`。
 - 新增稳定错误码 `SESSION_MODS_INVALID`（400），用于互斥字段同时提交、清单重复/超限或 Pack 不可用。
+- 小队共享存档配额统一记在创建者（`squads.owner_user_id`）名下；任意成员上传都校验创建者额度，非创建者不返回具体数值。`squad_save_blobs` 与个人 `game_save_blobs` 物理隔离，`blobs/check` 只能查询本小队内容。
+- 写租约有效期为 150 秒（90 秒心跳 + 60 秒宽限），自然到期后任意活跃成员可接力；未到期只有 owner/admin 能强制接管。`fencing_token` 单调递增，过期 token 的主链提交返回 `SQUAD_SAVE_LEASE_STALE`；最近一次被接管的原房主可用其当时的旧 token 和已暂存文件，以 `mode:"conflict_rescue"` 保存为 `branch_type='conflict'` 分支避免丢档；其他成员不能凭较小的 token 绕过写租约。
+- 每个槽位的快照按 GFS 分层保留：最近 10 个未置顶主链快照、过去 7 个自然日每天最后一个、全部 pinned（每槽上限 10）与全部 conflict 分支。淘汰立即释放创建者配额并进入延迟 GC，`pruned_snapshot_ids` 返回本次淘汰项。
+- 小队相关稳定错误码统一使用 `SQUAD_*` 前缀；完整列表、租约状态机和配额细则见云存档 API 指南。
 
 ## 2026-10-30 — 云存档文件级差量上传
 

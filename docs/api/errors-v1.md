@@ -17,6 +17,8 @@ V1 JSON 错误沿用稳定的 `{ error, meta }` 响应结构：
 
 程序应依据 HTTP 状态码和稳定的 `error.code` 决定处理方式。`message` 是面向用户的提示，可能会随语言变化。`meta.request_id` 可用于向维护者查询问题。`error.documentation_url` 指向错误代码对应的固定说明位置；例如 `RATE_LIMITED` 对应 `#rate-limited`。在线[错误代码表](/api/v1/docs/errors)由服务器的 V1 错误代码注册表生成。
 
+小队共享存档相关错误码（`SQUAD_*`）见[云存档 API](./cloud-saves-v1.md)的「小队共享存档接力」章节。
+
 如果没有收到 HTTP 响应（例如 DNS lookup、TLS 握手、连接重置或请求超时失败），这是传输层错误；服务端没有返回 `{error, meta}`，因此客户端不应把它包装成带业务 `error.code` 的 V1 异常。若收到了 HTTP 响应，则用状态码和稳定 `error.code` 判断业务结果；`SESSION_CLOSED` 和 `SESSION_EXPIRED` 是 HTTP 404 且 `retryable: false` 的终态。
 
 收到 HTTP 429 时，至少等待 `Retry-After` 指定的时长。对于可重试错误，请使用有上限的指数退避；对于不可重试错误，应先修改请求或用户状态，不要直接重试。

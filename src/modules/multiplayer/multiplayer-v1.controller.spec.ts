@@ -64,6 +64,23 @@ describe('MultiplayerV1Controller client identity', () => {
     expect(await validate(plainToInstance(ListJoinRequestsDto, { limit: 51 }, { enableImplicitConversion: true }), options)).not.toHaveLength(0);
   });
 
+  it('validates the optional squad_save_ref used for squad save relay', async () => {
+    const options = { whitelist: true, forbidNonWhitelisted: true };
+    const valid = {
+      game_id: 'mindustry',
+      squad_save_ref: {
+        squad_id: '11111111-1111-4111-8111-111111111111',
+        slot_id: '22222222-2222-4222-8222-222222222222',
+        fencing_token: 3,
+        lanlink_room_code: 'A1B2C3D4E5',
+      },
+    };
+    expect(await validate(plainToInstance(CreateMultiplayerSessionDto, valid), options)).toHaveLength(0);
+
+    const bad = { game_id: 'mindustry', squad_save_ref: { squad_id: 'x', slot_id: 'y', fencing_token: 0 } };
+    expect(await validate(plainToInstance(CreateMultiplayerSessionDto, bad), options)).not.toHaveLength(0);
+  });
+
   it.each([
     ['session', CreateMultiplayerSessionDto, { game_id: 'mindustry' }],
     ['join', JoinMultiplayerSessionDto, {}],

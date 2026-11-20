@@ -459,6 +459,7 @@ export class SettingsService implements OnModuleInit {
       'cloud_saves_storage_path',
       'cloud_saves_user_quota_bytes',
       'cloud_saves_max_file_bytes',
+      'squad_saves_enabled',
     ]),
     blobs: new Set([
       'blobs_enabled',
@@ -626,6 +627,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_third_party_multiplayer_v1_enabled', value: 'false', category: 'features', description: 'Allow reviewed third-party OAuth apps to use Multiplayer APIs' },
       { key: 'feature_multiplayer_mod_sync_enabled', value: 'true', category: 'features', description: 'Enable mod-aware Multiplayer sessions and mod sync plans (hot switch)' },
       { key: 'cloud_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable private Mindustry cloud saves' },
+      { key: 'squad_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable squad shared save relay (requires cloud_saves_enabled)' },
       { key: 'cloud_saves_storage_path', value: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'), category: 'cloud-saves', description: 'Persistent local directory for private save files' },
       { key: 'cloud_saves_user_quota_bytes', value: process.env.CLOUD_SAVES_MAX_BYTES_PER_USER || '524288000', category: 'cloud-saves', description: 'Cloud save quota per user in bytes' },
       { key: 'cloud_saves_max_file_bytes', value: process.env.CLOUD_SAVES_MAX_FILE_BYTES || '52428800', category: 'cloud-saves', description: 'Maximum size of one cloud save file in bytes' },
@@ -1010,6 +1012,7 @@ export class SettingsService implements OnModuleInit {
       'cloud_saves_storage_path',
       'cloud_saves_user_quota_bytes',
       'cloud_saves_max_file_bytes',
+      'squad_saves_enabled',
     ]);
     for (const key of values.keys()) {
       if (!allowed.has(key)) throw new BadRequestException(`Unsupported cloud save setting: ${key}`);
@@ -1017,6 +1020,14 @@ export class SettingsService implements OnModuleInit {
 
     const enabled = values.get('cloud_saves_enabled') ?? await this.get('cloud_saves_enabled') ?? 'false';
     if (!['true', 'false'].includes(enabled)) throw new BadRequestException('云存档开关必须为 true 或 false。');
+
+    const squadEnabled = values.get('squad_saves_enabled');
+    if (squadEnabled !== undefined && !['true', 'false'].includes(squadEnabled)) {
+      throw new BadRequestException('小队共享存档开关必须为 true 或 false。');
+    }
+    if (squadEnabled === 'true' && enabled !== 'true') {
+      throw new BadRequestException('启用小队共享存档前必须先启用云存档。');
+    }
 
     const currentQuota = await this.getNumber('cloud_saves_user_quota_bytes') || 524288000;
     const currentMaxFile = await this.getNumber('cloud_saves_max_file_bytes') || 52428800;

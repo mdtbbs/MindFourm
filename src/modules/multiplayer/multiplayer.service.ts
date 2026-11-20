@@ -25,6 +25,7 @@ import { DownloadGrantService } from '../downloads/download-grant.service';
 import { FriendsService } from '../friends/friends.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
+import { SquadLeaseService } from '../squads/squad-lease.service';
 import { SettingsService } from '../settings/settings.service';
 import { SocialPolicyService } from '../social/social-policy.service';
 import {
@@ -245,6 +246,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly modCatalog: MultiplayerModCatalogService,
     private readonly downloadGrants: DownloadGrantService,
+    private readonly squadLeases?: SquadLeaseService,
   ) {}
 
   onModuleInit(): void {
@@ -423,6 +425,11 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       await manager.save(MultiplayerPeerResumeToken, manager.create(MultiplayerPeerResumeToken, {
         peer_id: peerId, token_hash: sha256(resumeToken), expires_at: new Date(session.expires_at), consumed_at: null,
       }));
+      // 小队接力建房：只有当前租约持有者能把会话绑定到共享存档槽。绑定失败
+      // 会抛 SQUAD_SAVE_LEASE_REQUIRED/STALE 并回滚整个会话创建。
+      if (input.squad_save_ref) {
+        await this.squadLeases.bindMultiplayerSession(manager, userId, input.squad_save_ref, id);
+      }
       await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
         actor_user_id: userId, action: 'session.created', target_type: 'session', target_id: id,
         details: {
@@ -447,6 +454,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       peer: this.toPublicPeer(await this.peers.findOneByOrFail({ id: peerId })),
       resume_token: resumeToken,
       ...(code ? { join_code: code } : {}),
+      ...(input.squad_save_ref ? { squad_save_ref: input.squad_save_ref } : {}),
     };
   }
 
@@ -2297,6 +2305,8 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       }
     }
     await this.redis.del(`multiplayer:session:${session.id}`);
+    // 小队接力房间指针随会话关闭失效；失败不能阻塞会话关闭本身。
+    await this.squadLeases.clearSessionBinding(session.id).catch(() => undefined);
     await this.realtime.emitSession(session.id, event, { session_id: session.id, status: 'closed' });
   }
 

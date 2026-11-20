@@ -31,6 +31,12 @@ describe('migration registry', () => {
     );
   });
 
+  it('includes the squad saves schema for the shared-save relay feature', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'SquadSaves1720000430000',
+    );
+  });
+
   it('includes the legacy footer branding correction', () => {
     expect(migrations.map((migration) => migration.name)).toContain(
       'FixLegacyFooterBrand1720000043000',

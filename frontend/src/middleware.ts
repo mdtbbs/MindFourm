@@ -22,6 +22,7 @@ const AUTH_REQUIRED_ROUTES = [
   "/friends",
   "/resources/my",
   "/tools/cloud-saves",
+  "/tools/squads",
   "/apply-server",
 ];
 
