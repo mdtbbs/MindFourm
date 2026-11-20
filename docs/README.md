@@ -16,6 +16,7 @@
 - [`api/first-party-v1.md`](api/first-party-v1.md)、[`api/game-content-v1.md`](api/game-content-v1.md)、[`api/resources-v1-contract.md`](api/resources-v1-contract.md)：讨论、游戏内容与资源 API；资源契约也记录公开推荐算法及其分页、信号与隐私边界。
 - [`api/multiplayer-v1.md`](api/multiplayer-v1.md)、[`api/multiplayer-guide.md`](api/multiplayer-guide.md)、[`api/cloud-saves-v1.md`](api/cloud-saves-v1.md)：联机契约、第三方联机接入指南（端到端流程与公开/基础设施边界）与云存档（含小队共享存档）。
 - [`api/blobs-v1.md`](api/blobs-v1.md)：通用 blob 存储（`/api/v1/blobs`）——内容寻址、所有者绑定、去重与延迟回收。
+- [`api/timelapses.md`](api/timelapses.md)：基地延时摄影与战报卡 V1——`.mreplay.zip` 上传、渲染状态、视频/封面播放与 `battleReport` 正文节点。
 - [`api/rich-content-schema-v2.md`](api/rich-content-schema-v2.md)：Tiptap 正文 Schema。
 - [`api/errors-v1.md`](api/errors-v1.md)、[`api/changelog-v1.md`](api/changelog-v1.md)、[`api/lifecycle-v1.md`](api/lifecycle-v1.md)：错误码、已发布 API 更新与生命周期。
 
@@ -37,6 +38,7 @@
 - [`resource-storage-reconciliation.md`](resource-storage-reconciliation.md)：ResourceStorage 对账、审计和显式修复。
 - [`resource-storage.md`](resource-storage.md)：RES 直传、下载、预览和历史迁移合同。
 - [`international-site-profiles.md`](international-site-profiles.md)：MDTBBS / Mindustry Club profile 差异及部署隔离。
+- [`timelapse-worker.md`](timelapse-worker.md)：基地延时摄影渲染 Worker 的运行、安全边界与失败重试。
 - [`production-deployment.md`](production-deployment.md)：生产配置、数据库迁移和发布检查。
 - [`production-readiness.md`](production-readiness.md)：生产就绪背景与验收记录；执行操作前重新核实当前状态。
 

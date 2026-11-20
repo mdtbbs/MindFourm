@@ -5,6 +5,7 @@ import { BLOCK_ALIGNMENTS, FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, blockAlign
 import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 import { Plugin } from '@tiptap/pm/state';
 import { normalizePastedRichHtml } from './paste-normalization';
+import { battleReportLabel, isBattleReportPublicId } from '@/lib/timelapses/battle-report-data';
 
 const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
 const FONT_FAMILIES = Object.keys(FONT_STACKS);
@@ -199,6 +200,68 @@ export const AttachmentCard = Node.create({
   },
 });
 
+/**
+ * 基地延时战报卡：块级 atom，正文只保存战报 UUID 与两份服务端派生摘要。
+ *
+ * HTML 投影绝不包含视频流地址——播放器由 `RichBattleReportCard` 按 UUID 调用
+ * Public V1 获取；未通过审核的战报对非作者返回 404，前端渲染不可见占位。
+ * `mapName` / `maxWave` 以服务端写入事务的回填值为准，客户端提交值会被覆盖。
+ */
+export const BattleReport = Node.create({
+  name: 'battleReport',
+  group: 'block',
+  atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichCardNodeView); },
+  addAttributes() {
+    return {
+      timelapsePublicId: {
+        default: null,
+        parseHTML: (element) => (element as HTMLElement).getAttribute('data-timelapse-public-id') || null,
+      },
+      mapName: {
+        default: '',
+        parseHTML: (element) => (element as HTMLElement).getAttribute('data-map-name') || '',
+      },
+      maxWave: {
+        default: 0,
+        parseHTML: (element) => {
+          const wave = Number((element as HTMLElement).getAttribute('data-max-wave'));
+          return Number.isFinite(wave) && wave > 0 ? Math.floor(wave) : 0;
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{
+      tag: 'figure[data-timelapse-public-id]',
+      getAttrs: (element) => {
+        const figure = element as HTMLElement;
+        const wave = Number(figure.getAttribute('data-max-wave'));
+        return {
+          timelapsePublicId: figure.getAttribute('data-timelapse-public-id') || null,
+          mapName: figure.getAttribute('data-map-name') || '',
+          maxWave: Number.isFinite(wave) && wave > 0 ? Math.floor(wave) : 0,
+        };
+      },
+    }];
+  },
+  renderHTML({ node }) {
+    const publicId = typeof node.attrs.timelapsePublicId === 'string' ? node.attrs.timelapsePublicId : '';
+    const mapName = typeof node.attrs.mapName === 'string' ? node.attrs.mapName : '';
+    const maxWave = Number.isFinite(Number(node.attrs.maxWave)) && Number(node.attrs.maxWave) > 0
+      ? Math.floor(Number(node.attrs.maxWave))
+      : 0;
+    const label = battleReportLabel(mapName, maxWave);
+    return ['figure', {
+      'data-battle-report': '1',
+      'data-timelapse-public-id': publicId,
+      ...(mapName ? { 'data-map-name': mapName } : {}),
+      ...(maxWave > 0 ? { 'data-max-wave': String(maxWave) } : {}),
+      contenteditable: 'false',
+    }, isBattleReportPublicId(publicId) ? ['a', { href: '/timelapses/' + publicId }, label] : label];
+  },
+});
+
 export const PostQuote = Node.create({
   name: 'postQuote',
   group: 'block',
@@ -334,6 +397,7 @@ export const RICH_CONTENT_EXTENSIONS = [
   Mention,
   CustomEmoji,
   Video,
+  BattleReport,
   AttachmentCard,
   PostQuote,
   ReplyQuote,

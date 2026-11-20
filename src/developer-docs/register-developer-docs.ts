@@ -98,6 +98,7 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   'multiplayer-guide': 'multiplayer-guide.md',
   'cloud-saves': 'cloud-saves-v1.md',
   blobs: 'blobs-v1.md',
+  timelapses: 'timelapses.md',
   changelog: 'changelog-v1.md',
   lifecycle: 'lifecycle-v1.md',
 };
@@ -659,6 +660,8 @@ Content-Type: application/json
       [inlineCode('game_content.saves.read'), '读取游戏云存档'],
       [inlineCode('game_content.saves.write'), '创建或更新游戏云存档'],
       [inlineCode('game_content.saves.delete'), '删除游戏云存档'],
+      [inlineCode('timelapse.read'), '读取已发布或本人可见的基地延时战报'],
+      [inlineCode('timelapse.write'), '上传、提交和生成基地延时战报草稿帖'],
       [inlineCode('blob.read'), '读取当前账号的 blob 元数据与内容'],
       [inlineCode('blob.write'), '上传、提交或更新当前账号的 blob'],
       [inlineCode('blob.delete'), '删除当前账号的 blob'],

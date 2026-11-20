@@ -1,5 +1,6 @@
 import { HtmlDocumentProjection1720000370000 } from './1720000370000-HtmlDocumentProjection';
 import { SquadSaves1720000430000 } from './1720000430000-SquadSaves';
+import { TimelapseBattleReports1720000440000 } from './1720000440000-TimelapseBattleReports';
 import { MultiplayerVisibilityJoinPolicySplit1720000380000 } from './1720000380000-MultiplayerVisibilityJoinPolicySplit';
 import { MultiplayerInviteLimits1720000390000 } from './1720000390000-MultiplayerInviteLimits';
 import { CloudSaveManifestSnapshots1720000400000 } from './1720000400000-CloudSaveManifestSnapshots';
@@ -185,4 +186,5 @@ export const migrations = [
   CloudSaveManifestSnapshots1720000400000,
   MultiplayerSessionMods1720000410000,
   SquadSaves1720000430000,
+  TimelapseBattleReports1720000440000,
 ];

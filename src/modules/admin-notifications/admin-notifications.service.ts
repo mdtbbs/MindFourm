@@ -98,7 +98,7 @@ export class AdminNotificationsService {
   }
 
   async publishModerationPending(input: {
-    item_type: 'post' | 'reply' | 'avatar' | 'resource';
+    item_type: 'post' | 'reply' | 'avatar' | 'resource' | 'timelapse';
     item_id: number;
     title?: string | null;
     content?: string | null;
@@ -130,7 +130,7 @@ export class AdminNotificationsService {
   }
 
   async publishModerationResult(input: {
-    item_type: 'post' | 'reply' | 'avatar' | 'resource';
+    item_type: 'post' | 'reply' | 'avatar' | 'resource' | 'timelapse';
     item_id: number;
     action: 'approved' | 'rejected';
     actor_username?: string | null;
@@ -251,7 +251,7 @@ export class AdminNotificationsService {
     return [...new Set(values)];
   }
 
-  private getModerationItemLabel(itemType: 'post' | 'reply' | 'avatar' | 'resource'): string {
+  private getModerationItemLabel(itemType: 'post' | 'reply' | 'avatar' | 'resource' | 'timelapse'): string {
     switch (itemType) {
       case 'post':
         return '帖子';
@@ -261,6 +261,8 @@ export class AdminNotificationsService {
         return '头像';
       case 'resource':
         return '资源';
+      case 'timelapse':
+        return '延时战报';
       default:
         return '内容';
     }

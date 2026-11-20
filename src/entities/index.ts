@@ -171,6 +171,8 @@ import { BlobObject } from './blob-object.entity';
 import { BlobRecord } from './blob-record.entity';
 import { BlobUploadSession } from './blob-upload-session.entity';
 import { BlobIdempotency } from './blob-idempotency.entity';
+import { TimelapseReport } from './timelapse-report.entity';
+import { TimelapsePostRef } from './timelapse-post-ref.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -352,6 +354,8 @@ export const mdtbbsEntities = [
   SquadSaveSnapshot,
   SquadSaveSnapshotFile,
   SquadSaveBlobUpload,
+  TimelapseReport,
+  TimelapsePostRef,
 ] as const;
 
 /** Runtime profile composition. MDTBBS remains the current and only profile. */
@@ -362,6 +366,7 @@ export {
   GameSaveUploadSession, GameSaveIdempotency,
   Squad, SquadMember, SquadOwnershipTransfer, SquadSaveSlot, SquadSaveLease, SquadSaveBlob,
   SquadSaveSnapshot, SquadSaveSnapshotFile, SquadSaveBlobUpload,
+  TimelapseReport, TimelapsePostRef,
   BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerSessionMod, MultiplayerPeer,

@@ -18,7 +18,7 @@
 
 ## 节点与文本样式
 
-块级节点包括 `doc`、`paragraph`、`heading`、`blockquote`、`bulletList`、`orderedList`、`listItem`、`taskList`、`taskItem`、`codeBlock`、`horizontalRule`、`table`、`tableRow`、`tableHeader`、`tableCell`、`spoiler`、`video`、`attachment`、`postQuote`、`replyQuote` 和 `htmlBlock`。行内节点包括 `text`、`hardBreak`、`image`、`mention` 和 `customEmoji`。
+块级节点包括 `doc`、`paragraph`、`heading`、`blockquote`、`bulletList`、`orderedList`、`listItem`、`taskList`、`taskItem`、`codeBlock`、`horizontalRule`、`table`、`tableRow`、`tableHeader`、`tableCell`、`spoiler`、`video`、`attachment`、`postQuote`、`replyQuote`、`htmlBlock` 和 `battleReport`。行内节点包括 `text`、`hardBreak`、`image`、`mention` 和 `customEmoji`。
 
 文本样式（marks）包括 `bold`、`italic`、`strike`、`underline`、`code`、`link`、`textColor`、`highlight`、`fontSize`、`fontFamily`、`superscript` 和 `subscript`。颜色只接受 HEX，并规范为大写 `#RRGGBB` 或 `#RRGGBBAA`；高亮、字号和字体只能使用预设值。
 
@@ -48,6 +48,42 @@ HTML 区块支持两种呈现方式：
 `content_html` 对完整文档输出带 CSP 和 sandbox 的 iframe `srcdoc`，旧式片段维持原来的输出。直接消费 HTML 的客户端也必须保留这些隔离属性，不能取出文档样式注入宿主页面。HTML 缓存字段扩容迁移为 `HtmlDocumentProjection1720000370000`，需随部署执行并验收。
 
 清洗是幂等的：同一片段重复清洗结果不变，因此 `content_html` 重新生成不会改写已存内容。Markdown 投影与 `content_text` 使用区块的纯文本（纯图片区块则使用图片 `alt`），保证搜索与摘要有内容可用。
+
+## 基地延时战报（`battleReport`）
+
+`battleReport` 是 Schema v2 的块级原子节点，用于在帖子正文中嵌入一条基地延时战报。节点只保存战报公开 ID 与服务端派生的摘要属性，视频、封面、图表与状态仍由 `GET /api/v1/timelapses/{id}` 读取。
+
+```json
+{
+  "type": "battleReport",
+  "attrs": {
+    "timelapsePublicId": "0f5c2e2a-6d28-4f0e-9a5d-1b2c3d4e5f60",
+    "mapName": "示例地图",
+    "maxWave": 120
+  }
+}
+```
+
+| 属性 | 必填 | 说明 |
+| --- | --- | --- |
+| `timelapsePublicId` | 是 | 36 位 UUID，对应 `GET /api/v1/timelapses/{id}` 的 `id`。 |
+| `mapName` | 否 | 地图名，最多 160 字符。服务端派生：写入时按数据库战报覆盖，客户端值不会保存。 |
+| `maxWave` | 否 | 最高波次，0–1000000 的整数。服务端派生规则同上；0 表示未统计。 |
+
+约束：
+
+- 每篇正文最多 3 个 `battleReport`，超出返回 `400 BATTLE_REPORT_LIMIT_EXCEEDED`。
+- 允许的父节点：`doc`、表格单元格（`tableCell` / `tableHeader`）、列表项（`listItem` / `taskItem`）和 `spoiler`。不能放在 `blockquote`、`paragraph`、`heading` 等其它块级节点内。
+- 节点是 atom，不接受 `content`；除上述三个属性外不接受其它属性。
+- 新建帖子引用不存在或已删除的战报返回 `400 TIMELAPSE_NOT_FOUND`；引用他人未审核、已驳回或不可见的战报返回 `403 TIMELAPSE_NOT_AVAILABLE`。编辑已有帖子时，失效引用保留占位，不阻塞保存。
+- 服务端写入时以数据库战报为准重新生成 `mapName` 与 `maxWave`；引用不可见时写为空字符串和 0。客户端不得依赖自己提交的值。
+
+投影：
+
+- `content_html` 输出 `<figure data-battle-report="1" data-timelapse-public-id="{id}"><a href="/timelapses/{id}">基地延时战报: {mapName} · 最高 {maxWave} 波</a></figure>`，链接指向站内战报详情页。
+- `content_text` 输出 `[基地延时战报: {mapName} · 最高 {maxWave} 波]`；Markdown 投影输出同名链接 `[基地延时战报: ...](/timelapses/{id})`。
+- `mapName` 为空时省略地图名，`maxWave` 为 0 时省略波次；两者都缺失时摘要为 `基地延时战报`。
+- 投影只包含公开 ID 与摘要文本，不包含视频、封面或其它媒体地址。未通过审核的战报对非作者返回 404，帖子中的卡片显示不可用占位，不会请求或泄露视频流。
 
 ## 校验与安全规则
 

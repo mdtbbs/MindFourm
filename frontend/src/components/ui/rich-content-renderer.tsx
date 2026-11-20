@@ -11,6 +11,8 @@ import { RichAttachmentCard } from '@/components/rich-content/rich-attachment-ca
 import { RichQuoteCard } from '@/components/rich-content/rich-quote-card';
 import { RichCodeBlock } from '@/components/rich-content/rich-code-block';
 import { RichHtmlBlock } from '@/components/rich-content/rich-html-block';
+import { RichBattleReportCard } from '@/components/rich-content/rich-battle-report-card';
+import { isBattleReportPublicId } from '@/lib/timelapses/battle-report-data';
 
 type RichNode = Record<string, any>;
 type RichMark = Record<string, any>;
@@ -18,7 +20,7 @@ type RichMark = Record<string, any>;
 const RENDERABLE_NODES = new Set([
   'doc', 'paragraph', 'heading', 'text', 'hardBreak', 'blockquote', 'bulletList', 'orderedList',
   'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'image', 'table', 'tableRow',
-  'tableHeader', 'tableCell', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote',
+  'tableHeader', 'tableCell', 'spoiler', 'mention', 'customEmoji', 'video', 'battleReport', 'attachment', 'postQuote', 'replyQuote',
   'htmlBlock',
 ]);
 const RENDERABLE_MARKS = new Set([
@@ -108,6 +110,17 @@ function RichNodeView({ node, readonly = true }: { node: RichNode; readonly?: bo
       return Number.isSafeInteger(id) && id > 0 ? <img className="rich-custom-emoji" src={'/api/custom-emojis/' + id + '/image'} alt={':' + shortcode + ':'} title={String(node.attrs?.name || shortcode)} loading="lazy" /> : <span>:{shortcode}:</span>;
     }
     case 'video': return <RichVideoCard attrs={node.attrs || {}} />;
+    case 'battleReport': {
+      // 只接受 Schema v2 UUID；其余值不生成卡片，也不会请求 API。
+      const publicId = typeof node.attrs?.timelapsePublicId === 'string' ? node.attrs.timelapsePublicId : null;
+      if (!isBattleReportPublicId(publicId)) return null;
+      const maxWave = Number(node.attrs?.maxWave);
+      return <RichBattleReportCard
+        publicId={publicId}
+        mapName={typeof node.attrs?.mapName === 'string' ? node.attrs.mapName : ''}
+        maxWave={Number.isFinite(maxWave) ? maxWave : 0}
+      />;
+    }
     case 'attachment': {
       const id = Number(node.attrs?.attachmentId);
       return <RichAttachmentCard id={Number.isSafeInteger(id) && id > 0 ? id : undefined} draftToken={node.attrs?.draftToken} />;

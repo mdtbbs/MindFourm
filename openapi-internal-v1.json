@@ -24702,6 +24702,333 @@
         ]
       }
     },
+    "/v1/timelapses/uploads": {
+      "post": {
+        "operationId": "TimelapsesController_createUpload",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "创建延时战报上传会话",
+        "description": "校验未绑定草稿 ≤ 20、每小时 ≤ 3 次、每日 ≤ 10 次、同时处理中 ≤ 1，返回隔离上传地址。原始帧包上限 25 MB。",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/uploads/{id}/file": {
+      "put": {
+        "operationId": "TimelapsesController_uploadFile",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "上传 .mreplay.zip 原始帧包",
+        "description": "以原始字节流写入隔离目录，服务端计算 SHA-256 并限制 25 MB。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/commit": {
+      "post": {
+        "operationId": "TimelapsesController_commit",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "提交渲染",
+        "description": "校验 SHA-256 与 ZIP 基础头信息后推入 Redis 渲染队列；幂等返回当前状态。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitTimelapseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}": {
+      "get": {
+        "operationId": "TimelapsesController_get",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "查询延时战报",
+        "description": "返回任务状态、聚合战报 JSON、视频与封面播放地址。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/video": {
+      "get": {
+        "operationId": "TimelapsesController_video",
+        "x-rate-limit": {
+          "limit": 600,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "播放战报视频",
+        "description": "H.264 (yuv420p) MP4，支持单段 Range 请求。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "range",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/poster": {
+      "get": {
+        "operationId": "TimelapsesController_poster",
+        "x-rate-limit": {
+          "limit": 300,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "timelapse.read"
+        ],
+        "summary": "读取战报封面",
+        "description": "最后一帧生成的 WebP 封面。未通过审核的战报对非作者返回 404。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：timelapse.read"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/timelapses/{id}/draft-post": {
+      "post": {
+        "operationId": "TimelapsesController_draftPost",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "timelapse.write"
+        ],
+        "summary": "生成战报草稿帖",
+        "description": "创建包含 battleReport 节点的帖子草稿，作者可继续编辑后发布。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "延时战报 public_id（UUID）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTimelapseDraftPostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "游戏内容 / 基地延时摄影"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/game-content/meta": {
       "get": {
         "operationId": "GameContentController_meta",
@@ -33807,6 +34134,52 @@
             "description": "本次编辑说明；用于修订历史。"
           }
         }
+      },
+      "CommitTimelapseDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "客户端计算的压缩包 SHA-256；提供时服务端会与已上传文件比对。"
+          }
+        }
+      },
+      "CreateTimelapseDraftPostDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "草稿标题；省略时根据地图名自动生成。"
+          },
+          "category_id": {
+            "type": "number",
+            "minimum": 1,
+            "description": "论坛分类 ID；省略时使用站点默认分类。"
+          }
+        }
+      },
+      "ReviewTimelapseDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "description": "审核决定；通过后战报进入 published。"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "审核说明；驳回时必填，会展示给作者。"
+          }
+        },
+        "required": [
+          "decision"
+        ]
       },
       "GameContentAuthorDto": {
         "type": "object",

@@ -467,6 +467,12 @@ export class SettingsService implements OnModuleInit {
       'blobs_owner_quota_bytes',
       'blobs_max_object_bytes',
     ]),
+    timelapses: new Set([
+      'timelapses_enabled',
+      'timelapse_auto_approve_trusted',
+      'timelapse_storage_path',
+      'timelapse_trusted_min_points',
+    ]),
     terms: new Set([
       'terms_required',
       'terms_updated_at',
@@ -635,6 +641,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'blobs_storage_path', value: process.env.BLOBS_STORAGE_PATH || resolve(process.cwd(), 'storage', 'blobs'), category: 'blobs', description: 'Persistent local directory for generic blob objects' },
       { key: 'blobs_owner_quota_bytes', value: process.env.BLOBS_MAX_BYTES_PER_OWNER || '536870912', category: 'blobs', description: 'Generic blob quota per owner in bytes' },
       { key: 'blobs_max_object_bytes', value: process.env.BLOBS_MAX_OBJECT_BYTES || '67108864', category: 'blobs', description: 'Maximum size of one generic blob object in bytes' },
+      { key: 'timelapses_enabled', value: 'true', category: 'timelapses', description: 'Enable base timelapse battle reports and the render worker queue' },
+      { key: 'timelapse_auto_approve_trusted', value: 'false', category: 'timelapses', description: 'Auto-approve timelapses from moderators or trusted accounts' },
+      { key: 'timelapse_storage_path', value: process.env.TIMELAPSE_STORAGE_PATH || resolve(process.cwd(), 'storage', 'timelapses'), category: 'timelapses', description: 'Persistent local directory for timelapse source frames, MP4 output and WebP posters' },
+      { key: 'timelapse_trusted_min_points', value: '1000', category: 'timelapses', description: 'Minimum total points for a non-staff account to use auto-approve' },
       // Terms & Conditions enforcement
       { key: 'terms_required', value: 'false', category: 'terms', description: 'Require users to accept Terms & Privacy before forum access' },
       { key: 'terms_updated_at', value: new Date().toISOString(), category: 'terms', description: 'Bump to force all users to re-accept terms' },
@@ -876,6 +886,7 @@ export class SettingsService implements OnModuleInit {
 
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
     if (category === 'blobs') await this.validateBlobsSettings(normalizedPairs);
+    if (category === 'timelapses') await this.validateTimelapseSettings(normalizedPairs);
     if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     for (const [key, value] of normalizedPairs.entries()) {
@@ -905,6 +916,7 @@ export class SettingsService implements OnModuleInit {
     const normalizedPairs = this.normalizeBatch(replacementValues);
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
     if (category === 'blobs') await this.validateBlobsSettings(normalizedPairs);
+    if (category === 'timelapses') await this.validateTimelapseSettings(normalizedPairs);
     if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     const updated = await this.settingRepository.manager.transaction(async (manager) => {
@@ -1069,6 +1081,68 @@ export class SettingsService implements OnModuleInit {
     await probe.close();
     await unlink(probePath);
     values.set('cloud_saves_storage_path', normalizedPath);
+  }
+
+  /**
+   * 延时摄影开关与存储目录。
+   *
+   * 存储目录与云存档/blob 使用同一套规则：绝对路径、非根目录、可写探针；
+   * 已有战报对象时不允许直接迁移目录，避免数据库里留下指向旧目录的键。
+   */
+  private async validateTimelapseSettings(values: Map<string, string>): Promise<void> {
+    const allowed = new Set([
+      'timelapses_enabled',
+      'timelapse_auto_approve_trusted',
+      'timelapse_storage_path',
+      'timelapse_trusted_min_points',
+    ]);
+    for (const key of values.keys()) {
+      if (!allowed.has(key)) throw new BadRequestException(`Unsupported timelapse setting: ${key}`);
+    }
+
+    for (const key of ['timelapses_enabled', 'timelapse_auto_approve_trusted']) {
+      const value = values.get(key);
+      if (value !== undefined && !['true', 'false'].includes(value)) {
+        throw new BadRequestException('延时摄影开关必须为 true 或 false。');
+      }
+    }
+
+    const rawPoints = values.get('timelapse_trusted_min_points');
+    if (rawPoints !== undefined) {
+      const points = Number(rawPoints);
+      if (!Number.isSafeInteger(points) || points < 0 || points > 1_000_000_000) {
+        throw new BadRequestException('自动放行所需积分必须是 0 到 1000000000 之间的整数。');
+      }
+    }
+
+    const storagePath = values.get('timelapse_storage_path');
+    if (storagePath === undefined) return;
+    const normalizedPath = resolve(storagePath);
+    if (!storagePath || !isAbsolute(storagePath) || normalizedPath !== storagePath || parse(normalizedPath).root === normalizedPath) {
+      throw new BadRequestException('延时摄影存储目录必须是绝对路径，且不能是文件系统根目录。');
+    }
+    const currentPath = await this.get('timelapse_storage_path');
+    if (currentPath && resolve(currentPath) !== normalizedPath) {
+      try {
+        const rows = await this.settingRepository.query(
+          "SELECT COUNT(*) AS count FROM timelapse_reports WHERE source_object_key IS NOT NULL OR video_object_key IS NOT NULL",
+        );
+        if (Number(rows?.[0]?.count || 0) > 0) {
+          throw new ConflictException('已有延时摄影对象时不能直接更改存储目录；先停用功能并迁移文件。');
+        }
+      } catch (error: any) {
+        if (error instanceof ConflictException) throw error;
+        const code = error?.code || error?.driverError?.code;
+        if (code !== 'ER_NO_SUCH_TABLE') throw error;
+      }
+    }
+
+    await mkdir(normalizedPath, { recursive: true, mode: 0o700 });
+    const probePath = resolve(normalizedPath, `.write-check-${randomUUID()}`);
+    const probe = await open(probePath, 'wx', 0o600);
+    await probe.close();
+    await unlink(probePath);
+    values.set('timelapse_storage_path', normalizedPath);
   }
 
   /**

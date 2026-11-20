@@ -1,6 +1,6 @@
 # 公开 API 更新记录
 
-## 2026-11-20 — 模组房同步计划与小队共享存档接力
+## 2026-11-20 — 模组房同步计划、小队共享存档接力与基地延时摄影
 
 Public V1 契约版本 1.9.0。
 
@@ -9,7 +9,7 @@ Public V1 契约版本 1.9.0。
 - `POST /api/v1/multiplayer/sessions` 新增互斥可选的 `mod_pack_ref` 与 `mods[]`（最多 64 项）。服务端只按公开 Mod 目录解析，并以已发布版本的 SHA-256 主文件给出 `catalog_verified` / `catalog_version_mismatch` / `unlisted_local` 权威定级；未过审、隔离、已删除、已合并或分类停用的资源不会留下可下载引用。
 - `GET /api/v1/multiplayer/sessions` 新增 `modded`、`mod_id`、`pack_public_id` 筛选参数；每个会话对象新增 `is_modded`、`mod_count`、`mod_syncable_count` 与 `mod_summary`。列表中的 `mod_summary.mods` 最多 8 项并带 `mods_truncated`，完整清单通过 `GET /api/v1/multiplayer/sessions/{id}` 读取。
 - `POST /api/v1/multiplayer/sessions/{id}/mod-sync-plan`（`multiplayer.read` + `resource.read`）：按房主清单与客户端 `installed_mods`（最多 128 项）计算 `ready` / `sync_required` / `partial_sync_required`，返回 `to_download`、`to_enable`、`to_disable`、`preserved_client_mods`、`unresolved` 与完整 `mod_summary`。请求可携带可选 `join_code`，与加入接口同一校验，使持有房间码的客人在加入前也能读取计划。`to_download` 复用 `DownloadGrantService` 批量签发 60 秒滚动去重授权并写入下载事件；未收录或哈希不匹配项永不下发文件 ID 或下载地址。
-- `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities` 新增 `multiplayer_mod_sync_enabled`、`multiplayer.mod_sync_v1` 及 `mod_sync` 限额与状态枚举。
+- `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities` 新增 `multiplayer_mod_sync_enabled`、`multiplayer.mod_sync_v1`、`squad_saves_v1`、`timelapses_v1` 及 `mod_sync` 限额与状态枚举。
 - `GET /api/v1/squads`、`GET /api/v1/squads/invitations`、`POST /api/v1/squads`、`GET/PATCH/DELETE /api/v1/squads/{squadId}`：小队列表、收到的邀请、创建、详情、重命名与删除。
 - `GET/POST /api/v1/squads/{squadId}/members`、`POST .../members/accept`、`.../members/decline`、`PATCH/DELETE .../members/{userId}`：成员邀请、接受/拒绝邀请、角色调整、退出或被移除。
 - `POST /api/v1/squads/{squadId}/ownership-transfer` 及 `.../accept`、`.../decline`、`.../cancel`：24 小时有效的两步队长转让；接受时在事务内校验新队长配额。
@@ -20,6 +20,8 @@ Public V1 契约版本 1.9.0。
 - `GET /api/v1/game-saves/quota` 新增 `breakdown: { personal_bytes, owned_squads_bytes, pending_bytes }`；`used_bytes` 为三项之和，小队用量记在创建者名下。
 - `POST /api/v1/multiplayer/sessions` 新增可选 `squad_save_ref: { squad_id, slot_id, fencing_token, lanlink_room_code? }`：成功后回填 `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`，并在响应中回显。
 - 用户实时事件新增 `squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`，发送给该小队每个活跃成员。
+- `POST /api/v1/timelapses/uploads`、`PUT /api/v1/timelapses/uploads/{id}/file`、`POST /api/v1/timelapses/{id}/commit`、`GET /api/v1/timelapses/{id}`、`GET /api/v1/timelapses/{id}/video`（支持 Range 206）、`GET /api/v1/timelapses/{id}/poster`（WebP 封面）与 `POST /api/v1/timelapses/{id}/draft-post`：基地延时摄影上传、沙箱渲染、播放与一键战报草稿。
+- Rich Content Schema v2 新增块级 `battleReport` 节点（每篇最多 3 个，`timelapsePublicId` 必填 UUID，`mapName` / `maxWave` 服务端派生）；OAuth 新增 `timelapse.read` / `timelapse.write`。
 
 ### Clarified
 
@@ -30,6 +32,8 @@ Public V1 契约版本 1.9.0。
 - 写租约有效期为 150 秒（90 秒心跳 + 60 秒宽限），自然到期后任意活跃成员可接力；未到期只有 owner/admin 能强制接管。`fencing_token` 单调递增，过期 token 的主链提交返回 `SQUAD_SAVE_LEASE_STALE`；最近一次被接管的原房主可用其当时的旧 token 和已暂存文件，以 `mode:"conflict_rescue"` 保存为 `branch_type='conflict'` 分支避免丢档；其他成员不能凭较小的 token 绕过写租约。
 - 每个槽位的快照按 GFS 分层保留：最近 10 个未置顶主链快照、过去 7 个自然日每天最后一个、全部 pinned（每槽上限 10）与全部 conflict 分支。淘汰立即释放创建者配额并进入延迟 GC，`pruned_snapshot_ids` 返回本次淘汰项。
 - 小队相关稳定错误码统一使用 `SQUAD_*` 前缀；完整列表、租约状态机和配额细则见云存档 API 指南。
+- 战报按 `uploading → queued → processing → pending_review → published` 流转；`timelapse_auto_approve_trusted` 打开时，可信作者可直接进入 `published`。未通过审核战报对非作者返回 `404 TIMELAPSE_NOT_FOUND`。
+- 延时战报限额：未绑定任何已发布帖子的战报 ≤ 20 个、每小时 ≤ 3 次、每日 ≤ 10 次、同时处理 ≤ 1 个；未绑定草稿 30 天过期，原始 `.mreplay.zip`（≤ 25 MiB / 解压 ≤ 80 MiB / 5–180 帧）在合成完成 24 小时后清理，已嵌入发布帖子的战报随帖子永久保留。
 
 ## 2026-10-30 — 云存档文件级差量上传
 

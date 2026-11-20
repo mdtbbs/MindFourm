@@ -53,6 +53,7 @@ import { ContentSafetyService } from '../content-safety/content-safety.service';
 import { normalizePostTitle } from '@common/utils/post-title.util';
 import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { TimelapseRefsService } from '../timelapses/timelapse-refs.service';
 import { EventsService } from '../events/events.service';
 import { OutboxEvent } from '@entities/outbox-event.entity';
 
@@ -85,6 +86,7 @@ export class PostsService {
     @Optional() private customEmojis?: CustomEmojisService,
     @Optional() private attachmentsService?: AttachmentsService,
     @Optional() private events?: EventsService,
+    @Optional() private timelapseRefs?: TimelapseRefsService,
   ) {}
 
   onModuleInit(): void {
@@ -170,7 +172,14 @@ export class PostsService {
     let viewerPromise: Promise<{ id: number; role: string }> | null = null;
     const viewer = () => (viewerPromise ??= this.viewerFor(userId));
     if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, (await viewer()).role);
-    const contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
+    let contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
+    if (richJsonWrite && this.timelapseRefs) {
+      // 服务端回填战报摘要（mapName/maxWave），并拒绝引用不存在或他人未审核的战报。
+      const enriched = await this.timelapseRefs.resolveDocument(
+        contentSource.content_json as unknown as Record<string, unknown>, userId, { strict: true },
+      );
+      contentSource = resolveContentSource(undefined, enriched, 2, { allowDraftAttachments: true });
+    }
     if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, await viewer());
     const content = contentSource.content;
     dto.content = content;
@@ -255,6 +264,9 @@ export class PostsService {
         });
         Object.assign(savedPost, finalContent);
       }
+
+      // 只记录“已发布帖子”的引用；草稿/待审不占用战报永久保留额度。
+      await this.timelapseRefs?.syncPostRefs(manager, savedPost.id, finalContent.content_json, savedPost.status);
 
       // Keep the generic content reference synchronized while the legacy
       // server_id API column remains in its compatibility window.
@@ -733,9 +745,17 @@ export class PostsService {
       : dto.content_json;
     await this.canonicalizeMentionSnapshots(canonicalJson);
     if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, userRole);
-    const contentSource = dto.content !== undefined || dto.content_json !== undefined
+    let contentSource = dto.content !== undefined || dto.content_json !== undefined
       ? resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true })
       : null;
+    if (contentSource && richJsonWrite && this.timelapseRefs) {
+      // 编辑旧帖时非严格模式：已被删除的战报保留占位，不阻塞保存；客户端伪造的
+      // mapName/maxWave 仍会被覆盖。
+      const enriched = await this.timelapseRefs.resolveDocument(
+        contentSource.content_json as unknown as Record<string, unknown>, userId, { strict: false },
+      );
+      contentSource = resolveContentSource(undefined, enriched, 2, { allowDraftAttachments: true });
+    }
     if (contentSource) {
       if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, { id: userId, role: userRole });
       dto.content = contentSource.content;
@@ -873,6 +893,15 @@ export class PostsService {
       const updatedPost = await manager.findOne(Post, {
         where: { id }, relations: ['user', 'category', 'postTags', 'postTags.tag'],
       });
+
+      // 正文或状态变化都同步引用：下架/退回草稿会释放战报的永久保留额度。
+      await this.timelapseRefs?.syncPostRefs(
+        manager,
+        id,
+        updateData.content_json ?? updatedPost?.content_json,
+        updatedPost?.status,
+      );
+
       if (this.events && updatedPost?.status === 'published') {
         if (post.status !== 'published') {
           await this.events.publish({ eventKey: 'ForumPostPublished', aggregateType: 'Post', aggregateId: id,
@@ -983,8 +1012,11 @@ export class PostsService {
     // Execute "before" hook
     await this.eventBus.execute('post.delete', { post, userId });
 
-    // Soft delete using TypeORM's soft-remove
-    await this.postRepository.softDelete(id);
+    // 帖子删除与引用释放必须同事务，否则战报会永久绑定一个已不存在的帖子。
+    await this.dataSource.transaction(async (manager) => {
+      await manager.softDelete(Post, id);
+      await this.timelapseRefs?.removePostRefs(manager, id);
+    });
 
     // Invalidate cache
     await this.invalidatePostCache(id);
@@ -1007,11 +1039,12 @@ export class PostsService {
       throw new NotFoundException('帖子不存在');
     }
 
-    // Remove associated tags
-    await this.postTagRepository.delete({ post_id: id });
-
-    // Hard delete
-    await this.postRepository.delete(id);
+    await this.dataSource.transaction(async (manager) => {
+      // Remove associated tags
+      await manager.delete(PostTag, { post_id: id });
+      await manager.delete(Post, id);
+      await this.timelapseRefs?.removePostRefs(manager, id);
+    });
 
     // Invalidate cache
     await this.invalidatePostCache(id);

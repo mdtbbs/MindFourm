@@ -1,4 +1,5 @@
 import { trustedHtmlText } from './trusted-html';
+import { battleReportLabel, isBattleReportPublicId } from '../timelapses/battle-report-data';
 
 type NodeJson = Record<string, any>;
 
@@ -53,6 +54,12 @@ function blocks(nodes: NodeJson[] = [], depth = 0): string {
       case 'spoiler': return `> [!SPOILER] ${node.attrs?.title || '剧透内容'}\n${content.trim().split('\n').map((line) => `> ${line}`).join('\n')}\n\n`;
       case 'video': return (node.attrs?.src || `[${node.attrs?.provider || 'video'} video ${node.attrs?.videoId || ''}]`) + '\n\n';
       case 'attachment': return `[Attachment #${node.attrs?.attachmentId || 'draft'}]\n\n`;
+      case 'battleReport': {
+        const publicId = typeof node.attrs?.timelapsePublicId === 'string' ? node.attrs.timelapsePublicId : '';
+        // 没有合法 UUID 就无法生成安全的站内链接；投影直接省略该节点。
+        if (!isBattleReportPublicId(publicId)) return '';
+        return `[${battleReportLabel(node.attrs?.mapName, node.attrs?.maxWave)}](/timelapses/${publicId})\n\n`;
+      }
       case 'postQuote': return `[Quoted post #${node.attrs?.postId}](/posts/${node.attrs?.postId})\n\n`;
       case 'replyQuote': return `[Quoted reply #${node.attrs?.replyId}](/posts/${node.attrs?.postId}#reply-${node.attrs?.replyId})\n\n`;
       case 'text': return inline([node]);
