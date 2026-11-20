@@ -28,6 +28,8 @@
       script: npm run test:frontend-unit
     - name: check committed Public V1 OpenAPI contract
       script: npm run openapi:check
+    - name: check generated API skill docs match the contract
+      script: npm run api-skill:check
     - name: test Public V1 changelog guard
       script: npm run test:api-changelog
     # Keep the runtime API guides free of dead links: the Markdown guide renderer
@@ -35,6 +37,8 @@
     # `#anchor` only shows up as a 404 on the developer site otherwise.
     - name: check runtime API guide links
       script: npm run check:docs-links
+    - name: test API skill generator
+      script: npm run test:api-skill
 
 .frontend: &frontend
   name: frontend-quality-gates

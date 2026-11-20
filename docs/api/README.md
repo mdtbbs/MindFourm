@@ -51,6 +51,7 @@
 - [通用 Blob 存储 V1](./blobs-v1.md)
 - [基地延时摄影与战报卡 V1](./timelapses.md)：`.mreplay.zip` 上传、渲染状态、视频/封面播放与 `battleReport` 正文节点；另含不属于 Public V1 的站内审核接口边界。
 - [公开 V1 错误代码](./errors-v1.md)
+- [逐接口 API Skill 文档](./skill/SKILL.md)：由 `openapi-public-v1.json` 生成的全量接口文档（每个接口含认证、权限范围、参数、响应结构与 curl 示例）
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)
 

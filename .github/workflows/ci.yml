@@ -82,8 +82,14 @@ jobs:
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
 
+      - name: Check generated API skill docs match the contract
+        run: npm run api-skill:check
+
       - name: Test Public V1 changelog guard
         run: npm run test:api-changelog
+
+      - name: Test API skill generator
+        run: npm run test:api-skill
 
   runtime-docs:
     name: Runtime API guide presence
