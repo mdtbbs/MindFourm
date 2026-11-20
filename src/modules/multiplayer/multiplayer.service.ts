@@ -428,6 +428,9 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       // 小队接力建房：只有当前租约持有者能把会话绑定到共享存档槽。绑定失败
       // 会抛 SQUAD_SAVE_LEASE_REQUIRED/STALE 并回滚整个会话创建。
       if (input.squad_save_ref) {
+        if (!this.squadLeases) {
+          throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.SERVICE_UNAVAILABLE, '小队共享存档接力服务暂不可用。');
+        }
         await this.squadLeases.bindMultiplayerSession(manager, userId, input.squad_save_ref, id);
       }
       await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
@@ -2306,7 +2309,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     }
     await this.redis.del(`multiplayer:session:${session.id}`);
     // 小队接力房间指针随会话关闭失效；失败不能阻塞会话关闭本身。
-    await this.squadLeases.clearSessionBinding(session.id).catch(() => undefined);
+    await this.squadLeases?.clearSessionBinding(session.id).catch(() => undefined);
     await this.realtime.emitSession(session.id, event, { session_id: session.id, status: 'closed' });
   }
 
