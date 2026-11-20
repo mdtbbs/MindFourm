@@ -13,10 +13,12 @@ const BLOCK_NODES = new Set([
   'doc', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList',
   'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'table',
   'tableRow', 'tableHeader', 'tableCell', 'spoiler', 'video', 'attachment',
-  'postQuote', 'replyQuote', 'htmlBlock', 'battleReport',
+  'postQuote', 'replyQuote', 'htmlBlock', 'battleReport', 'resourceEmbed',
 ]);
 const INLINE_NODES = new Set(['text', 'hardBreak', 'image', 'mention', 'customEmoji']);
-const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport']);
+const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport', 'resourceEmbed']);
+const RESOURCE_EMBED_LIMIT = 10;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MARKS = new Set(['bold', 'italic', 'strike', 'underline', 'code', 'link', 'textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const V2_MARKS = new Set(['textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const MAX_NODES = 5000;
@@ -265,6 +267,22 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
       result.text = trustedHtmlToText(safe).slice(0, 4000);
       break;
     }
+    case 'resourceEmbed': {
+      // 卡片只保存资源标识，不缓存标题/预览等可陈旧内容。资源可见性在读接口
+      // 批量水合时重新判定；这里只做格式与长度校验。
+      strictKeys(source, ['resourcePublicId', 'versionPublicId', 'displayMode'], path, type, version);
+      textAttr('resourcePublicId', 36, true);
+      if (!UUID_RE.test(String(result.resourcePublicId))) invalid(path + '.resourcePublicId', type, 'resourcePublicId', version);
+      if (source.versionPublicId !== undefined && source.versionPublicId !== null) {
+        textAttr('versionPublicId', 36, true);
+        if (!UUID_RE.test(String(result.versionPublicId))) invalid(path + '.versionPublicId', type, 'versionPublicId', version);
+      }
+      if (source.displayMode !== undefined && source.displayMode !== null && source.displayMode !== 'card') {
+        invalid(path + '.displayMode', type, 'displayMode', version);
+      }
+      result.displayMode = 'card';
+      break;
+    }
     case 'postQuote':
       strictKeys(source, ['postId'], path, type, version);
       intAttr('postId');
@@ -294,10 +312,10 @@ export function battleReportSummaryText(attrs: Record<string, unknown> | undefin
 }
 
 function childAllowed(parent: string, child: string): boolean {
-  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport'].includes(child);
+  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport', 'resourceEmbed'].includes(child);
   if (parent === 'paragraph' || parent === 'heading') return INLINE_NODES.has(child);
   if (parent === 'blockquote') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'htmlBlock'].includes(child);
-  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport'].includes(child);
+  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock', 'battleReport', 'resourceEmbed'].includes(child);
   if (parent === 'bulletList' || parent === 'orderedList') return child === 'listItem';
   if (parent === 'taskList') return child === 'taskItem';
   if (parent === 'codeBlock') return child === 'text';
@@ -306,10 +324,18 @@ function childAllowed(parent: string, child: string): boolean {
   return false;
 }
 
+export type ResourceEmbedProjection = Record<string, {
+  title: string | null;
+  kind: string | null;
+  status: 'available' | 'pending_review' | 'unavailable';
+}>;
+
 export interface NormalizeContentOptions {
   schemaVersion?: number;
   resourceDescription?: boolean;
   allowDraftAttachments?: boolean;
+  /** 读接口批量水合后的卡片标题；只影响 HTML/纯文本投影，不写回 content_json。 */
+  resourceEmbeds?: ResourceEmbedProjection;
 }
 
 export function normalizeTiptapDocument(input: unknown, options: NormalizeContentOptions = {}): TiptapDocument {
@@ -319,6 +345,7 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
   let textLength = 0;
   let htmlBlocks = 0;
   let battleReports = 0;
+  let resourceEmbeds = 0;
   const mentions = new Set<number>();
   const visit = (value: unknown, depth: number, path: string, parent?: string, inSpoiler = false): Record<string, unknown> => {
     if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 32 || ++nodeCount > MAX_NODES) invalid(path, undefined, undefined, version);
@@ -330,6 +357,7 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
     if (parent && !childAllowed(parent, type)) invalid(path, type, 'parent', version);
     if (type === 'spoiler' && inSpoiler) invalid(path, type, 'nested spoiler', version);
     if (type === 'htmlBlock' && ++htmlBlocks > TRUSTED_HTML_MAX_BLOCKS) throw schemaError('HTML_BLOCK_LIMIT_EXCEEDED', 'HTML 区块数量超出限制', path, type, undefined, version);
+    if (type === 'resourceEmbed' && ++resourceEmbeds > RESOURCE_EMBED_LIMIT) throw schemaError('RESOURCE_EMBED_LIMIT_EXCEEDED', '单篇正文最多嵌入 10 个资源卡片', path, type, undefined, version);
     strictKeys(node, type === 'text' ? ['type', 'text', 'marks'] : ['type', 'attrs', 'content'], path, type, version);
     const output: Record<string, unknown> = { type };
     if (type === 'text') {
@@ -534,8 +562,8 @@ function alignAttributes(align: unknown): string {
   return typeof align === 'string' && BLOCK_ALIGNMENTS.has(align) ? ' data-align="' + align + '" style="text-align: ' + align + '"' : '';
 }
 
-function renderNode(raw: Record<string, any>): string {
-  const children = (raw.content || []).map(renderNode).join('');
+function renderNode(raw: Record<string, any>, resourceEmbeds?: ResourceEmbedProjection): string {
+  const children = (raw.content || []).map((child: Record<string, any>) => renderNode(child, resourceEmbeds)).join('');
   switch (raw.type) {
     case 'doc': return children;
     case 'text': return renderInlineMarks(raw.text, raw.marks);
@@ -570,6 +598,17 @@ function renderNode(raw: Record<string, any>): string {
       return '<figure data-battle-report="1" data-timelapse-public-id="' + escapeHtml(publicId) + '"><a href="/timelapses/' + escapeHtml(publicId) + '">' + escapeHtml(battleReportSummaryText(raw.attrs)) + '</a></figure>';
     }
     case 'htmlBlock': return raw.attrs.html + '\n';
+    case 'resourceEmbed': {
+      const id = escapeHtml(String(raw.attrs.resourcePublicId));
+      const hydrated = resourceEmbeds?.[String(raw.attrs.resourcePublicId)];
+      const attributes = ' data-resource-embed="' + id + '"' + (raw.attrs.versionPublicId ? ' data-resource-version="' + escapeHtml(String(raw.attrs.versionPublicId)) + '"' : '') + ' data-display-mode="card"';
+      if (hydrated && hydrated.status !== 'unavailable' && hydrated.title) {
+        const label = '[资源卡片: ' + escapeHtml(hydrated.title) + (hydrated.kind ? ' (' + escapeHtml(hydrated.kind) + ')' : '') + ']';
+        return '<aside' + attributes + '><a href="/resources/' + id + '">' + label + '</a></aside>';
+      }
+      if (hydrated) return '<aside' + attributes + '><span class="resource-embed-unavailable">资源卡片不可用</span></aside>';
+      return '<aside' + attributes + '><a href="/resources/' + id + '">资源卡片</a></aside>';
+    }
     case 'postQuote': return '<aside data-quote-type="post"><a href="/posts/' + raw.attrs.postId + '">引用帖子 #' + raw.attrs.postId + '</a></aside>';
     case 'replyQuote': return '<aside data-quote-type="reply" data-post-id="' + raw.attrs.postId + '" data-reply-id="' + raw.attrs.replyId + '"><a href="/posts/' + raw.attrs.postId + '#reply-' + raw.attrs.replyId + '">引用回复 #' + raw.attrs.replyId + '</a></aside>';
     default: return '';
@@ -596,7 +635,7 @@ export function renderTiptapDocument(input: unknown, options: NormalizeContentOp
   const nonce = Math.random().toString(36).slice(2, 10).toUpperCase();
   const token = (index: number) => 'MDTBBSHTMLBLOCK' + nonce + index + 'X';
   const parked = parkHtmlBlocks(document as unknown as Record<string, any>, fragments, token);
-  const rendered = sanitize(renderNode(parked));
+  const rendered = sanitize(renderNode(parked, options.resourceEmbeds));
   return fragments.reduce((html, fragment, index) => html.split(token(index)).join(fragment), rendered);
 }
 
@@ -737,6 +776,7 @@ export function serializeTiptapToMarkdown(input: unknown): string {
       case 'video': return (node.attrs.src || '[' + node.attrs.provider + ' video ' + node.attrs.videoId + ']') + '\n\n';
       case 'attachment': return '[Attachment #' + (node.attrs.attachmentId || 'draft') + ']\n\n';
       case 'battleReport': return '[' + battleReportSummaryText(node.attrs) + '](/timelapses/' + node.attrs.timelapsePublicId + ')\n\n';
+      case 'resourceEmbed': return '[资源卡片: ' + node.attrs.resourcePublicId + '](/resources/' + node.attrs.resourcePublicId + ')\n\n';
       case 'postQuote': return '[Quoted post #' + node.attrs.postId + '](/posts/' + node.attrs.postId + ')\n\n';
       case 'replyQuote': return '[Quoted reply #' + node.attrs.replyId + '](/posts/' + node.attrs.postId + '#reply-' + node.attrs.replyId + ')\n\n';
       case 'tableRow':
@@ -748,7 +788,7 @@ export function serializeTiptapToMarkdown(input: unknown): string {
   return renderBlocks([document]).trim();
 }
 
-export function extractTiptapText(input: unknown): string {
+export function extractTiptapText(input: unknown, resourceEmbeds?: ResourceEmbedProjection): string {
   const document = normalizeTiptapDocument(input, { schemaVersion: 2, allowDraftAttachments: true });
   const inlineContainers = new Set(['paragraph', 'heading', 'codeBlock']);
   const visit = (node: Record<string, any>): string => {
@@ -760,6 +800,12 @@ export function extractTiptapText(input: unknown): string {
     if (node.type === 'video') return node.attrs.title || (node.attrs.provider + ' video');
     if (node.type === 'attachment') return '[Attachment ' + (node.attrs.attachmentId || 'draft') + ']';
     if (node.type === 'battleReport') return '[' + battleReportSummaryText(node.attrs) + ']';
+    if (node.type === 'resourceEmbed') {
+      const hydrated = resourceEmbeds?.[String(node.attrs.resourcePublicId)];
+      if (!hydrated) return '[资源卡片: ' + node.attrs.resourcePublicId + ']';
+      if (hydrated.status === 'unavailable') return '[资源卡片: 不可用]';
+      return hydrated.title ? '[资源卡片: ' + hydrated.title + (hydrated.kind ? ' (' + hydrated.kind + ')' : '') + ']' : '[资源卡片: ' + node.attrs.resourcePublicId + ']';
+    }
     if (node.type === 'postQuote') return '[Quoted post #' + node.attrs.postId + ']';
     if (node.type === 'replyQuote') return '[Quoted reply #' + node.attrs.replyId + ']';
     if (node.type === 'taskItem') return (node.attrs?.checked ? '[x] ' : '[ ] ') + (node.content || []).map(visit).join('\n');

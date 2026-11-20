@@ -24,7 +24,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
     contentLanguages: ['en', 'ru', 'ja', 'zh-CN'],
     contentLanguagePreference: false,
     verification: { requireEmail: false, requirePhoneForWrites: true },
-    features: { resources: true, servers: true, serversDirectory: true, serverApplications: true, gameVersions: true, lanlink: true, multiplayerModSync: true, developerFeed: true, phoneVerification: true, domesticFiling: true, contentLanguageSearch: false, developers: false },
+    features: { resources: true, servers: true, serversDirectory: true, serverApplications: true, gameVersions: true, lanlink: true, multiplayerModSync: true, developerFeed: true, phoneVerification: true, domesticFiling: true, contentLanguageSearch: false, developers: false, resourceVisualDiff: true },
     navigation: [
       { key: 'home', href: '/', label: '首页' },
       { key: 'posts', href: '/posts', label: '讨论' },
@@ -43,7 +43,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
     contentLanguages: ['en', 'ru', 'ja', 'zh-CN'],
     contentLanguagePreference: true,
     verification: { requireEmail: true, requirePhoneForWrites: false },
-    features: { resources: true, servers: false, serversDirectory: true, serverApplications: false, gameVersions: true, lanlink: false, multiplayerModSync: true, developerFeed: false, phoneVerification: false, domesticFiling: false, contentLanguageSearch: true, developers: true },
+    features: { resources: true, servers: false, serversDirectory: true, serverApplications: false, gameVersions: true, lanlink: false, multiplayerModSync: true, developerFeed: false, phoneVerification: false, domesticFiling: false, contentLanguageSearch: true, developers: true, resourceVisualDiff: true },
     navigation: [
       { key: 'home', href: '/', label: 'Home' },
       { key: 'posts', href: '/threads', label: 'Discussions' },

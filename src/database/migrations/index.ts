@@ -5,6 +5,7 @@ import { MultiplayerVisibilityJoinPolicySplit1720000380000 } from './17200003800
 import { MultiplayerInviteLimits1720000390000 } from './1720000390000-MultiplayerInviteLimits';
 import { CloudSaveManifestSnapshots1720000400000 } from './1720000400000-CloudSaveManifestSnapshots';
 import { MultiplayerSessionMods1720000410000 } from './1720000410000-MultiplayerSessionMods';
+import { SchematicLogicSnippetsAndDiffV21720000420000 } from './1720000420000-SchematicLogicSnippetsAndDiffV2';
 import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
 import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceViewsAnalytics';
 import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
@@ -185,6 +186,7 @@ export const migrations = [
   MultiplayerInviteLimits1720000390000,
   CloudSaveManifestSnapshots1720000400000,
   MultiplayerSessionMods1720000410000,
+  SchematicLogicSnippetsAndDiffV21720000420000,
   SquadSaves1720000430000,
   TimelapseBattleReports1720000440000,
 ];

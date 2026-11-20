@@ -1475,7 +1475,7 @@ export class ResourcesV2Service {
       const y = this.nullableNumber(position.y);
       const config = this.objectValue(position.config);
       if (x === null || y === null || !config) continue;
-      const source = config.format_version === 1 && typeof config.source === 'string' && config.source.length <= 32_768 && !config.source.includes('\0')
+      const source = config.format_version === 1 && typeof config.source === 'string' && config.source.length <= 131_072 && !config.source.includes('\0')
         ? config.source : null;
       inertConfigByPosition.set(`${x}:${y}`, {
         source,
@@ -1487,11 +1487,19 @@ export class ResourcesV2Service {
       const x = this.nullableNumber(row.position_x);
       const y = this.nullableNumber(row.position_y);
       const config = x === null || y === null ? undefined : inertConfigByPosition.get(`${x}:${y}`);
+      const storedSource = typeof row.source_code === 'string' && row.source_code.length <= 131_072 && !row.source_code.includes('\0')
+        ? row.source_code : null;
       return {
         x, y, processor_type: row.processor_type || 'unknown',
         links: config?.links ?? this.safePublicJson(this.arrayValue(row.links_json), []),
-        logic_source: config?.source ?? null,
-        logic_source_available: config?.source_available ?? false,
+        logic_source: config?.source ?? storedSource,
+        logic_source_available: config?.source_available ?? storedSource !== null,
+        source_truncated: Number(row.source_truncated) === 1,
+        instruction_count: Number(row.instruction_count) || 0,
+        estimated_cycle_ticks: this.nullableNumber(row.estimated_cycle_ticks),
+        has_warnings: this.safePublicJson(this.arrayValue(row.audit_findings_json), [])
+          .some((finding) => ['warning', 'error'].includes(String((finding as Record<string, unknown>)?.severity || ''))),
+        audit_findings: this.safePublicJson(this.arrayValue(row.audit_findings_json), []).slice(0, 50),
         variables: Object.entries(this.safePublicJson(this.objectValue(row.variables_json) || {}, {})).map(([name, value]) => ({ name, value })),
       };
     });

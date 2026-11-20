@@ -603,13 +603,29 @@ export class ResourcePreviewService {
   }
 
   /** Stateless tools: no upload draft, permanent binding, or user file survives this request. */
-  async analyzeEditorFile(kind: 'map' | 'schematic', file: StoredResourceFile) {
+  async analyzeEditorFile(kind: 'map' | 'schematic', file: StoredResourceFile, options: { includePreview?: boolean } = {}) {
     if (!this.isConfigured() || !this.supports({ resource_kind: kind })) {
       throw new ServiceUnavailableException('编辑解析服务暂不可用');
     }
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的地图或蓝图');
-    try { return { resource_kind: kind, metadata: this.safeMetadata(rendered.preview.metadata), parser_version: rendered.preview.parserVersion }; }
+    try {
+      // 粘贴蓝图的预览浮层需要缩略图；分析接口默认不返回大块 base64，
+      // 只有调用方明确请求且 PNG 在限额内才附带 data URL。
+      let previewDataUrl: string | null = null;
+      if (options.includePreview === true) {
+        const preview = await this.readPreviewKey(rendered.preview.previewKey).catch(() => null);
+        if (preview && preview.length > 0 && preview.length <= 512 * 1024) {
+          previewDataUrl = 'data:image/png;base64,' + preview.toString('base64');
+        }
+      }
+      return {
+        resource_kind: kind,
+        metadata: this.safeMetadata(rendered.preview.metadata),
+        parser_version: rendered.preview.parserVersion,
+        preview_data_url: previewDataUrl,
+      };
+    }
     finally { await this.removePreviewKey(rendered.preview.previewKey); }
   }
 
@@ -807,6 +823,14 @@ export class ResourcePreviewService {
       } catch { return; }
     }
     await unlink(path.resolve(this.previewRoot, previewKey)).catch(() => undefined);
+  }
+
+  /** 读取 renderer 生成的差异叠加层；key 必须由 diff 服务从持久化记录中取得。 */
+  async readDiffOverlay(key: string): Promise<Buffer> {
+    if (typeof key !== 'string' || !/^resources\/map-diff\/[a-f0-9]{2}\/[a-f0-9]{64}\/overlay\.png$/.test(key)) {
+      throw new NotFoundException('差异叠加层不存在');
+    }
+    return readFile(path.resolve(this.previewRoot, key));
   }
 
   private get rendererUrl(): string { return (process.env.RESOURCE_RENDERER_URL || '').replace(/\/$/, ''); }

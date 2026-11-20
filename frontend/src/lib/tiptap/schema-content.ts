@@ -17,7 +17,7 @@
 export const CONTAINER_BLOCKS = [
   'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
   'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'battleReport',
-  'postQuote', 'replyQuote', 'htmlBlock',
+  'postQuote', 'replyQuote', 'htmlBlock', 'resourceEmbed',
 ] as const;
 
 /** `doc` and `blockquote` accept everything above plus a spoiler. */

@@ -6,6 +6,7 @@ import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-c
 import { Plugin } from '@tiptap/pm/state';
 import { normalizePastedRichHtml } from './paste-normalization';
 import { battleReportLabel, isBattleReportPublicId } from '@/lib/timelapses/battle-report-data';
+import { ResourceEmbed } from './resource-embed';
 
 const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
 const FONT_FAMILIES = Object.keys(FONT_STACKS);
@@ -402,8 +403,11 @@ export const RICH_CONTENT_EXTENSIONS = [
   PostQuote,
   ReplyQuote,
   HtmlBlock,
+  ResourceEmbed,
   RichPasteSanitizer,
 ];
+
+export { ResourceEmbed } from './resource-embed';
 
 export const richContentEditorDefaults = {
   fontSizes: FONT_SIZES,

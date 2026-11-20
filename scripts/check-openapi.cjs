@@ -136,6 +136,7 @@ try {
     ['GET /v1/resources/{id}/relations', 'listResourceRelationsV2'],
     ['GET /v1/resources/{id}/stats', 'getResourceStatsV2'],
     ['GET /v1/resources/{id}/workbench', 'getResourceWorkbenchV2'],
+    ['GET /v1/resources/embeds/cards', 'listResourceEmbedCardsV2'],
     ['GET /v1/resources/mods/{id}', 'getModResourceV2'],
     ['GET /v1/resources/mods/{id}/versions', 'listModResourceVersionsV2'],
     ['GET /v1/resources/mods/{id}/manifest', 'getModResourceManifestV2'],
@@ -157,6 +158,7 @@ try {
     ['GET /v1/resources/schematics/{id}/materials', 'listSchematicMaterialsV2'],
     ['GET /v1/resources/schematics/{id}/production', 'getSchematicProductionV2'],
     ['GET /v1/resources/schematics/{id}/logic', 'listSchematicLogicV2'],
+    ['GET /v1/resources/schematics/logic-search', 'searchSchematicLogicV2'],
     ['GET /v1/resources/schematics/{id}/dependencies', 'listSchematicDependenciesV2'],
     ['GET /v1/resources/schematics/{id}/relations', 'listSchematicRelationsV2'],
     ['GET /v1/resources/schematics/{id}/diff', 'getSchematicVersionDiffV2'],
@@ -171,12 +173,14 @@ try {
     ['GET /v1/resources/maps/{id}/dependencies', 'listMapDependenciesV2'],
     ['GET /v1/resources/maps/{id}/relations', 'listMapRelationsV2'],
     ['GET /v1/resources/maps/{id}/diff', 'getMapVersionDiffV2'],
+    ['GET /v1/resources/maps/{id}/diff/chunk', 'getMapDiffChunkV2'],
     ['GET /v1/game-content/content/search', 'searchGameContentIndexV2'],
     ['GET /v1/game-content/content/by-name/{type}/{internalName}', 'findGameContentByNameV2'],
     ['GET /v1/game-content/content/{id}', 'getGameContentItemV2'],
   ];
   const requiredResourceV2RawOperations = [
     ['GET /v1/resources/{id}/versions/{versionId}/preview', 'getResourceVersionPreviewV2'],
+    ['GET /v1/resources/maps/{id}/diff/overlay', 'getMapDiffOverlayV2'],
   ];
   const commonResourceCompatibilityOperations = [
     ['GET /v1/resources/{id}', 'ResourcesV1Controller_getResource'],

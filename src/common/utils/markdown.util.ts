@@ -50,7 +50,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     ol: ['start', 'type'],
     details: ['open'],
     span: ['data-color', 'data-highlight', 'data-font-size', 'data-font-family'],
-    aside: ['data-quote-type', 'data-post-id', 'data-reply-id'],
+    aside: ['data-quote-type', 'data-post-id', 'data-reply-id', 'data-resource-embed', 'data-resource-version', 'data-display-mode'],
     figure: ['data-battle-report', 'data-timelapse-public-id'],
     ul: ['data-task-list'],
   },
@@ -103,6 +103,11 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
         ...(attribs['data-quote-type'] === 'post' || attribs['data-quote-type'] === 'reply' ? { 'data-quote-type': attribs['data-quote-type'] } : {}),
         ...( /^\d+$/.test(attribs['data-post-id'] || '') ? { 'data-post-id': attribs['data-post-id'] } : {}),
         ...( /^\d+$/.test(attribs['data-reply-id'] || '') ? { 'data-reply-id': attribs['data-reply-id'] } : {}),
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attribs['data-resource-embed'] || '')
+          ? { 'data-resource-embed': attribs['data-resource-embed'] } : {}),
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attribs['data-resource-version'] || '')
+          ? { 'data-resource-version': attribs['data-resource-version'] } : {}),
+        ...( attribs['data-display-mode'] === 'card' ? { 'data-display-mode': 'card' } : {}),
       },
     }),
     // 战报卡：只保留固定的标记位与合法 UUID；原始 HTML（如旧 Markdown）里的

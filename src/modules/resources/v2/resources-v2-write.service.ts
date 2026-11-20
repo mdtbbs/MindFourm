@@ -12,6 +12,7 @@ import { DirectVersionCompletionContext, ResourceVersionService } from '../resou
 import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceFileMeta, ResourcesService } from '../resources.service';
+import { SchematicLogicIndexService } from '../schematic-logic-index.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { analyzeMapMetadata } from '../analyzers/map-analyzer';
@@ -32,6 +33,7 @@ export class ResourcesV2WriteService {
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly resourceLifecycle?: ResourcesService,
     @Optional() private readonly editorCapabilities?: CapabilitiesService,
+    @Optional() private readonly logicIndex?: SchematicLogicIndexService,
   ) {}
 
   private assertUuid(value: string): void {
@@ -401,6 +403,7 @@ export class ResourcesV2WriteService {
       }
       throw error;
     }
+    if (update.status === 'pending') void this.logicIndex?.syncResource(resourceId).catch(() => undefined);
     const updated = await this.resources.findOne({ where: { id: resourceId } });
     if (!updated) throw new NotFoundException('资源不存在');
     return {

@@ -31,6 +31,26 @@ export default function ResourceDetail({ resource, selectedVersionPublicId }: Re
   const { isAuthenticated, user } = useAuth();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [activeTab, setActiveTab] = useState<ResourceTab>('overview');
+  // 资源卡片链接使用 #updates / #logic 直达版本对比工作台；内部标签页切换
+  // 后再滚动到对应区块，避免浏览器在目标节点尚未挂载时丢失锚点。
+  useEffect(() => {
+    const anchor = window.location.hash.replace('#', '');
+    if (anchor !== 'updates' && anchor !== 'logic') return;
+    setActiveTab('updates');
+    // The workbench is a lazy client chunk; poll briefly until its anchor exists.
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      const target = document.getElementById(anchor === 'logic' ? 'resource-logic' : 'resource-visual-diff');
+      if (target) {
+        window.clearInterval(timer);
+        target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else if (attempts >= 20) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, []);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [related, setRelated] = useState<Resource[]>([]);
   const [favorite, setFavorite] = useState(Boolean(resource.is_favorited));

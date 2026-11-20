@@ -303,6 +303,7 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
+    'resource_visual_diff_enabled',
     'terms_summary',
     'site_favicon_url',
     'sidebar_title',
@@ -453,6 +454,7 @@ export class SettingsService implements OnModuleInit {
       'feature_multiplayer_relay_v1_enabled',
       'feature_third_party_multiplayer_v1_enabled',
       'feature_multiplayer_mod_sync_enabled',
+      'resource_visual_diff_enabled',
     ]),
     'cloud-saves': new Set([
       'cloud_saves_enabled',
@@ -632,6 +634,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_multiplayer_relay_v1_enabled', value: 'false', category: 'features', description: 'Enable allocation of official Relay Agents' },
       { key: 'feature_third_party_multiplayer_v1_enabled', value: 'false', category: 'features', description: 'Allow reviewed third-party OAuth apps to use Multiplayer APIs' },
       { key: 'feature_multiplayer_mod_sync_enabled', value: 'true', category: 'features', description: 'Enable mod-aware Multiplayer sessions and mod sync plans (hot switch)' },
+      { key: 'resource_visual_diff_enabled', value: 'true', category: 'features', description: 'Enable schematic/map visual version diff and the mlog logic snippet index' },
       { key: 'cloud_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable private Mindustry cloud saves' },
       { key: 'squad_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable squad shared save relay (requires cloud_saves_enabled)' },
       { key: 'cloud_saves_storage_path', value: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'), category: 'cloud-saves', description: 'Persistent local directory for private save files' },

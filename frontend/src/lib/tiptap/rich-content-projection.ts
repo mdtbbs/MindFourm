@@ -62,6 +62,9 @@ function blocks(nodes: NodeJson[] = [], depth = 0): string {
       }
       case 'postQuote': return `[Quoted post #${node.attrs?.postId}](/posts/${node.attrs?.postId})\n\n`;
       case 'replyQuote': return `[Quoted reply #${node.attrs?.replyId}](/posts/${node.attrs?.postId}#reply-${node.attrs?.replyId})\n\n`;
+      // Legacy/search projection only: the card is hydrated from resource ids at
+      // render time, so projecting the id is enough and never performs a request.
+      case 'resourceEmbed': return `[资源卡片: ${String(node.attrs?.resourcePublicId || '')}]\n\n`;
       case 'text': return inline([node]);
       default: return content;
     }

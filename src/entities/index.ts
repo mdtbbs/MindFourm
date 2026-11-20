@@ -94,7 +94,7 @@ import {
 } from './mod-resource-v2.entity';
 import {
   SchematicVersionMetadata, SchematicBlock, SchematicMaterial,
-  SchematicLogicProcessor, SchematicAnalysis,
+  SchematicLogicProcessor, SchematicAnalysis, SchematicLogicSnippet,
 } from './schematic-resource-v2.entity';
 import {
   MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore,
@@ -282,6 +282,7 @@ export const coreEntities = [
   SchematicMaterial,
   SchematicLogicProcessor,
   SchematicAnalysis,
+  SchematicLogicSnippet,
   MapVersionMetadata,
   MapResourceEntry,
   MapSpawn,
@@ -422,7 +423,7 @@ export {
   ModProfile, ModIdAlias, ModVersionMetadata, ModContent, ModContentAlias, ModLocalization,
   ModCompatibilityReport, ModIssueReport, ModConflictReport, ModConflictMember,
   ModReportAttachment,
-  SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis,
+  SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis, SchematicLogicSnippet,
   MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore, MapWaveSummary, MapAnalysis, MapFeedback,
   // Phase 4 (refactor): Media
   MediaAsset, ResourceMediaLink,
