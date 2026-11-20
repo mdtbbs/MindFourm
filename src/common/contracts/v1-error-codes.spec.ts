@@ -58,6 +58,15 @@ describe('V1 Error Code Registry', () => {
     }
   });
 
+  it('registers stable Squad Saves API error codes', () => {
+    for (const code of [
+      'SQUADS_DISABLED', 'SQUAD_NOT_FOUND', 'SQUAD_PERMISSION_DENIED', 'SQUAD_OWNER_QUOTA_EXCEEDED',
+      'SQUAD_SAVE_LEASE_HELD', 'SQUAD_SAVE_LEASE_STALE', 'SQUAD_SAVE_LEASE_REQUIRED', 'SQUAD_TAKEOVER_FORBIDDEN',
+      'SQUAD_TRANSFER_QUOTA_EXCEEDED', 'SQUAD_SAVE_CONFLICT', 'SQUAD_SAVE_BLOB_MISSING',
+      'SQUAD_OWNER_CHANGED',
+    ]) expect(lookupV1ErrorCode(code)).not.toBeNull();
+  });
+
   it('all codes have required fields', () => {
     for (const def of getAllV1ErrorCodes()) {
       expect(def.code).toBeTruthy();

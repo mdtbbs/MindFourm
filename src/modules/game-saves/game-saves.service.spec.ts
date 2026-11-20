@@ -5,6 +5,7 @@ describe('GameSavesService privacy deletion', () => {
   it('tombstones user slots, releases each blob reference once per snapshot, and cancels pending uploads', async () => {
     const manager = { query: jest.fn(async (sql: string, parameters: unknown[] = []) => {
       if (sql.includes('SELECT id FROM users')) return [{ id: 17 }];
+      if (sql.includes('SELECT id FROM squads')) return [];
       if (sql.includes('SELECT id FROM game_save_slots')) return [{ id: 'slot-a' }, { id: 'slot-b' }];
       if (sql.includes('FROM game_save_snapshots s')) return [
         { snapshot_id: 'snap-a', blob_id: 'blob-a' },
@@ -21,7 +22,9 @@ describe('GameSavesService privacy deletion', () => {
     const storage = {};
     const service = new GameSavesService(dataSource as any, config as any, storage as any, {} as any);
 
-    await expect(service.markUserDataDeleted(17)).resolves.toEqual({ slots: 2, snapshots: 3, uploads: 1 });
+    await expect(service.markUserDataDeleted(17)).resolves.toEqual({
+      slots: 2, snapshots: 3, uploads: 1, squads: 0, squad_snapshots: 0, squad_uploads: 0,
+    });
 
     const calls = manager.query.mock.calls.map(([sql]) => sql);
     expect(calls[0]).toContain('SELECT id FROM users WHERE id=? FOR UPDATE');
@@ -39,6 +42,7 @@ describe('GameSavesService privacy deletion', () => {
   it('is safe to repeat after all save data has already been tombstoned', async () => {
     const manager = { query: jest.fn(async (sql: string) => {
       if (sql.includes('SELECT id FROM users')) return [{ id: 17 }];
+      if (sql.includes('SELECT id FROM squads')) return [];
       if (sql.includes('SELECT id FROM game_save_slots')) return [];
       if (sql.includes('UPDATE game_save_upload_sessions')) return { affectedRows: 0 };
       return { affectedRows: 1 };
@@ -50,8 +54,58 @@ describe('GameSavesService privacy deletion', () => {
       {} as any,
     );
 
-    await expect(service.markUserDataDeleted(17)).resolves.toEqual({ slots: 0, snapshots: 0, uploads: 0 });
+    await expect(service.markUserDataDeleted(17)).resolves.toEqual({
+      slots: 0, snapshots: 0, uploads: 0, squads: 0, squad_snapshots: 0, squad_uploads: 0,
+    });
     expect(manager.query.mock.calls.some(([, parameters]) => parameters?.includes('cloud_save.account_delete'))).toBe(false);
+  });
+
+  it('tombstones owned squads, releases squad blobs and revokes leases on account deletion', async () => {
+    const manager = { query: jest.fn(async (sql: string, parameters: unknown[] = []) => {
+      if (sql.includes('SELECT id FROM users')) return [{ id: 17 }];
+      if (sql.includes('SELECT id FROM game_save_slots')) return [];
+      if (sql.includes('UPDATE game_save_upload_sessions')) return { affectedRows: 0 };
+      if (sql.includes('SELECT id FROM squads')) return [{ id: 'squad-1' }];
+      if (sql.includes('SELECT id FROM squad_save_slots')) return [{ id: 'sslot-1' }];
+      if (sql.includes('JOIN squad_save_snapshot_files')) return [
+        { snapshot_id: 'ssnap-1', blob_id: 'sblob-1' },
+        { snapshot_id: 'ssnap-2', blob_id: 'sblob-1' },
+        { snapshot_id: 'ssnap-3', blob_id: 'sblob-2' },
+      ];
+      if (sql.includes('SELECT ref_count FROM squad_save_blobs')) return [{ ref_count: parameters[0] === 'sblob-1' ? 2 : 1 }];
+      if (sql.includes('UPDATE squad_save_snapshots')) return { affectedRows: 3 };
+      if (sql.includes('UPDATE squad_save_blob_uploads')) return { affectedRows: 2 };
+      return [];
+    }) };
+    const service = new GameSavesService(
+      { transaction: (work: (tx: any) => Promise<unknown>) => work(manager) } as any,
+      { get: jest.fn((key: string) => key === 'cloudSaves.gcGraceHours' ? 24 : undefined) } as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.markUserDataDeleted(17)).resolves.toEqual({
+      slots: 0, snapshots: 0, uploads: 0, squads: 1, squad_snapshots: 3, squad_uploads: 2,
+    });
+
+    const blobReleases = manager.query.mock.calls
+      .filter(([sql]) => String(sql).includes('UPDATE squad_save_blobs SET ref_count=?,pending_delete_at=?,gc_in_progress=0'))
+      .map(([, parameters]) => parameters);
+    expect(blobReleases).toEqual(expect.arrayContaining([
+      [0, expect.any(Date), 'sblob-1'],
+      [0, expect.any(Date), 'sblob-2'],
+    ]));
+
+    const leaseRevocation = manager.query.mock.calls.find(([sql]) => String(sql).includes("UPDATE squad_save_leases SET status='expired'"));
+    expect(leaseRevocation?.[1]).toEqual(['sslot-1']);
+
+    const uploadExpiry = manager.query.mock.calls.find(([sql]) => String(sql).includes('UPDATE squad_save_blob_uploads SET status='));
+    expect(uploadExpiry?.[0]).toContain("UPDATE squad_save_blob_uploads SET status='expired'");
+    expect(uploadExpiry?.[1]).toEqual(['squad-1']);
+
+    const squadTombstone = manager.query.mock.calls.find(([sql]) => String(sql).includes('UPDATE squads SET deleted_at=NOW()'));
+    expect(squadTombstone?.[1]).toEqual(['squad-1']);
+    expect(manager.query.mock.calls.some(([sql]) => String(sql).includes('DELETE FROM squad_save_snapshot_files'))).toBe(true);
   });
 });
 
@@ -155,7 +209,7 @@ describe('GameSavesService delta uploads', () => {
 
   function build(query: jest.Mock, transaction?: jest.Mock) {
     return new GameSavesService(
-      { query, transaction: transaction || ((work: (tx: any) => Promise<unknown>) => work({ query })) } as any,
+      { query, manager: { query }, transaction: transaction || ((work: (tx: any) => Promise<unknown>) => work({ query })) } as any,
       { get: jest.fn() } as any,
       storage as any,
       enabledSettings as any,
@@ -199,11 +253,14 @@ describe('GameSavesService delta uploads', () => {
       if (sql.includes('FROM game_save_blob_uploads') && sql.includes('SELECT id,object_key')) {
         return [{ id: 'upload-b', object_key: 'cloud-saves/17/00000000-0000-4000-8000-000000000000', storage_provider: 'local' }];
       }
-      if (sql.includes('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes')) return [{ used_bytes: '100' }];
-      if (sql.includes('SELECT DISTINCT sha256,size_bytes FROM game_save_blob_uploads')) return [];
+      if (sql.includes('FROM game_save_blobs WHERE user_id=? AND ref_count>0')) return [{ size_bytes: '0' }];
+      if (sql.includes('FROM squad_save_blobs b JOIN squads sq')) return [{ size_bytes: '0' }];
+      if (sql.includes('FROM game_save_upload_sessions s')) return [];
+      if (sql.includes('FROM game_save_blob_uploads u')) return [];
+      if (sql.includes('u.squad_id AS squad_id')) return [];
       if (sql.includes('MAX(revision)')) return [{ revision: 2 }];
       if (sql.includes('SELECT id,gc_in_progress FROM game_save_blobs')) return [{ id: parameters[0], gc_in_progress: 0 }];
-      return { affectedRows: 1 };
+      return [];
     }) };
     const service = build(jest.fn(), (work: (tx: any) => Promise<unknown>) => work(manager) as any);
 
@@ -277,7 +334,7 @@ describe('GameSavesService delta hardening', () => {
   };
   function build(query: jest.Mock, tx?: (work: (tx: any) => Promise<unknown>) => Promise<unknown>) {
     return new GameSavesService(
-      { query, transaction: tx || ((work: (m: any) => Promise<unknown>) => work({ query })) } as any,
+      { query, manager: { query }, transaction: tx || ((work: (m: any) => Promise<unknown>) => work({ query })) } as any,
       { get: jest.fn() } as any,
       storage as any,
       settings as any,
@@ -294,11 +351,14 @@ describe('GameSavesService delta hardening', () => {
       if (sql.includes('SELECT id FROM game_save_snapshots WHERE id = ?')) return [{ id: BASE }];
       if (sql.includes('SELECT * FROM game_save_snapshots WHERE id = ?')) return [{ id: BASE, revision: 1, format: 'zip', sha256: 'f'.repeat(64), size_bytes: '5', manifest_file_count: null, created_at: new Date() }];
       if (sql.includes('SELECT id,ref_count,gc_in_progress,object_key FROM game_save_blobs')) return [{ id: 'blob-a', ref_count: 1, gc_in_progress: 0, object_key: 'cloud-saves/17/existing' }];
-      if (sql.includes('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes')) return [{ used_bytes: '0' }];
-      if (sql.includes('SELECT DISTINCT sha256,size_bytes FROM game_save_blob_uploads')) return [];
+      if (sql.includes('FROM game_save_blobs WHERE user_id=? AND ref_count>0')) return [{ size_bytes: '0' }];
+      if (sql.includes('FROM squad_save_blobs b JOIN squads sq')) return [{ size_bytes: '0' }];
+      if (sql.includes('FROM game_save_upload_sessions s')) return [];
+      if (sql.includes('FROM game_save_blob_uploads u')) return [];
+      if (sql.includes('u.squad_id AS squad_id')) return [];
       if (sql.includes('MAX(revision)')) return [{ revision: 2 }];
       if (sql.includes('SELECT id,gc_in_progress FROM game_save_blobs')) return [{ id: p[0], gc_in_progress: 0 }];
-      return { affectedRows: 1 };
+      return [];
     }) };
     const service = build(jest.fn(), (work) => work(manager));
 
@@ -379,7 +439,11 @@ describe('GameSavesService delta hardening', () => {
 
   it('reports the unique-blob charge alongside logical bytes and manifest limits', async () => {
     const query = jest.fn(async (sql: string) => {
-      if (sql.includes('used_bytes FROM game_save_blobs')) return [{ used_bytes: '100' }];
+      if (sql.includes('FROM game_save_blobs WHERE user_id=? AND ref_count>0')) return [{ size_bytes: '100' }];
+      if (sql.includes('FROM squad_save_blobs b JOIN squads sq')) return [{ size_bytes: '0' }];
+      if (sql.includes('FROM game_save_upload_sessions s')) return [];
+      if (sql.includes('FROM game_save_blob_uploads u')) return [];
+      if (sql.includes('u.squad_id AS squad_id')) return [];
       if (sql.includes('used_slots')) return [{ used_slots: '2' }];
       if (sql.includes('logical_bytes')) return [{ logical_bytes: '500' }];
       return [];
@@ -387,7 +451,9 @@ describe('GameSavesService delta hardening', () => {
     const result = await build(query).getQuota(17);
 
     expect(result).toMatchObject({
-      used_bytes: 100, logical_bytes: 500, formats: ['zip', 'manifest'],
+      used_bytes: 100,
+      breakdown: { personal_bytes: 100, owned_squads_bytes: 0, pending_bytes: 0 },
+      logical_bytes: 500, formats: ['zip', 'manifest'],
       manifest_limits: { max_files: 5000, max_manifest_bytes: 1048576 },
     });
   });
@@ -417,5 +483,77 @@ describe('GameSavesService delta hardening', () => {
 
     expect(result).toMatchObject({ uploaded: true, status: 'ready' });
     expect(storage.deleteObject).not.toHaveBeenCalledWith('cloud-saves/17/obj');
+  });
+});
+
+describe('GameSavesService unified quota', () => {
+  it('sums personal, owned-squad and pending bytes into used_bytes', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM game_save_blobs WHERE user_id=? AND ref_count>0')) return [{ size_bytes: '100' }];
+      if (sql.includes('FROM squad_save_blobs b JOIN squads sq')) return [{ size_bytes: '50' }];
+      if (sql.includes('FROM game_save_upload_sessions s')) return [{ sha256: 'a'.repeat(64), size_bytes: '10' }];
+      if (sql.includes('FROM game_save_blob_uploads u')) return [{ sha256: 'b'.repeat(64), size_bytes: '15' }];
+      if (sql.includes('u.squad_id AS squad_id')) return [];
+      if (sql.includes('used_slots')) return [{ used_slots: '1' }];
+      if (sql.includes('logical_bytes')) return [{ logical_bytes: '200' }];
+      return [];
+    });
+    const service = new GameSavesService(
+      { query, manager: { query }, transaction: (work: (tx: any) => Promise<unknown>) => work({ query }) } as any,
+      { get: jest.fn() } as any,
+      { provider: 'local', isConfigured: () => true } as any,
+      { getCached: jest.fn((key: string) => key === 'cloud_saves_enabled' ? 'true' : undefined) } as any,
+    );
+
+    const result = await service.getQuota(17);
+
+    expect(result.used_bytes).toBe(175);
+    expect(result.breakdown).toEqual({ personal_bytes: 100, owned_squads_bytes: 50, pending_bytes: 25 });
+    expect(result.logical_bytes).toBe(200);
+  });
+});
+
+describe('GameSavesService unified quota accounting', () => {
+  const HASH = 'a'.repeat(64);
+
+  it('counts the committing upload session as a pending reservation', async () => {
+    const session = {
+      id: 'upload-1', user_id: 17, slot_id: 'slot-a', status: 'uploaded',
+      expected_sha256: HASH, expected_size_bytes: '90',
+      object_key: 'cloud-saves/17/00000000-0000-4000-8000-000000000000',
+      storage_provider: 'local', expires_at: new Date(Date.now() + 600_000),
+      base_snapshot_id: null, conflict_resolution: 'normal', confirm_current_snapshot_id: null,
+      reason: 'manual', game_version: null, game_build: null, map_name: null, wave: null,
+      playtime_seconds: null, mods_manifest_json: null, mods_manifest_hash: null,
+    };
+    const manager = { query: jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT id FROM users')) return [{ id: 17 }];
+      if (sql.includes('SELECT * FROM game_save_slots')) return [{ id: 'slot-a', user_id: 17, name: 'Slot', current_snapshot_id: null }];
+      if (sql.includes('SELECT * FROM game_save_upload_sessions')) return [session];
+      if (sql.includes('SUM(b.size_bytes),0)')) return [{ size_bytes: '0' }];
+      if (sql.includes('SUM(size_bytes),0) AS size_bytes FROM game_save_blobs')) return [{ size_bytes: '50' }];
+      if (sql.includes('FROM game_save_upload_sessions s')) return [{ sha256: HASH, size_bytes: '90' }];
+      if (sql.includes('FROM game_save_blob_uploads u')) return [];
+      if (sql.includes('FROM squad_save_blob_uploads u')) return [];
+      if (sql.includes('UPDATE game_save_upload_sessions')) return { affectedRows: 1 };
+      return [];
+    }) };
+    const dataSource = {
+      query: jest.fn(async (sql: string) => (sql.includes('SELECT * FROM game_save_upload_sessions') ? [session] : [])),
+      manager,
+      transaction: (work: (tx: any) => Promise<unknown>) => work(manager),
+    };
+    const service = new GameSavesService(
+      dataSource as any,
+      { get: jest.fn() } as any,
+      { provider: 'local', isConfigured: () => true, verifyObject: jest.fn(async () => true) } as any,
+      { getCached: jest.fn((key: string) => key === 'cloud_saves_enabled' ? 'true'
+        : key === 'cloud_saves_user_quota_bytes' ? '100' : undefined) } as any,
+    );
+
+    // 50 字节存活 blob + 90 字节待提交预留 = 140 > 100；如果把本次会话从
+    // pending 中错误排除，就只剩 50 字节而放行，说明配额被少算一个文件。
+    await expect(service.commitUpload(17, 'upload-1', {})).rejects.toMatchObject({ code: 'SAVE_QUOTA_EXCEEDED' });
+    expect(manager.query.mock.calls.some(([sql]) => String(sql).includes('UPDATE game_save_upload_sessions SET status=?'))).toBe(true);
   });
 });

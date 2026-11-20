@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Blocks, Cloud, Map as MapIcon, ScanSearch, Waves } from 'lucide-react';
+import { Blocks, Cloud, Map as MapIcon, ScanSearch, Users, Waves } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
 
 const TOOLS = [
@@ -11,6 +11,7 @@ const TOOLS = [
   { id: 'wave-editor', href: '/tools/wave-editor', titleKey: 'tools.waveEditor', descriptionKey: 'tools.waveEditorDescription', icon: Waves },
   { id: 'blueprint-analysis', href: '/tools/blueprint-analysis', titleKey: 'tools.blueprintAnalysis', descriptionKey: 'tools.blueprintAnalysisDescription', icon: ScanSearch },
   { id: 'cloud-saves', href: '/tools/cloud-saves', titleKey: 'tools.cloudSaves', descriptionKey: 'tools.cloudSavesDescription', icon: Cloud },
+  { id: 'squads', href: '/tools/squads', titleKey: 'tools.squads', descriptionKey: 'tools.squadsDescription', icon: Users },
 ] as const;
 
 type RecentTool = { id: string; usedAt: number };

@@ -16,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsModule } from '../settings/settings.module';
 import { SocialModule } from '../social/social.module';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { SquadSavesModule } from '../squads/squad-saves.module';
 import { MultiplayerService } from './multiplayer.service';
 import { MultiplayerV1Controller, RelayInternalV1Controller } from './multiplayer-v1.controller';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
@@ -34,6 +35,7 @@ import { InvitePolicyService } from './invite-policy.service';
     SettingsModule,
     SocialModule,
     RealtimeModule,
+    SquadSavesModule,
   ],
   controllers: [MultiplayerV1Controller, RelayInternalV1Controller],
   providers: [MultiplayerService, RelayInternalAuthGuard, ThirdPartyMultiplayerGuard, SessionPolicyService, InvitePolicyService],

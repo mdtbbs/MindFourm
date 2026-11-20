@@ -1,5 +1,27 @@
 # 公开 API 更新记录
 
+## 2026-11-20 — 小队共享存档接力（Squad Saves）
+
+### Added
+
+- `GET /api/v1/squads`、`GET /api/v1/squads/invitations`、`POST /api/v1/squads`、`GET/PATCH/DELETE /api/v1/squads/{squadId}`：小队列表、收到的邀请、创建、详情、重命名与删除。
+- `GET/POST /api/v1/squads/{squadId}/members`、`POST .../members/accept`、`.../members/decline`、`PATCH/DELETE .../members/{userId}`：成员邀请、接受/拒绝邀请、角色调整、退出或被移除。
+- `POST /api/v1/squads/{squadId}/ownership-transfer` 及 `.../accept`、`.../decline`、`.../cancel`：24 小时有效的两步队长转让；接受时在事务内校验新队长配额。
+- `GET/POST /api/v1/squads/{squadId}/slots`、`GET/PATCH/DELETE .../slots/{slotId}`：共享存档槽的创建、详情、重命名与删除。
+- `GET .../slots/{slotId}/lease`、`POST .../lease/acquire`、`POST .../lease/renew`、`DELETE .../lease`：150 秒写租约、`fencing_token`、owner/admin 强制接管与释放。
+- `GET/POST .../slots/{slotId}/snapshots`、`GET .../snapshots/{snapshotId}/manifest`、`POST .../snapshots/{snapshotId}/restore`、`PATCH/DELETE .../snapshots/{snapshotId}`：manifest 快照提交、清单、恢复、置顶与删除；支持 `mode:"conflict_rescue"` 保存冲突救援分支。
+- `POST .../slots/{slotId}/blobs/check`、`POST .../slots/{slotId}/blobs`、`PUT /api/v1/squads/{squadId}/blobs/uploads/{uploadId}/file`、`POST .../snapshots/{snapshotId}/blobs/download`、`GET .../snapshots/{snapshotId}/blobs/{sha256}/file`：小队内文件级差量上传与下载。
+- `GET /api/v1/game-saves/quota` 新增 `breakdown: { personal_bytes, owned_squads_bytes, pending_bytes }`；`used_bytes` 为三项之和，小队用量记在创建者名下。
+- `POST /api/v1/multiplayer/sessions` 新增可选 `squad_save_ref: { squad_id, slot_id, fencing_token, lanlink_room_code? }`：成功后回填 `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`，并在响应中回显。
+- 用户实时事件新增 `squad_save.lease_acquired`、`squad_save.lease_released`、`squad_save.lease_taken_over`、`squad_save.snapshot_committed`、`squad_save.ownership_transferred`，发送给该小队每个活跃成员。
+
+### Clarified
+
+- 小队共享存档配额统一记在创建者（`squads.owner_user_id`）名下；任意成员上传都校验创建者额度，非创建者不返回具体数值。`squad_save_blobs` 与个人 `game_save_blobs` 物理隔离，`blobs/check` 只能查询本小队内容。
+- 写租约有效期为 150 秒（90 秒心跳 + 60 秒宽限），自然到期后任意活跃成员可接力；未到期只有 owner/admin 能强制接管。`fencing_token` 单调递增，过期 token 的主链提交返回 `SQUAD_SAVE_LEASE_STALE`；最近一次被接管的原房主可用其当时的旧 token 和已暂存文件，以 `mode:"conflict_rescue"` 保存为 `branch_type='conflict'` 分支避免丢档；其他成员不能凭较小的 token 绕过写租约。
+- 每个槽位的快照按 GFS 分层保留：最近 10 个未置顶主链快照、过去 7 个自然日每天最后一个、全部 pinned（每槽上限 10）与全部 conflict 分支。淘汰立即释放创建者配额并进入延迟 GC，`pruned_snapshot_ids` 返回本次淘汰项。
+- 小队相关稳定错误码统一使用 `SQUAD_*` 前缀；完整列表、租约状态机和配额细则见云存档 API 指南。
+
 ## 2026-10-30 — 云存档文件级差量上传
 
 ### Added

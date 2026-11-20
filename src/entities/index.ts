@@ -157,6 +157,15 @@ import { GameSaveBlob } from './game-save-blob.entity';
 import { GameSaveBlobUpload } from './game-save-blob-upload.entity';
 import { GameSaveUploadSession } from './game-save-upload-session.entity';
 import { GameSaveIdempotency } from './game-save-idempotency.entity';
+import { Squad } from './squad.entity';
+import { SquadMember } from './squad-member.entity';
+import { SquadOwnershipTransfer } from './squad-ownership-transfer.entity';
+import { SquadSaveSlot } from './squad-save-slot.entity';
+import { SquadSaveLease } from './squad-save-lease.entity';
+import { SquadSaveBlob } from './squad-save-blob.entity';
+import { SquadSaveSnapshot } from './squad-save-snapshot.entity';
+import { SquadSaveSnapshotFile } from './squad-save-snapshot-file.entity';
+import { SquadSaveBlobUpload } from './squad-save-blob-upload.entity';
 import { BlobObject } from './blob-object.entity';
 import { BlobRecord } from './blob-record.entity';
 import { BlobUploadSession } from './blob-upload-session.entity';
@@ -332,6 +341,15 @@ export const mdtbbsEntities = [
   GameSaveBlobUpload,
   GameSaveUploadSession,
   GameSaveIdempotency,
+  Squad,
+  SquadMember,
+  SquadOwnershipTransfer,
+  SquadSaveSlot,
+  SquadSaveLease,
+  SquadSaveBlob,
+  SquadSaveSnapshot,
+  SquadSaveSnapshotFile,
+  SquadSaveBlobUpload,
 ] as const;
 
 /** Runtime profile composition. MDTBBS remains the current and only profile. */
@@ -340,6 +358,8 @@ export const entities = [...coreEntities, ...mdtbbsEntities];
 export {
   GameSaveSlot, GameSaveSnapshot, GameSaveSnapshotFile, GameSaveBlob, GameSaveBlobUpload,
   GameSaveUploadSession, GameSaveIdempotency,
+  Squad, SquadMember, SquadOwnershipTransfer, SquadSaveSlot, SquadSaveLease, SquadSaveBlob,
+  SquadSaveSnapshot, SquadSaveSnapshotFile, SquadSaveBlobUpload,
   BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,

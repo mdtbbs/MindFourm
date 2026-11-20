@@ -157,6 +157,8 @@
     "blueprintAnalysisDetails": "打开已发布蓝图的工作台，可查看当前版本的分析数据。",
     "cloudSaves": "云存档",
     "cloudSavesDescription": "管理授权启动器同步的个人存档与历史版本。",
+    "squads": "小队共享存档",
+    "squadsDescription": "与小队共用存档槽，接力开房时无需重传存档。",
     "openBlueprintEditor": "在蓝图编辑器中打开",
     "openMapEditor": "在地图编辑器中打开",
     "workbenchNote": "公开资源人人可编辑副本并下载，登录后可发布自己的作品；原资源由所有者管理。",

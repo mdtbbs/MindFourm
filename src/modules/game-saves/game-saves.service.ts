@@ -9,6 +9,7 @@ import {
   decodeSaveCursor, encodeSaveCursor, MANIFEST_FORMAT, normalizeCloudSaveName, normalizeHashList,
   normalizeManifest, normalizeSaveMetadata, NormalizedSaveMetadata, shouldCreateConflictCopy,
 } from './game-save-validation';
+import { getSaveQuotaUsage } from './save-quota';
 
 export type CloudSaveActor = { clientId?: string; deviceId?: string; requestId?: string; ip?: string; userAgent?: string };
 
@@ -27,11 +28,21 @@ export class GameSavesService {
 
   isStorageReady(): boolean { return this.storage.isConfigured(); }
 
-  /** Account deletion path: preserve rows for delayed object GC while making all saves inaccessible. */
-  async markUserDataDeleted(userId: number): Promise<{ slots: number; snapshots: number; uploads: number }> {
+  /**
+   * Account deletion path: preserve rows for delayed object GC while making all
+   * saves inaccessible.
+   *
+   * 创建者销号必须同时处理名下小队（D03）：软删小队与共享存档槽、吊销租约、
+   * 释放小队 blob 引用并把待提交上传标记过期，否则这些字节会继续占着已删除
+   * 账号的配额，且小队成员仍能看到旧存档。
+   */
+  async markUserDataDeleted(userId: number): Promise<{
+    slots: number; snapshots: number; uploads: number;
+    squads: number; squad_snapshots: number; squad_uploads: number;
+  }> {
     return this.dataSource.transaction(async manager => {
       const users = await manager.query('SELECT id FROM users WHERE id=? FOR UPDATE', [userId]);
-      if (!users.length) return { slots: 0, snapshots: 0, uploads: 0 };
+      if (!users.length) return { slots: 0, snapshots: 0, uploads: 0, squads: 0, squad_snapshots: 0, squad_uploads: 0 };
 
       const slots = await manager.query('SELECT id FROM game_save_slots WHERE user_id=? AND deleted_at IS NULL FOR UPDATE', [userId]);
       const slotIds = slots.map((row: any) => String(row.id));
@@ -72,11 +83,101 @@ export class GameSavesService {
       // Staged differential blobs are user-owned bytes too; mark them expired so
       // the next maintenance pass deletes their objects.
       await manager.query("UPDATE game_save_blob_uploads SET status='expired' WHERE user_id=? AND status IN ('pending','ready')", [userId]);
-      if (slotIds.length || uploads) {
-        await this.audit(manager, userId, 'cloud_save.account_delete', { slots: slotIds.length, snapshots, uploads }, {});
+      const squads = await this.tombstoneOwnedSquads(manager, userId);
+      if (slotIds.length || uploads || squads.squads) {
+        await this.audit(manager, userId, 'cloud_save.account_delete', {
+          slots: slotIds.length, snapshots, uploads,
+          squads: squads.squads, squad_snapshots: squads.snapshots, squad_uploads: squads.uploads,
+        }, {});
       }
-      return { slots: slotIds.length, snapshots, uploads };
+      return {
+        slots: slotIds.length, snapshots, uploads,
+        squads: squads.squads, squad_snapshots: squads.snapshots, squad_uploads: squads.uploads,
+      };
     });
+  }
+
+  /**
+   * 软删该用户名下的小队存档并释放小队 blob 引用。
+   *
+   * 物理对象保留到维护任务按宽限期回收；这里只保证成员立刻不可见、租约
+   * 失效且配额不再被占用。
+   */
+  private async tombstoneOwnedSquads(
+    manager: EntityManager,
+    userId: number,
+  ): Promise<{ squads: number; snapshots: number; uploads: number }> {
+    const owned = await manager.query('SELECT id FROM squads WHERE owner_user_id=? AND deleted_at IS NULL FOR UPDATE', [userId]);
+    const squadIds = (Array.isArray(owned) ? owned : []).map((row: any) => String(row.id));
+    if (!squadIds.length) return { squads: 0, snapshots: 0, uploads: 0 };
+    const squadMarks = squadIds.map(() => '?').join(',');
+
+    const slots = await manager.query(
+      `SELECT id FROM squad_save_slots WHERE squad_id IN (${squadMarks}) AND deleted_at IS NULL FOR UPDATE`,
+      squadIds,
+    );
+    const slotIds = (Array.isArray(slots) ? slots : []).map((row: any) => String(row.id));
+    let snapshots = 0;
+    if (slotIds.length) {
+      const slotMarks = slotIds.map(() => '?').join(',');
+      // 与插入时的引用契约一致：一个快照对同一 blob 只持有一个引用，即使
+      // 多个路径共享相同内容。
+      const references = await manager.query(
+        `SELECT s.id AS snapshot_id, f.blob_id AS blob_id
+           FROM squad_save_snapshots s
+           JOIN squad_save_snapshot_files f ON f.snapshot_id = s.id
+          WHERE s.slot_id IN (${slotMarks}) AND s.deleted_at IS NULL`,
+        slotIds,
+      );
+      const bySnapshot = new Map<string, Set<string>>();
+      for (const row of Array.isArray(references) ? references : []) {
+        const set = bySnapshot.get(String(row.snapshot_id)) || new Set<string>();
+        set.add(String(row.blob_id));
+        bySnapshot.set(String(row.snapshot_id), set);
+      }
+      const counts = new Map<string, number>();
+      for (const set of bySnapshot.values()) for (const blobId of set) counts.set(blobId, (counts.get(blobId) || 0) + 1);
+      for (const [blobId, count] of counts) await this.releaseSquadBlob(manager, blobId, count);
+      for (const snapshotId of bySnapshot.keys()) {
+        await manager.query('DELETE FROM squad_save_snapshot_files WHERE snapshot_id=?', [snapshotId]);
+      }
+      const updated = await manager.query(
+        `UPDATE squad_save_snapshots SET deleted_at=NOW() WHERE slot_id IN (${slotMarks}) AND deleted_at IS NULL`,
+        slotIds,
+      );
+      snapshots = Number(updated?.affectedRows || 0);
+      await manager.query(
+        `UPDATE squad_save_slots SET head_snapshot_id=NULL, active_session_id=NULL, deleted_at=NOW(), updated_at=NOW()
+          WHERE id IN (${slotMarks})`,
+        slotIds,
+      );
+      await manager.query(
+        `UPDATE squad_save_leases SET status='expired', expires_at=LEAST(expires_at, NOW()), multiplayer_session_id=NULL
+          WHERE slot_id IN (${slotMarks}) AND status='active'`,
+        slotIds,
+      );
+    }
+    const uploads = await manager.query(
+      `UPDATE squad_save_blob_uploads SET status='expired'
+        WHERE squad_id IN (${squadMarks}) AND status IN ('pending','ready')`,
+      squadIds,
+    );
+    await manager.query(
+      `UPDATE squad_ownership_transfers SET status='cancelled', resolved_at=NOW()
+        WHERE squad_id IN (${squadMarks}) AND status='pending'`,
+      squadIds,
+    );
+    await manager.query('UPDATE squads SET deleted_at=NOW(), updated_at=NOW() WHERE id IN (' + squadMarks + ')', squadIds);
+    return { squads: squadIds.length, snapshots, uploads: Number(uploads?.affectedRows || 0) };
+  }
+
+  /** 递减小队 blob 引用；归零后进入延迟 GC，立即释放创建者配额。 */
+  private async releaseSquadBlob(manager: EntityManager, blobId: string, count: number): Promise<void> {
+    const rows = await manager.query('SELECT ref_count FROM squad_save_blobs WHERE id=? FOR UPDATE', [blobId]);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const next = Math.max(0, Number(rows[0].ref_count) - Math.max(0, count));
+    const pending = next === 0 ? new Date(Date.now() + this.number('gcGraceHours', 24) * 3_600_000) : null;
+    await manager.query('UPDATE squad_save_blobs SET ref_count=?,pending_delete_at=?,gc_in_progress=0 WHERE id=?', [next, pending, blobId]);
   }
 
   async listSlots(userId: number, cursor?: string, limit = 30) {
@@ -164,7 +265,10 @@ export class GameSavesService {
 
   async getQuota(userId: number) {
     this.assertEnabled();
-    const [{ used_bytes }] = await this.dataSource.query('SELECT COALESCE(SUM(size_bytes), 0) AS used_bytes FROM game_save_blobs WHERE user_id = ? AND ref_count > 0', [userId]);
+    // 统一配额口径（D03）：个人 blob + 个人待提交预留 + 名下小队 blob
+    // + 名下小队待提交预留。`used_bytes` 是三者之和，`breakdown` 让客户端
+    // 解释空间被谁占用，而不必猜测。
+    const usage = await getSaveQuotaUsage(this.dataSource.manager, userId);
     const [{ used_slots }] = await this.dataSource.query('SELECT COUNT(*) AS used_slots FROM game_save_slots WHERE user_id = ? AND deleted_at IS NULL', [userId]);
     // Unique-blob bytes are what the quota charges; logical bytes let clients
     // explain "I deleted a snapshot but the quota barely moved" without a
@@ -173,7 +277,12 @@ export class GameSavesService {
       FROM game_save_snapshots sn JOIN game_save_slots s ON s.id = sn.slot_id
       WHERE s.user_id = ? AND s.deleted_at IS NULL AND sn.deleted_at IS NULL`, [userId]);
     return {
-      used_bytes: Number(used_bytes), logical_bytes: Number(logical_bytes), limit_bytes: this.number('maxBytesPerUser', 524288000),
+      used_bytes: usage.used_bytes, logical_bytes: Number(logical_bytes), limit_bytes: this.number('maxBytesPerUser', 524288000),
+      breakdown: {
+        personal_bytes: usage.personal_bytes,
+        owned_squads_bytes: usage.owned_squads_bytes,
+        pending_bytes: usage.pending_bytes,
+      },
       max_file_size_bytes: this.number('maxFileBytes', 52428800),
       formats: ['zip', 'manifest'],
       manifest_limits: {
@@ -236,16 +345,11 @@ export class GameSavesService {
         if (resolution === 'force_replace_head' && confirmedCurrentId !== current.id) this.conflict(base?.id || null, current.id);
       }
       if (resolution === 'force_replace_head' && (!current || confirmedCurrentId !== current.id)) this.conflict(base?.id || null, current?.id || null);
-      const reservationRows = await manager.query(`SELECT COALESCE(SUM(size_bytes), 0) AS reserved_bytes FROM (
-        SELECT DISTINCT s.expected_sha256, s.expected_size_bytes AS size_bytes
-        FROM game_save_upload_sessions s WHERE s.user_id = ? AND s.status IN ('pending','uploaded') AND s.expires_at > NOW()
-          AND NOT EXISTS (SELECT 1 FROM game_save_blobs b WHERE b.user_id = s.user_id AND b.sha256 = s.expected_sha256
-            AND b.size_bytes = s.expected_size_bytes AND b.ref_count > 0)
-      ) pending_saves`, [userId]);
-      const usedRows = await manager.query('SELECT COALESCE(SUM(size_bytes), 0) AS used_bytes FROM game_save_blobs WHERE user_id = ? AND ref_count > 0', [userId]);
       const existingBlob = await manager.query('SELECT id FROM game_save_blobs WHERE user_id = ? AND sha256 = ? AND size_bytes = ? LIMIT 1 FOR UPDATE', [userId, sha256, String(size)]);
       const additional = existingBlob.length ? 0 : size;
-      if (Number(usedRows[0].used_bytes) + Number(reservationRows[0].reserved_bytes) + additional > this.number('maxBytesPerUser', 524288000)) {
+      // 个人配额同时承担名下小队共享存档（D03），所以每次预留都走统一核算。
+      const usage = await getSaveQuotaUsage(manager, userId);
+      if (usage.used_bytes + additional > this.number('maxBytesPerUser', 524288000)) {
         this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
       }
       const uploadId = randomUUID();
@@ -404,9 +508,8 @@ export class GameSavesService {
         if (info?.exists && info.size_bytes === size) return { no_upload_required: true, sha256, size };
         await manager.query("UPDATE game_save_blob_uploads SET status='failed' WHERE id=? AND status='ready'", [ready[0].id]);
       }
-      const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
-      const reserved = await this.reservedBlobBytes(manager, userId, []);
-      if (Number(used_bytes) + reserved + size > this.number('maxBytesPerUser', 524288000)) {
+      const usage = await getSaveQuotaUsage(manager, userId);
+      if (usage.used_bytes + size > this.number('maxBytesPerUser', 524288000)) {
         this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
       }
       const uploadId = randomUUID();
@@ -593,9 +696,9 @@ export class GameSavesService {
         resolved.set(`${file.sha256}:${file.size}`, blobId);
       }
 
-      const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
-      const reserved = await this.reservedBlobBytes(manager, userId, [...unique.values()]);
-      if (Number(used_bytes) + newBytes + reserved > this.number('maxBytesPerUser', 524288000)) {
+      // 即将提交的暂存内容已在本事务内晋升为 blob，从预留里排除以免重复计数。
+      const usage = await getSaveQuotaUsage(manager, userId, { personal: [...unique.values()] });
+      if (usage.used_bytes + newBytes > this.number('maxBytesPerUser', 524288000)) {
         this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
       }
 
@@ -771,14 +874,11 @@ export class GameSavesService {
         this.conflict(locked.base_snapshot_id || null, current?.id || null);
       }
       if (createConflictCopy) destination = await this.createConflictCopySlot(manager, userId, slot, actor);
-      const [{ used_bytes }] = await manager.query('SELECT COALESCE(SUM(size_bytes),0) AS used_bytes FROM game_save_blobs WHERE user_id=? AND ref_count>0', [userId]);
-      const [{ reserved_bytes }] = await manager.query(`SELECT COALESCE(SUM(size_bytes),0) AS reserved_bytes FROM (
-        SELECT DISTINCT s.expected_sha256,s.expected_size_bytes AS size_bytes FROM game_save_upload_sessions s
-        WHERE s.user_id=? AND s.status IN ('pending','uploaded') AND s.expires_at>NOW()
-          AND NOT EXISTS (SELECT 1 FROM game_save_blobs b WHERE b.user_id=s.user_id AND b.sha256=s.expected_sha256
-            AND b.size_bytes=s.expected_size_bytes AND b.ref_count>0)
-      ) pending_saves`, [userId]);
-      if (Number(used_bytes) + Number(reserved_bytes) > this.number('maxBytesPerUser', 524288000)) {
+      // 不能排除本次上传会话：它此刻仍是一条 pending 预留，提交后会变成
+      // 同字节数的 blob。排除会让新增字节既不进 pending 也不进 used，
+      // 导致配额被少算一个文件大小。
+      const usage = await getSaveQuotaUsage(manager, userId);
+      if (usage.used_bytes > this.number('maxBytesPerUser', 524288000)) {
         // Quota may have been lowered after the session was created. Fail the
         // session and drop the object now; leaving it pending would keep the
         // reservation alive and block every later commit.
@@ -1229,30 +1329,6 @@ export class GameSavesService {
     await manager.query('INSERT INTO game_save_slots (id,user_id,name) VALUES (?,?,?)', [copyId, userId, copyName]);
     await this.audit(manager, userId, 'cloud_save.slot.create', { slot_id: copyId, conflict_copy_of: slot.id }, actor);
     return { id: copyId, name: copyName, current_snapshot_id: null };
-  }
-
-  /**
-   * Bytes reserved by standalone blob sessions that are not yet referenced by
-   * any snapshot. `exclude` lets the caller drop the blobs it is about to
-   * commit, so they are not double-counted.
-   */
-  private async reservedBlobBytes(manager: EntityManager, userId: number, exclude: Array<{ sha256: string; size: number }>): Promise<number> {
-    const rows = await manager.query(
-      "SELECT DISTINCT sha256,size_bytes FROM game_save_blob_uploads WHERE user_id=? AND status IN ('pending','ready') AND expires_at>NOW()",
-      [userId],
-    );
-    const excluded = new Set(exclude.map((pair) => `${pair.sha256}:${pair.size}`));
-    let total = 0;
-    for (const row of rows) {
-      if (excluded.has(`${row.sha256}:${row.size_bytes}`)) continue;
-      const used = await manager.query(
-        'SELECT id FROM game_save_blobs WHERE user_id=? AND sha256=? AND size_bytes=? AND ref_count>0 LIMIT 1',
-        [userId, row.sha256, row.size_bytes],
-      );
-      if (used.length) continue;
-      total += Number(row.size_bytes);
-    }
-    return total;
   }
 
   private assertManifestFormat(snapshot: any): void {

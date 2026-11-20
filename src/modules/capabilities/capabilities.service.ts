@@ -28,6 +28,8 @@ export type ClientCapabilities = {
   messages: { available: boolean; third_party_access: boolean };
   game_content: { maps: { read: boolean; download: boolean; upload: boolean }; schematics: { read: boolean; download: boolean; upload: boolean } };
   cloud_saves_v1: boolean;
+  /** 小队共享存档接力：依赖个人云存档开关与存储可用性。 */
+  squad_saves_v1: boolean;
   /** Generic Blob API: enabled by settings and backed by a writable path. */
   blobs_v1: boolean;
   client: { minimum_supported_version: string | null; recommended_version: string | null };
@@ -88,7 +90,7 @@ export class CapabilitiesService {
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
       notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
-      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled] = await Promise.all([
+      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled, squadSavesEnabled] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -108,6 +110,7 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('blobs_enabled', false),
       this.settingsService.get('blobs_storage_path'),
       this.settingsService.getBoolean('feature_resources_enabled', true),
+      this.settingsService.getBoolean('squad_saves_enabled', false),
     ]);
     const cloudSavesAvailable = cloudSavesEnabled && isAbsoluteStoragePath(
       cloudSavePath || process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
@@ -157,6 +160,7 @@ export class CapabilitiesService {
         schematics: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
       },
       cloud_saves_v1: cloudSavesAvailable,
+      squad_saves_v1: cloudSavesAvailable && squadSavesEnabled,
       blobs_v1: blobsAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
       resource_read: resourceRead,

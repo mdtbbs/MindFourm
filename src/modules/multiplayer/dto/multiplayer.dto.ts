@@ -4,6 +4,26 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+/**
+ * 小队共享存档接力引用（D05/D06）。
+ *
+ * 创建会话时服务端会校验调用者当前持有该槽位的写租约，并把会话 ID 回填到
+ * `squad_save_leases.multiplayer_session_id` 与 `squad_save_slots.active_session_id`。
+ */
+export class SquadSaveRefDto {
+  @ApiProperty({ format: 'uuid', description: '小队 UUID。' })
+  @IsString() @MaxLength(36) @MinLength(36) squad_id: string;
+
+  @ApiProperty({ format: 'uuid', description: '共享存档槽 UUID。' })
+  @IsString() @MaxLength(36) @MinLength(36) slot_id: string;
+
+  @ApiProperty({ example: 3, minimum: 1, description: '调用者持有的写租约 fencing_token。' })
+  @IsInt() @Min(1) fencing_token: number;
+
+  @ApiPropertyOptional({ example: 'A1B2C3D4E5', maxLength: 16, description: '可选的 LanLink 房间码；供其他成员在 409 SQUAD_SAVE_LEASE_HELD 时一键加入。' })
+  @IsOptional() @IsString() @MaxLength(16) lanlink_room_code?: string;
+}
+
 export class CreateMultiplayerSessionDto {
   @ApiProperty({ example: 'mindustry', maxLength: 128, description: '游戏的稳定标识。' })
   @IsString() @MaxLength(128)
@@ -43,6 +63,10 @@ export class CreateMultiplayerSessionDto {
   @ApiPropertyOptional({ minimum: 2, maximum: 64, example: 8, description: 'Peer 最大数量。' })
   @IsOptional() @IsInt() @Min(2) @Max(64)
   max_players?: number;
+
+  @ApiPropertyOptional({ type: () => SquadSaveRefDto, description: '小队共享存档接力：调用者必须是该槽位当前租约持有者；成功后回填 active_session_id。' })
+  @IsOptional() @ValidateNested() @Type(() => SquadSaveRefDto)
+  squad_save_ref?: SquadSaveRefDto;
 }
 
 export class ListMultiplayerSessionsDto {

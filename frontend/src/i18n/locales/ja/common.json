@@ -157,6 +157,8 @@
     "blueprintAnalysisDetails": "設計図分析は Resource Center V2 のバージョン分析データを使います。公開済みの設計図ワークベンチで選択バージョンの情報を確認してください。",
     "cloudSaves": "クラウドセーブ",
     "cloudSavesDescription": "許可済みランチャーと同期したセーブと履歴を管理",
+    "squads": "スクワッド共有セーブ",
+    "squadsDescription": "スクワッドとセーブスロットを共有し、ホストを引き継ぎます。",
     "openBlueprintEditor": "設計図エディタで開く",
     "openMapEditor": "マップエディタで開く",
     "workbenchNote": "編集と分析は Resource Center V2 の renderer、権限、バージョン管理を使用します。選択したリソースが対応する操作だけを有効にします。",
