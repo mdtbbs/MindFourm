@@ -13,8 +13,9 @@ export default function HomeResourceKinds({ kinds, title }: { kinds: HomeResourc
     </div>
     <ul className="flex flex-wrap gap-2">
       {kinds.map((kind) => <li key={kind.kind}>
-        <Link href={`/resources?resource_kind=${kind.kind}`} className="inline-flex min-h-9 items-center gap-2 border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary-text)]">
-          {kind.label}<span className="text-xs tabular-nums text-[var(--text-muted)]">{kind.count}</span>
+        <Link href={`/resources?resource_kind=${kind.kind}`} className="inline-flex min-h-9 items-center gap-2 border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--primary-text)]">
+          <span>{kind.label}</span>
+          <span className="bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{kind.count}</span>
         </Link>
       </li>)}
     </ul>

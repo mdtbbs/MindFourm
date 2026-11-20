@@ -21,8 +21,9 @@ describe('homepage portal sections', () => {
     expect(Array.from(html.matchAll(/href="([^"]+)"/g), (match) => match[1])).toEqual(['/categories', '/categories/1', '/categories/2']);
     expect(html).toContain('讨论交流');
     expect(html).toContain('子版块');
-    // A sub-board must stay visually subordinate instead of starting a new group.
-    expect(html).toContain('sm:ml-4');
+    // A sub-board stays visually subordinate via elevated surface without breaking grid alignment.
+    expect(html).toContain('bg-[var(--bg-elevated)]');
+    expect(html).not.toContain('sm:ml-4');
   });
 
   test('an empty board list degrades to a message rather than a bare heading', () => {

@@ -4,6 +4,7 @@ import { ArrowRight, Search } from 'lucide-react';
 import HomeBoardGrid from '@/components/portal/home-board-grid';
 import HomeStatsStrip from '@/components/portal/home-stats-strip';
 import HomeResourceKinds from '@/components/portal/home-resource-kinds';
+import HomeResourceGrid from '@/components/portal/home-resource-grid';
 import HomeSearchLauncher from '@/components/portal/home-search-launcher';
 import ThreadList from '@/components/forum/thread-list';
 import CompactResourceCard from '@/components/forum/compact-resource-card';
@@ -120,19 +121,40 @@ export default async function HomePage() {
   // and the reading column finally uses the width it already had. The secondary
   // rail only appears on 2xl, where the previous single column wasted ~200px.
   return (
-    <main className="mx-auto w-full max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8">
-      <section className="border-b border-[var(--border)] pb-6">
+    <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <section className="industrial-grid-bg border border-[var(--border)] border-l-4 border-l-[var(--primary)] p-5 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">{brand.siteName}</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">找 Mod、地图、蓝图、服务器，或加入正在发生的讨论。</p>
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[var(--industrial-accent)]">
+              {`${brand.siteName} // MINDUSTRY COMMUNITY`}
+            </p>
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-[var(--text)] sm:text-3xl">
+              Mindustry 中文玩家社区
+            </h1>
+            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+              探索高质量 Mod、地图、蓝图与联机服务器，和核心玩家一起交流战术与开发。
+            </p>
           </div>
-          <nav aria-label={t('home.quickLinks')} className="flex flex-wrap gap-2">{[
-            { href: '/posts/new', label: t('create.post') },
-            { href: '/resources/submit/mod', label: t('create.mod') },
-            { href: '/multiplayer', label: t('navigation.multiplayer') },
-          ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
+          <nav aria-label={t('home.quickLinks')} className="flex flex-wrap gap-2">
+            <Link
+              href="/posts/new"
+              className="inline-flex min-h-10 items-center border border-[var(--primary)] bg-[var(--primary-button)] px-4 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            >
+              {t('create.post')}
+            </Link>
+            {[
+              { href: '/resources/submit/mod', label: t('create.mod') },
+              { href: '/multiplayer', label: t('navigation.multiplayer') },
+            ].map((entry) => (
+              <Link
+                key={entry.href}
+                href={entry.href}
+                className="inline-flex min-h-10 items-center border border-[var(--border)] bg-[var(--bg-card)] px-3.5 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              >
+                {entry.label}
+              </Link>
+            ))}
+          </nav>
         </div>
         {/* The homepage search posts to the in-app command palette when the tour
             engine is available and to `/search` otherwise, so a guest can never
@@ -142,40 +164,120 @@ export default async function HomePage() {
 
       {staleSections > 0 && <p role="status" className="mt-4 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}
 
-      <div className="mt-6">
-        <HomeStatsStrip stats={home.stats} labels={{ posts: '主题', replies: '回复', members: '成员', resources: '资源', today: '今日新帖' }} />
-      </div>
+      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-8">
+          <HomeResourceKinds kinds={home.resource_kinds} title="热门资源分类" />
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_20rem_17rem]">
-        <div className="min-w-0 space-y-9">
+          <section>
+            <SectionHeading title="最新资源" href="/resources" />
+            {home.resources.state === 'unavailable' ? (
+              <SectionUnavailable />
+            ) : home.resources.items.length ? (
+              <HomeResourceGrid resources={home.resources.items} />
+            ) : (
+              <p className="border border-[var(--border)] bg-[var(--bg-card)] p-5 text-sm text-[var(--text-muted)]">暂时没有公开资源</p>
+            )}
+          </section>
+
+          <section>
+            <SectionHeading title="正在讨论" href="/threads" />
+            {home.discussions.state === 'unavailable' ? (
+              <SectionUnavailable />
+            ) : home.discussions.items.length ? (
+              <div>
+                <div className="flex items-center justify-between border border-b-0 border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-[var(--text-muted)] sm:px-5">
+                  <span>主题</span>
+                  <span>回复 / 浏览</span>
+                </div>
+                <ThreadList posts={home.discussions.items} />
+              </div>
+            ) : (
+              <p className="border border-[var(--border)] bg-[var(--bg-card)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>
+            )}
+          </section>
+
           <HomeBoardGrid boards={home.boards} title="社区版块" />
-          <HomeResourceKinds kinds={home.resource_kinds} title="资源分类" />
-
-          <section><SectionHeading title="正在讨论" href="/threads" />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
-
-          <section><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : home.resources.items.length ? <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-5 text-sm text-[var(--text-muted)]">暂时没有公开资源</p>}</section>
         </div>
 
-        <div className="min-w-0 space-y-9 border-t border-[var(--border)] pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-1">
-          <section><SectionHeading title="社区公告" href="/notices" />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <ul className="border border-[var(--border)] bg-[var(--bg-card)]">{home.notices.items.map((notice) => <li key={notice.id} className="border-b border-[var(--border)] p-3 last:border-b-0"><Link href={`/notices/${notice.public_id}`} className="block hover:text-[var(--primary-text)]"><span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{notice.title}</span>{notice.published_at && <span className="mt-1 block text-xs text-[var(--text-muted)]">{formatTime(notice.published_at)}</span>}</Link></li>)}</ul> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]">暂无社区公告</p>}</section>
+        <aside className="min-w-0 space-y-6 border-t border-[var(--border)] pt-6 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+          {home.stats && (
+            <section>
+              <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">社区概览</h2>
+              <HomeStatsStrip
+                stats={home.stats}
+                variant="compact"
+                labels={{ posts: '主题', replies: '回复', members: '成员', resources: '资源', today: '今日新帖' }}
+              />
+            </section>
+          )}
+
+          <section>
+            <SectionHeading title="社区公告" href="/notices" />
+            {home.notices.state === 'unavailable' ? (
+              <SectionUnavailable />
+            ) : home.notices.items.length ? (
+              <ul className="border border-[var(--border)] border-l-2 border-l-[var(--industrial-accent)] bg-[var(--bg-card)]">
+                {home.notices.items.map((notice) => (
+                  <li key={notice.id} className="border-b border-[var(--border)] p-3.5 last:border-b-0 hover:bg-[var(--bg-hover)]">
+                    <Link href={`/notices/${notice.public_id}`} className="block hover:text-[var(--primary-text)]">
+                      <span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{notice.title}</span>
+                      {notice.published_at && (
+                        <span className="mt-1.5 block font-mono text-[11px] text-[var(--text-muted)]">{formatTime(notice.published_at)}</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]">暂无社区公告</p>
+            )}
+          </section>
 
           {/* Rendered only when the server actually has news. An empty section used
               to leave a bare heading floating above nothing. */}
-          {home.news.state !== 'unavailable' && home.news.items.length > 0 && <section><SectionHeading title="像素快报" />{<ul className="border border-[var(--border)] bg-[var(--bg-card)]">{home.news.items.map((news) => <li key={news.id} className="border-b border-[var(--border)] p-3 last:border-b-0"><Link href={`/search?q=${encodeURIComponent(news.title)}`} className="block hover:text-[var(--primary-text)]"><span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{news.title}</span>{news.category && <span className="mt-1 block text-xs text-[var(--text-muted)]">{news.category}</span>}</Link></li>)}</ul>}</section>}
+          {home.news.state !== 'unavailable' && home.news.items.length > 0 && (
+            <section>
+              <SectionHeading title="像素快报" />
+              <ul className="border border-[var(--border)] bg-[var(--bg-card)]">
+                {home.news.items.map((news) => (
+                  <li key={news.id} className="border-b border-[var(--border)] p-3.5 last:border-b-0 hover:bg-[var(--bg-hover)]">
+                    <Link href={`/search?q=${encodeURIComponent(news.title)}`} className="block hover:text-[var(--primary-text)]">
+                      <span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{news.title}</span>
+                      {news.category && (
+                        <span className="mt-1.5 inline-block border border-[var(--border)] bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+                          {news.category}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-          <nav aria-label={t('navigation.siteNavigation')} className="hidden 2xl:block">
+          <nav aria-label={t('navigation.siteNavigation')} className="hidden lg:block">
             <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">快捷入口</h2>
-            <ul className="space-y-1 text-sm">
+            <ul className="border border-[var(--border)] bg-[var(--bg-card)] text-sm">
               {[
                 { href: '/categories', label: t('navigation.categories') },
                 { href: '/tags', label: t('navigation.tags') },
                 { href: '/servers', label: t('navigation.servers') },
                 { href: '/leaderboard', label: '积分排行榜' },
                 { href: '/tools/blueprint-editor', label: t('tools.blueprintEditor') },
-              ].map((entry) => <li key={entry.href}><Link href={entry.href} className="flex min-h-9 items-center border border-transparent px-2 text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--primary-text)]">{entry.label}</Link></li>)}
+              ].map((entry) => (
+                <li key={entry.href} className="border-b border-[var(--border)] last:border-b-0">
+                  <Link
+                    href={entry.href}
+                    className="flex min-h-10 items-center justify-between px-3.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--primary-text)]"
+                  >
+                    <span>{entry.label}</span>
+                    <ArrowRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
             </ul>
           </nav>
-        </div>
+        </aside>
       </div>
     </main>
   );

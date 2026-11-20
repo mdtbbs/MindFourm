@@ -4,6 +4,8 @@
 审计范围: 完整仓库深度审查 + 验证轮次 + 规范化  
 审计方法: 静态分析 + 代码审查 + 验证命令执行 + 数据核实
 
+> **后续演进状态（2026-11 更新）**：本报告为 `2026-10-05` 审计时的历史快照。此后后端 lint/typecheck、Playwright E2E CI、Resource Pack 套件及 `ws`/`nodemailer`/`handlebars` 安全升级等已陆续落地；当前工程约束与状态以 [`CLAUDE.md`](CLAUDE.md) 和 [`CODE_AUDIT_PROGRESS.md`](CODE_AUDIT_PROGRESS.md) 为准。
+
 ## Executive Summary
 
 ### 整体评估

@@ -23,17 +23,20 @@ export default function HomeBoardGrid({ boards, title }: { boards: HomeBoard[]; 
       {boards.map((board) => <Link
         key={board.id}
         href={`/categories/${board.id}`}
-        className={`group relative flex min-h-[92px] flex-col justify-between border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${board.depth ? 'sm:ml-4' : ''}`}
+        className={`group relative flex min-h-[92px] flex-col justify-between border border-[var(--border)] p-4 transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${board.depth ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-card)]'}`}
       >
         <span aria-hidden="true" className="absolute inset-y-0 left-0 w-0.5" style={{ backgroundColor: board.color || 'var(--primary)' }} />
         <span className="min-w-0">
-          <span className="block truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]">{board.name}</span>
+          <span className="flex items-center justify-between gap-2">
+            <span className="block truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary-text)]">{board.name}</span>
+            {board.depth > 0 && <span className="shrink-0 border border-[var(--border)] bg-[var(--bg-card)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">子版块</span>}
+          </span>
           {board.description && <span className="mt-1 line-clamp-2 block text-xs leading-5 text-[var(--text-secondary)]">{board.description}</span>}
         </span>
-        <span className="mt-3 inline-flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <span className="mt-3 inline-flex items-center gap-2 font-mono text-xs text-[var(--text-muted)]">
           <span>{board.post_count} 主题</span>
           <span aria-hidden="true">·</span>
-          <span className="inline-flex items-center gap-1 text-[var(--primary-text)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">进入 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
+          <span className="inline-flex items-center gap-1 font-sans text-[var(--primary-text)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">进入 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
         </span>
       </Link>)}
     </div>

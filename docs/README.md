@@ -18,14 +18,15 @@
 - [`api/blobs-v1.md`](api/blobs-v1.md)：通用 blob 存储（`/api/v1/blobs`）——内容寻址、所有者绑定、去重与延迟回收。
 - [`api/rich-content-schema-v2.md`](api/rich-content-schema-v2.md)：Tiptap 正文 Schema。
 - [`api/errors-v1.md`](api/errors-v1.md)、[`api/changelog-v1.md`](api/changelog-v1.md)、[`api/lifecycle-v1.md`](api/lifecycle-v1.md)：错误码、已发布 API 更新与生命周期。
+- [`api/search-index-maintenance.md`](api/search-index-maintenance.md)：统一搜索 `FULLTEXT` 索引巡检、修复与重建运维操作。
+- [`api/external.md`](api/external.md)：服务端集成接口（External API Key / LanLink 机器接口）说明，仅供部署方维护，不发布到公开开发者门户。
 
 ## 移动客户端（Android）
 
 - [`android/ANDROID-CLIENT-STATUS.md`](android/ANDROID-CLIENT-STATUS.md)：客户端逐功能审计——与当前 V1 契约的差距、四个阻塞项、按阶段排序的改造建议，并记录上一版审计的更正。
 - [`android/ANDROID-DEVELOPMENT-PLAN.md`](android/ANDROID-DEVELOPMENT-PLAN.md)：阶段化开发计划（发布闭环 → 数据与授权风险 → 能力缺口 → 工程完备性）与各阶段出口条件。
+- [`android/ANDROID-CLIENT-CONFIG.md`](android/ANDROID-CLIENT-CONFIG.md)：客户端服务端配置接口（`GET /api/v1/client/config` 强制更新、维护模式、功能开关）与 `mdtbbs*` Gradle 构建参数说明。
 - [`android/M0-android-api-gap.md`](android/M0-android-api-gap.md)、[`android/M0-android-engineering-architecture.md`](android/M0-android-engineering-architecture.md)、[`android/M0-mobile-auth-rfc.md`](android/M0-mobile-auth-rfc.md)：一期 API 缺口、工程约定与移动认证 RFC；已接受但部分内容早于当前实现，读前先看审计文件。
-
-移动端相关服务端开关（`GET /api/v1/client/config` 的强制更新、维护模式、功能开关）与 Android 构建参数（`mdtbbs*` Gradle property）目前没有独立文档页，取值来源见审计文件与计划文件的阶段 0。
 
 ## 当前系统与运维
 
@@ -34,9 +35,13 @@
 - [`resource-center-v2.md`](resource-center-v2.md)：Resource Center V2 业务与 API。
 - [`platform-2.7.0.md`](platform-2.7.0.md)：2.7.0 平台能力收口、证据层和已知限制。
 - [`schematic-editor.md`](schematic-editor.md)、[`map-editor.md`](map-editor.md)：蓝图/地图安全编辑器边界与版本流程。
+- [`resource-preview-renderer.md`](resource-preview-renderer.md)：官方 Mindustry 预览渲染器集成与安全边界。
 - [`resource-storage-reconciliation.md`](resource-storage-reconciliation.md)：ResourceStorage 对账、审计和显式修复。
 - [`resource-storage.md`](resource-storage.md)：RES 直传、下载、预览和历史迁移合同。
+- [`resources-cross-site-transfer.md`](resources-cross-site-transfer.md)：跨站资源迁移说明与边界。
 - [`international-site-profiles.md`](international-site-profiles.md)：MDTBBS / Mindustry Club profile 差异及部署隔离。
+- [`i18n-status.md`](i18n-status.md)：国际站（Mindustry Club）界面翻译覆盖现状与未本地化范围。
+- [`bare-metal-deployment.md`](bare-metal-deployment.md)：裸机部署（PM2 + Nginx，无 Docker）构建与启动流程。
 - [`production-deployment.md`](production-deployment.md)：生产配置、数据库迁移和发布检查。
 - [`production-readiness.md`](production-readiness.md)：生产就绪背景与验收记录；执行操作前重新核实当前状态。
 
