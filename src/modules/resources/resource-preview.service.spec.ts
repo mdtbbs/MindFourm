@@ -340,6 +340,61 @@ describe('ResourcePreviewService', () => {
       .resolves.toEqual({ items: {}, blocks: {}, liquids: {} });
   });
 
+  it('analyzes standalone editor files through the pinned renderer without persisting Resource metadata', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    process.env.RESOURCE_RENDERER_TOKEN = 'renderer-secret';
+    const source = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 2, 3]);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ parserVersion: 'v160.5', metadata: {
+        name: 'Local schematic', width: 8, height: 8, unknown_content: ['mod-block'],
+        block_positions: [{ x: 1, y: 2, block: 'router', rotation: 0 }], ignored: 'not part of the safe metadata contract',
+      } }),
+    }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    await expect(service.analyzeLocalEditorFile('schematic', '../local.msch', source)).resolves.toMatchObject({
+      resource_kind: 'schematic', file_name: 'local.msch', parser_version: 'v160.5',
+      sha256: crypto.createHash('sha256').update(source).digest('hex'),
+      renderer_metadata: { name: 'Local schematic', width: 8, height: 8, unknown_content: ['mod-block'], block_positions: [{ x: 1, y: 2, block: 'router', rotation: 0 }] },
+    });
+    const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:6100/v1/analyze');
+    expect(request.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer renderer-secret' });
+    expect(JSON.parse(request.body)).toMatchObject({ filename: 'local.msch', resourceType: 'schematic', dataBase64: source.toString('base64') });
+  });
+
+  it('returns only validated vanilla entries and runtime rule defaults from the full content catalog', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+      blocks: [{ internal_name: 'router', display_name: '路由器', icon: 'data:image/png;base64,AA==', size: 1, size_offset: 0, placeable: true, rotatable: true }],
+      items: [], liquids: [], units: [], statuses: [],
+      teams: [{ internal_name: 'sharded', display_name: '秩序', icon: null, id: 0 }],
+      rule_defaults: { waveTimer: true, itemDepositCooldown: 0.5, unknown: 'drop me' },
+    }) }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    await expect(service.resolveContentCatalog()).resolves.toEqual({
+      blocks: [{ internal_name: 'router', display_name: '路由器', icon: 'data:image/png;base64,AA==', size: 1, size_offset: 0, placeable: true, rotatable: true }],
+      items: [], liquids: [], units: [], statuses: [],
+      teams: [{ internal_name: 'sharded', display_name: '秩序', icon: null, id: 0 }],
+      rule_defaults: { waveTimer: true, itemDepositCooldown: 0.5 },
+    });
+  });
+
+  it('creates a blank official schematic and verifies the bytes returned by Renderer', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    const output = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 0]);
+    const outputHash = crypto.createHash('sha256').update(output).digest('hex');
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ dataBase64: output.toString('base64'), sha256: outputHash }) }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    await expect(service.createBlankEditorFile('schematic', 12, 7, '空白蓝图')).resolves.toEqual({ data: output, sha256: outputHash });
+    const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:6100/v1/create-schematic');
+    expect(JSON.parse(request.body)).toEqual({ width: 12, height: 7, name: '空白蓝图' });
+  });
+
   it('sends schematic edits to the official renderer and verifies its serialized bytes', async () => {
     const source = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 2, 3]);
     const output = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 4, 5]);

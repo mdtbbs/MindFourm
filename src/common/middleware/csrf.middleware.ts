@@ -25,6 +25,14 @@ function buildExemptPaths(): Set<string> {
 }
 
 const EXEMPT_PATHS = buildExemptPaths();
+const ANONYMOUS_EDITOR_WRITE_PATHS = new Set([
+  '/api/v1/editor-tools/map/create',
+  '/api/v1/editor-tools/schematic/create',
+  '/api/v1/editor-tools/map/analyze',
+  '/api/v1/editor-tools/schematic/analyze',
+  '/api/v1/editor-tools/map/export',
+  '/api/v1/editor-tools/schematic/export',
+]);
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -53,6 +61,12 @@ function tokensMatch(a: string, b: string): boolean {
 
 function isExempt(req: Request): boolean {
   if (EXEMPT_PATHS.has(req.path)) return true;
+  // These editor writes only create/analyze/export request-local files. They are
+  // public to anonymous and explicit Bearer clients, but browser sessions remain
+  // protected by the double-submit token.
+  const cookies = (req as any).cookies || parseCookies(req.headers.cookie);
+  const method = String(req.method || '').toUpperCase();
+  if (method === 'POST' && ANONYMOUS_EDITOR_WRITE_PATHS.has(req.path) && !cookies.forum_session) return true;
   // These endpoints accept native PKCE artifacts or a mobile bearer token, never
   // a browser session cookie. Keeping this list exact preserves CSRF protection
   // for every other V1 write route.

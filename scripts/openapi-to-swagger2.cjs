@@ -25,7 +25,13 @@ const path = require('node:path');
 // 公开契约里的中文标签映射到稳定的 ASCII slug，生成器用它派生目录名。
 const TAG_SLUGS = {
   '联机会话': 'v1-multiplayer',
+  '联机邀请': 'v1-multiplayer-invitations',
+  '加入请求': 'v1-multiplayer-join-requests',
+  '中继': 'v1-multiplayer-relay',
+  '活动': 'v1-presence-activities',
   '游戏内容 / 云存档': 'v1-game-saves',
+  '游戏内容 / 小队共享存档': 'v1-squad-saves',
+  '游戏内容 / 基地延时摄影': 'v1-timelapses',
   '公共 V1 / Blob 存储': 'v1-blobs',
   '好友': 'v1-friends',
   '在线状态': 'v1-presence',

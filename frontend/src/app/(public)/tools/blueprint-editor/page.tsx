@@ -1,6 +1,5 @@
-import EditorToolWorkspace from '@/components/tools/editor-tool-workspace';
+import { EditorWorkspace } from '@/components/editors/editor-workspace';
 
-export default async function BlueprintEditorPage({ searchParams }: { searchParams: Promise<{ resource?: string; version?: string }> }) {
-  const query = await searchParams;
-  return <EditorToolWorkspace id="blueprint-editor" resourceId={query.resource} versionId={query.version} />;
+export default function BlueprintEditorPage() {
+  return <EditorWorkspace pageKind="schematic" />;
 }

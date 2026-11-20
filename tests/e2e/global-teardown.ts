@@ -54,6 +54,10 @@ function loadDotenv(): void {
 }
 
 async function cleanup() {
+  if (process.env.PLAYWRIGHT_SKIP_DATABASE_CLEANUP === '1') {
+    console.log('[e2e cleanup] skipped by PLAYWRIGHT_SKIP_DATABASE_CLEANUP=1');
+    return;
+  }
   loadDotenv();
 
   const connection = await mysql.createConnection({

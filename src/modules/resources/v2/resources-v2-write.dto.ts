@@ -30,6 +30,13 @@ export class ResourceV2SchematicMoveDto {
   to_y!: number;
 }
 
+export class ResourceV2SchematicRotateDto {
+  @ApiProperty({ minimum: 0, maximum: 127 }) @IsInt() @Min(0) @Max(127) x!: number;
+  @ApiProperty({ minimum: 0, maximum: 127 }) @IsInt() @Min(0) @Max(127) y!: number;
+  @ApiProperty({ minimum: 1, maximum: 3, description: 'Clockwise quarter turns applied to one block.' })
+  @IsInt() @Min(1) @Max(3) rotation_quarters!: number;
+}
+
 export class ResourceV2SchematicAddedBlockDto {
   @ApiProperty({ minimum: 0, maximum: 127 })
   @IsInt() @Min(0) @Max(127)
@@ -253,6 +260,10 @@ export class ResourceV2ExportSchematicDto {
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicMoveDto)
   move_positions?: ResourceV2SchematicMoveDto[];
 
+  @ApiPropertyOptional({ type: [ResourceV2SchematicRotateDto], maxItems: 5_000, description: 'Rotate individual blocks whose configs do not contain coordinate links.' })
+  @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicRotateDto)
+  rotate_positions?: ResourceV2SchematicRotateDto[];
+
   @ApiPropertyOptional({ type: [ResourceV2SchematicAddedBlockDto], maxItems: 5_000 })
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicAddedBlockDto)
   add_blocks?: ResourceV2SchematicAddedBlockDto[];
@@ -332,6 +343,15 @@ export class ResourceV2MapObjectMoveDto extends ResourceV2MapObjectOperationBase
   @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) to_y!: number;
 }
 
+export class ResourceV2MapObjectRotateDto extends ResourceV2MapObjectOperationBaseDto {
+  @ApiProperty({ enum: ['rotate'] }) @Equals('rotate') action: 'rotate' = 'rotate';
+  @ApiProperty({ enum: ['core', 'building'] }) @IsIn(['core', 'building'])
+  declare object_type: 'core' | 'building';
+  @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) x!: number;
+  @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) y!: number;
+  @ApiProperty({ minimum: 0, maximum: 3 }) @IsInt() @Min(0) @Max(3) rotation!: number;
+}
+
 export class ResourceV2MapObjectTeamDto extends ResourceV2MapObjectOperationBaseDto {
   @ApiProperty({ enum: ['team'] }) @Equals('team') action: 'team' = 'team';
   @ApiProperty({ enum: ['core', 'building'] }) @IsIn(['core', 'building'])
@@ -339,14 +359,6 @@ export class ResourceV2MapObjectTeamDto extends ResourceV2MapObjectOperationBase
   @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) x!: number;
   @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) y!: number;
   @ApiProperty({ maxLength: 40, example: 'sharded' }) @IsString() @MinLength(1) @MaxLength(40) team!: string;
-}
-
-export class ResourceV2MapObjectRotateDto extends ResourceV2MapObjectOperationBaseDto {
-  @ApiProperty({ enum: ['rotate'] }) @Equals('rotate') action: 'rotate' = 'rotate';
-  @ApiProperty({ enum: ['core', 'building'] }) @IsIn(['core', 'building']) declare object_type: 'core' | 'building';
-  @ApiProperty({ minimum: 0, maximum: 32767 }) @IsInt() @Min(0) @Max(32767) x!: number;
-  @ApiProperty({ minimum: 0, maximum: 32767 }) @IsInt() @Min(0) @Max(32767) y!: number;
-  @ApiProperty({ minimum: 0, maximum: 3 }) @IsInt() @Min(0) @Max(3) rotation!: number;
 }
 
 export type ResourceV2MapObjectOperationDtoUnion = ResourceV2MapObjectAddDto | ResourceV2MapObjectDeleteDto
@@ -382,7 +394,8 @@ export class ResourceV2ExportMapDto {
   @IsOptional() @IsArray() @ArrayMaxSize(2_000) @ValidateNested({ each: true })
   @Type(() => ResourceV2MapObjectAddDto, { discriminator: { property: 'action', subTypes: [
     { name: 'add', value: ResourceV2MapObjectAddDto }, { name: 'delete', value: ResourceV2MapObjectDeleteDto },
-    { name: 'move', value: ResourceV2MapObjectMoveDto }, { name: 'team', value: ResourceV2MapObjectTeamDto }, { name: 'rotate', value: ResourceV2MapObjectRotateDto },
+    { name: 'move', value: ResourceV2MapObjectMoveDto }, { name: 'team', value: ResourceV2MapObjectTeamDto },
+    { name: 'rotate', value: ResourceV2MapObjectRotateDto },
   ] }, keepDiscriminatorProperty: true })
   object_operations?: ResourceV2MapObjectOperationDtoUnion[];
 }
