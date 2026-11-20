@@ -1,11 +1,11 @@
 # MindFourm — AI 开发上下文
 
-OAuth applications have two access levels: basic MindAuth sign-in or the forum grant. The unified Bearer resolver rejects identity-only tokens before account lookup and expands verified forum grants into existing operation scopes. Legacy narrow tokens retain their scopes; Presence/Multiplayer no longer use app-directory capability approval as an authorization gate. User permissions and site switches still apply.
+OAuth 应用有两个访问层级：基础 MindAuth 登录或论坛授权。统一的 Bearer 解析器在账户查询前拒绝纯身份令牌，并将已验证的论坛授权扩展为现有操作范围。旧版窄令牌保留其范围；Presence/Multiplayer 不再使用应用目录能力审批作为授权关卡。用户权限和站点开关仍然适用。
 
 
 本文件是 MindFourm 仓库的当前工程上下文。涉及接口、数据库、部署和功能状态时，先以代码与下方标注的现行文档为准；历史计划和旧版参考不能作为当前实现证据。
 
-## Documentation Map
+## 文档地图
 
 - [`docs/README.md`](docs/README.md)：中文文档索引和阅读入口。
 - `docs/product/*.md`：面向论坛用户与开发者的功能概览、产品更新日志和公开计划；在线入口为 `/api/v1/docs/product-*`。
@@ -21,84 +21,84 @@ OAuth applications have two access levels: basic MindAuth sign-in or the forum g
 - `docs/design/`：设计背景。逐项确认是否与当前实现一致后才可用于实施。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：历史方案，不代表当前状态。
 
-## Project Structure and Sources of Truth
+## 项目结构与事实来源
 
-- NestJS backend starts at `src/main.ts`; root module registration is in `src/app.module.ts`.
-- Backend modules live in `src/modules/`; entity registration is maintained in `src/entities/index.ts`; TypeORM migrations are registered from `src/database/migrations/`.
-- Next.js frontend lives in `frontend/`. Shared site profile data is in `src/config/site-profile-data.ts` and `frontend/src/config/site-profile.ts`.
-- Do not maintain hand-counted totals for modules or entities. Read `src/app.module.ts`, `src/entities/index.ts`, and `src/modules/` when the exact structure matters.
-- Forum business data and Resource aggregates are separate from file bytes. `ResourceStorageClientService` stores new durable resource bytes in RES; `ResourceStorageService` retains temporary staging and historical local compatibility, while `ResourceFileProviderService` selects RES, managed, MFL or external delivery. Keep large binary transfers off the primary forum web path where the deployment uses a file service. Resource APIs are not generic object storage; RES owns content-addressed objects and deduplication; forum deletion removes bindings, never shared CAS objects.
+- NestJS 后端入口为 `src/main.ts`；根模块注册在 `src/app.module.ts`。
+- 后端模块位于 `src/modules/`；实体注册维护在 `src/entities/index.ts`；TypeORM 迁移从 `src/database/migrations/` 注册。
+- Next.js 前端位于 `frontend/`。共享站点配置数据在 `src/config/site-profile-data.ts` 和 `frontend/src/config/site-profile.ts`。
+- 不要手动统计模块或实体的数量。当确切结构重要时，请阅读 `src/app.module.ts`、`src/entities/index.ts` 和 `src/modules/`。
+- 论坛业务数据与 Resource 聚合与文件字节分离。`ResourceStorageClientService` 将新的持久资源字节存储在 RES；`ResourceStorageService` 保留临时暂存和历史本地兼容性，而 `ResourceFileProviderService` 选择 RES、托管、MFL 或外部交付。在部署使用文件服务的场景下，将大二进制传输避开主论坛 web 路径。Resource API 不是通用对象存储；RES 拥有内容寻址对象和去重；论坛删除移除绑定，永不删除共享 CAS 对象。
 
-## Public API Contract
+## Public API 契约
 
-- The stable first-party/public client contract is the explicitly filtered Public V1 OpenAPI, not every controller whose URL contains `/v1`.
-- Runtime API paths use `/api/v1/*`. Other `/api/*` routes are legacy, first-party compatibility, management, or internal routes unless separately documented. `/api/external/v1/*` is the separately authenticated server-integration surface, not the third-party client API.
-- When `OPENAPI_ENABLED` is not `false`, runtime documentation is served at `/api/v1`, `/api/v1/reference`, `/api/v1/docs/*`; public machine-readable JSON is served at `/api/openapi/v1.json` and `/api/openapi/public-v1.json`.
-- `openapi-v1.json` and `openapi-public-v1.json` are the public contract and compatibility mirror; `openapi-internal-v1.json` is a development snapshot and is not a public API.
-- If a Public V1 OpenAPI contract file changes, update `docs/api/changelog-v1.md` in the same PR. CI enforces this with `scripts/check-api-changelog.cjs`; `npm run openapi:check` independently verifies generated contract drift.
-- Preserve existing Public V1 operations, including the documented Messages operations. Never add a legacy controller to the public allowlist solely to make a doc link work.
-- Public V1 success/error JSON envelopes are `{ data, meta }` and `{ error, meta }`; use stable `error.code` and HTTP status for control flow. File and redirect responses can be raw HTTP responses.
+- 稳定的第一方/公开客户端契约是显式过滤后的 Public V1 OpenAPI，而非 URL 中包含 `/v1` 的所有控制器。
+- 运行时 API 路径使用 `/api/v1/*`。其他 `/api/*` 路由为遗留、第一方兼容、管理或内部路由，除非另行文档化。`/api/external/v1/*` 是单独认证的服务端集成面，而非第三方客户端 API。
+- 当 `OPENAPI_ENABLED` 不为 `false` 时，运行时文档服务于 `/api/v1`、`/api/v1/reference`、`/api/v1/docs/*`；公开机读 JSON 服务于 `/api/openapi/v1.json` 和 `/api/openapi/public-v1.json`。
+- `openapi-v1.json` 和 `openapi-public-v1.json` 是公开契约与兼容镜像；`openapi-internal-v1.json` 是开发快照，并非公开 API。
+- 若 Public V1 OpenAPI 契约文件变更，须在同一 PR 中更新 `docs/api/changelog-v1.md`。CI 通过 `scripts/check-api-changelog.cjs` 强制执行；`npm run openapi:check` 可独立验证生成契约漂移。
+- 保留现有 Public V1 操作，包括已文档化的 Messages 操作。切勿仅为了让文档链接工作而将遗留控制器加入公开白名单。
+- Public V1 成功/错误 JSON 信封为 `{ data, meta }` 和 `{ error, meta }`；使用稳定的 `error.code` 和 HTTP 状态码进行控制流。文件和重定向响应可为原始 HTTP 响应。
 
-## Rich Content
+## 富文本内容
 
-- Posts, replies, resources, and supported long-form fields use Tiptap/ProseMirror rich content. The canonical format is `content_format: "tiptap_json"`, `content_schema_version`, and `content_json` (Schema v2 for current new writes).
-- The frontend editor schema and serializers live under `frontend/src/lib/tiptap/`; backend validation, canonicalization, safe HTML rendering, text extraction, and Markdown conversion live under `src/common/utils/` and the relevant module write services.
-- `content_html` and `content_text` are derived projections. Markdown `content` remains for legacy input and compatibility/search/notification/RSS/plain-text use; Markdown is not the canonical new-write format.
-- Markdown-only legacy requests are still accepted on compatibility paths and converted to the rich JSON form. Bulk conversion is separately implemented by `src/scripts/content-json-backfill.ts`; do not claim all production rows have been backfilled without deployment evidence.
-- Keep schema changes synchronized across frontend editor, backend validation/serialization, OpenAPI DTOs, and `docs/api/rich-content-schema-v2.md`.
+- 帖子、回复、资源和支持的长文本字段使用 Tiptap/ProseMirror 富文本。规范格式为 `content_format: "tiptap_json"`、`content_schema_version` 和 `content_json`（当前新写入使用 Schema v2）。
+- 前端编辑器 schema 和序列化器位于 `frontend/src/lib/tiptap/`；后端验证、规范化、安全 HTML 渲染、文本提取和 Markdown 转换位于 `src/common/utils/` 及相关模块写入服务。
+- `content_html` 和 `content_text` 是派生投影。Markdown `content` 保留用于遗留输入和兼容/搜索/通知/RSS/纯文本用途；Markdown 不是新写入的规范格式。
+- 纯 Markdown 遗留请求在兼容路径上仍然接受并转换为富 JSON 形式。批量转换由 `src/scripts/content-json-backfill.ts` 单独实现；无部署证据时，不得声称所有生产行已回填。
+- 保持前端编辑器、后端验证/序列化、OpenAPI DTO 与 `docs/api/rich-content-schema-v2.md` 的 schema 变更同步。
 
 ## Resource Center V2
 
-- Resource V2 extends the existing Resource aggregate; Mod, Map, and Schematic are first-class resource kinds, not secondary attachments.
-- `ResourceVersion` stores immutable revisions. Publishing an already-used display version creates a new revision rather than overwriting a published file.
-- Current V2 contracts include public UUID identifiers (`public_id`), owner/member roles and invitations, review events and annotations, compatibility and dependencies, version analysis, type-specific manifests, GitHub Release source sync, and Mod/Map/Schematic read APIs.
-- Uploads enter quarantine/pending review and become published only after the review decision. Review, approval, and storage transitions are implemented in the Resource V2 services; preserve quarantine files when a review fails or is rejected.
-- Forum stores Resource business metadata, ownership, versions, and moderation state. File storage handles the binary lifecycle and delivery. Keep Resource API behavior explicit and resource-oriented; do not present it as a generic blob API.
-- Metadata-first direct upload keeps browser bytes on ResourceStorage; Forum completion must re-read authoritative object metadata and only then create a pending private binding. ResourceStorage reconciliation is administrator-triggered, records request/completion operation logs, and never deletes objects automatically.
-- Renderer-backed schematic/map editing always exports a new version. Capability flags are fail-closed on protocol, pinned runtime digest, operation allowlist, and RES health; do not describe unsupported map layers or unknown schematic configuration as editable.
-- Resource V2 migrations and any required backfill need separate production acceptance. Do not infer that a local migration or source build proves production schema/data readiness.
+- Resource V2 扩展现有 Resource 聚合；Mod、Map 和 Schematic 是一等资源类型，而非次级附件。
+- `ResourceVersion` 存储不可变修订。发布已使用的显示版本会创建新修订，而非覆盖已发布文件。
+- 当前 V2 契约包括公开 UUID 标识符（`public_id`）、所有者/成员角色和邀请、审核事件和批注、兼容性和依赖、版本分析、类型特定 manifest、GitHub Release 源同步，以及 Mod/Map/Schematic 读取 API。
+- 上传进入隔离/待审状态，仅在审核决策后发布。审核、批准和存储转换在 Resource V2 服务中实现；当审核失败或被拒绝时保留隔离文件。
+- 论坛存储 Resource 业务元数据、所有权、版本和审核状态。文件存储处理二进制生命周期和交付。保持 Resource API 行为显式且面向资源；不要将其呈现为通用 blob API。
+- 元数据优先直接上传保持浏览器字节在 ResourceStorage 上；Forum 完成必须重新读取权威对象元数据，然后才创建待定私有绑定。ResourceStorage 对账由管理员触发，记录请求/完成操作日志，且永不自动删除对象。
+- 基于 renderer 的蓝图/地图编辑总是导出新版本。能力标志在协议、固定运行时摘要、操作白名单和 RES 健康检查上采用失败关闭策略；不要将不支持的地图图层或未知蓝图配置描述为可编辑。
+- Resource V2 迁移和任何必需的回填需要单独的生产验收。不得从本地迁移或源码构建推断生产 schema/数据就绪。
 
-## Download Events and Analytics
+## 下载事件与分析
 
-- `DownloadEvent` is a TypeORM entity in `src/entities/download-event.entity.ts`; the database persists `requested`, `granted`, `started`, `completed`, and `failed` lifecycle events.
-- `DownloadGrantService` records requested/granted events, deduplicates grants using a database deduplication table and a rolling 60-second window, and increments the Resource aggregate (`resources.download_count`, the grant/authorization counter) only for a new grant. `DownloadEventsService` records transfer lifecycle outcomes and deduplicates `completed` rows with a natural-minute bucket (`DEDUP_BUCKET_MS`) — not a rolling window.
-- `StatsService` aggregates durable `completed`/`failed` counts by time range; the admin dashboard displays downloads and related range metrics. User-visible "downloads" figures count `completed` (a stream that finished writing its body) only — bare grants are not downloads. `resources.download_count` intentionally keeps its ADR-009 authorization semantics, so public cards and rankings show authorization counts, not completions; label them accordingly instead of presenting the two numbers as one metric. Do not describe download tracking as memory-only.
+- `DownloadEvent` 是 `src/entities/download-event.entity.ts` 中的 TypeORM 实体；数据库持久化 `requested`、`granted`、`started`、`completed` 和 `failed` 生命周期事件。
+- `DownloadGrantService` 记录 requested/granted 事件，使用数据库去重表和 60 秒滚动窗口对授权去重，并仅对新授权增加 Resource 聚合（`resources.download_count`，授权/授权计数器）。`DownloadEventsService` 记录传输生命周期结果，并使用自然分钟桶（`DEDUP_BUCKET_MS`）对 `completed` 行去重——而非滚动窗口。
+- `StatsService` 按时间范围聚合持久化的 `completed`/`failed` 计数；管理后台展示下载和相关范围指标。用户可见的"下载"数字仅统计 `completed`（完成写入其响应体的流）——裸授权不算下载。`resources.download_count` 有意保留其 ADR-009 授权语义，因此公开卡片和排名显示授权数而非完成数；应相应标注，而非将两个数字呈现为一个指标。不要将下载跟踪描述为仅内存。
 
-## Network Bans
+## 网络封禁
 
-- `src/modules/bans/bans.service.ts` normalizes IPv4 and IPv6 addresses, validates both IPv4 and IPv6 CIDR prefixes, and compares only addresses from the same family. `src/modules/bans/bans.service.spec.ts` covers IPv6 normalization, CIDR validation, and matching. Do not claim IPv6 CIDR is unsupported.
+- `src/modules/bans/bans.service.ts` 规范化 IPv4 和 IPv6 地址，验证 IPv4 和 IPv6 CIDR 前缀，并仅比较同族地址。`src/modules/bans/bans.service.spec.ts` 覆盖 IPv6 规范化、CIDR 验证和匹配。不要声称 IPv6 CIDR 不支持。
 
-## Database and Migrations
+## 数据库与迁移
 
-- Use the explicit TypeORM migration registry in `src/database/migrations/`. Keep `synchronize: false` on the application and CLI DataSources; do not use runtime schema synchronization as a migration substitute.
-- The application DataSource currently sets `migrationsRun: true`, so pending tracked migrations are run during application initialization. Production release procedures should inspect with `npm run migration:show`, make migration execution an explicit release gate (normally `npm run migration:run` before service start), then verify the resulting migration state. The initial baseline migration has a special empty-schema bootstrap path; this is not permission to enable general `synchronize`.
-- Resource V2 schema migrations and data backfills must be reviewed and accepted against the target production database separately. Do not run migrations or backfills in production as part of ordinary documentation work.
+- 使用 `src/database/migrations/` 中的显式 TypeORM 迁移注册表。在应用和 CLI DataSource 上保持 `synchronize: false`；不要使用运行时 schema 同步作为迁移替代。
+- 应用 DataSource 当前设置 `migrationsRun: true`，因此待处理的已跟踪迁移在应用初始化期间运行。生产发布流程应使用 `npm run migration:show` 检查，将迁移执行设为显式发布关卡（通常在服务启动前 `npm run migration:run`），然后验证结果迁移状态。初始基线迁移有特殊的空 schema 引导路径；这不是启用通用 `synchronize` 的许可。
+- Resource V2 schema 迁移和数据回填必须针对目标生产数据库单独审查和验收。不要在普通文档工作中运行生产迁移或回填。
 
-## Site Profiles
+## 站点配置
 
-`SITE_PROFILE` on the backend and `NEXT_PUBLIC_SITE_PROFILE` at frontend build time must match. Each profile is one deployment, not runtime multi-tenancy; use separate databases, Redis, upload roots, OAuth clients, and credentials.
+后端 `SITE_PROFILE` 与前端构建时的 `NEXT_PUBLIC_SITE_PROFILE` 必须匹配。每个配置是一个部署，而非运行时多租户；使用独立的数据库、Redis、上传根目录、OAuth 客户端和凭证。
 
-| Profile | Locale and verification | Profile-specific features |
+| 配置 | 语言区域与验证 | 配置特定功能 |
 | --- | --- | --- |
-| `mdtbbs` | Chinese (`zh-CN`); community writes require verified phone; email verification is not the profile gate | LanLink, developer feed, and server applications/directory are enabled by profile; domestic filing applies |
-| `mindustry-club` | English by default with Russian and Japanese; email is required for writes; phone verification is not required | server applications, LanLink, developer feed, and domestic filing are disabled; developer docs are enabled |
+| `mdtbbs` | 中文（`zh-CN`）；社区写入需验证手机；邮箱验证不是配置关卡 | LanLink、开发者动态和服务器应用/目录按配置启用；备案适用 |
+| `mindustry-club` | 默认英文，支持俄语和日语；写入需邮箱验证；手机验证不要求 | 服务器应用、LanLink、开发者动态和备案禁用；开发者文档启用 |
 
-Runtime settings and feature flags can further disable functionality. Check `src/config/site-profile-data.ts`, `frontend/src/config/site-profile.ts`, and `src/modules/settings/` before describing a toggle as universally enabled.
+运行时设置和功能标志可进一步禁用功能。在描述开关为普遍启用前，检查 `src/config/site-profile-data.ts`、`frontend/src/config/site-profile.ts` 和 `src/modules/settings/`。
 
-## Known Product Gaps
+## 已知产品缺口
 
-- Polls are not implemented.
-- Group chat has no complete user-facing chat experience.
-- Plugin frontend theme/template injection and hot reload are not implemented.
-- A general-purpose blob API exists at `/api/v1/blobs` (`src/modules/blobs`, off by default behind `blobs_enabled`). It is a separate store from ResourceStorage: callers supply namespace/key/metadata, and it owns content dedup, ref counting, owner binding and delayed reclamation. Resource uploads still use the ResourceStorage CAS, binding, GC, and reconciliation contracts documented above. Do not route resource binaries through `/v1/blobs` — resources need versions, moderation and download grants that blobs deliberately do not implement.
+- 投票功能未实现。
+- 群聊没有完整的用户面向聊天体验。
+- 插件前端主题/模板注入和热重载未实现。
+- 通用 blob API 存在于 `/api/v1/blobs`（`src/modules/blobs`，默认关闭，由 `blobs_enabled` 控制）。它与 ResourceStorage 是独立存储：调用者提供命名空间/键/元数据，它拥有内容去重、引用计数、所有者绑定和延迟回收。资源上传仍使用上文文档化的 ResourceStorage CAS、绑定、GC 和对账契约。不要将资源二进制路由到 `/v1/blobs`——资源需要版本、审核和下载授权，这些 blobs 刻意不实现。
 
-Do not report implemented dashboard download analytics, IPv6 CIDR, Resource public UUIDs, or Tiptap storage as outstanding work.
+不要将已实现的仪表板下载分析、IPv6 CIDR、Resource 公开 UUID 或 Tiptap 存储报告为未完成工作。
 
-## Development and Definition of Done
+## 开发与完成定义
 
-Use Node.js 20 as in CI. Install dependencies with `npm ci` at the repository root and `npm ci` in `frontend/` when frontend packages are needed.
+使用 CI 中的 Node.js 20。在仓库根目录用 `npm ci` 安装依赖，需要前端包时在 `frontend/` 中执行 `npm ci`。
 
-Backend/API changes should run:
+后端/API 变更应运行：
 
 ```bash
 npm run build:backend
@@ -107,7 +107,7 @@ npm run openapi:check
 npm run test:api-changelog
 ```
 
-Frontend changes should run:
+前端变更应运行：
 
 ```bash
 cd frontend
@@ -116,12 +116,12 @@ npm run typecheck
 npm run build
 ```
 
-Changes to Resource or user-critical flows should run the relevant Playwright E2E coverage where an isolated local environment is available:
+涉及 Resource 或用户关键流程的变更，在隔离本地环境可用时应运行相关 Playwright E2E 覆盖：
 
 ```bash
 npm run test:e2e -- --project=chromium tests/e2e/product-smoke.spec.ts tests/e2e/resource.spec.ts tests/e2e/resource-v2-review.spec.ts
 ```
 
-A command that was skipped or blocked is not a passing check; report exact results and limits. E2E global teardown deletes rows matching its test prefixes from the configured MySQL database, so verify the database is isolated before running it.
+跳过或阻塞的命令不是通过的检查；报告准确结果和限制。E2E 全局清理会从配置的 MySQL 数据库删除匹配其测试前缀的行，因此运行前请验证数据库已隔离。
 
-Before delivery, run `git diff --check` and inspect `git status`. Preserve unrelated work. Do not run production migrations, backfills, or deployments unless the user explicitly asks for that operational work.
+交付前运行 `git diff --check` 并检查 `git status`。保留无关工作。除非用户显式要求该运维工作，否则不要运行生产迁移、回填或部署。

@@ -4,4 +4,4 @@ See [CLAUDE.md](CLAUDE.md) for the authoritative AI context of this repository.
 
 Detailed Chinese developer documentation lives in [docs/](docs/README.md) — CLAUDE.md's "Documentation Map" section tells you when to read which file.
 
-代码审查时使用中文
+代码审查时使用中文，编写/提交/注释等都用中文 不要用英文
