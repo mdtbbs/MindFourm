@@ -20167,6 +20167,38 @@
             }
           },
           {
+            "name": "modded",
+            "required": false,
+            "in": "query",
+            "description": "按是否模组房筛选：true 只返回模组房，false 只返回原版房。",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "mod_id",
+            "required": false,
+            "in": "query",
+            "description": "只返回房主清单包含该 Mod 的会话。",
+            "schema": {
+              "maxLength": 191,
+              "example": "flood-driver",
+              "type": "string"
+            }
+          },
+          {
+            "name": "pack_public_id",
+            "required": false,
+            "in": "query",
+            "description": "只返回引用该公开 Pack 的会话。",
+            "schema": {
+              "maxLength": 36,
+              "example": "c0ffee00-0000-4000-8000-000000000000",
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -20251,6 +20283,23 @@
                           "expires_at": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "is_modded": {
+                            "type": "boolean",
+                            "description": "是否为模组房。"
+                          },
+                          "mod_count": {
+                            "type": "integer",
+                            "description": "房主上报的 Mod 数量。"
+                          },
+                          "mod_syncable_count": {
+                            "type": "integer",
+                            "description": "服务端可校验并自动下发授权的 Mod 数量。"
+                          },
+                          "mod_summary": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "大厅摘要；mods 最多前 8 项，完整清单读取单会话。"
                           },
                           "joinable": {
                             "type": "boolean",
@@ -20442,6 +20491,259 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         }
+      }
+    },
+    "/v1/multiplayer/sessions/{id}/mod-sync-plan": {
+      "post": {
+        "operationId": "createMultiplayerSessionModSyncPlan",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "multiplayer.read",
+          "resource.read"
+        ],
+        "summary": "计算加入模组房所需的同步计划并批量签发下载授权",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModSyncPlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "标准成功信封；data 是按房主清单与本地已安装 Mod 计算出的同步计划。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "plan_version",
+                    "session_id",
+                    "status",
+                    "generated_at",
+                    "mod_summary",
+                    "to_download",
+                    "to_enable",
+                    "to_disable",
+                    "preserved_client_mods",
+                    "unresolved",
+                    "limits"
+                  ],
+                  "properties": {
+                    "plan_version": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "example": "ses_AbCdEf0123456789_-wxyz"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "sync_required",
+                        "partial_sync_required"
+                      ],
+                      "description": "ready 可直接加入；sync_required 需同步；partial_sync_required 表示仍有需手动获取的 Mod，但可先拉齐可同步项。"
+                    },
+                    "generated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "mod_summary": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "房主 Mod 清单与可同步计数。"
+                    },
+                    "to_download": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mod_id",
+                          "sha256",
+                          "resource_public_id",
+                          "file_public_id",
+                          "download_url",
+                          "granted"
+                        ],
+                        "properties": {
+                          "mod_id": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "size_bytes": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "resource_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "resource_version_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "file_public_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "download_url": {
+                            "type": "string",
+                            "format": "uri-reference"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "missing",
+                              "hash_mismatch",
+                              "unverified"
+                            ]
+                          },
+                          "granted": {
+                            "type": "boolean",
+                            "description": "false 表示该文件在 60 秒滚动窗口内已有同账号授权记录。"
+                          }
+                        }
+                      }
+                    },
+                    "to_enable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "to_disable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "preserved_client_mods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      },
+                      "description": "纯客户端辅助 Mod，默认保留不禁用。"
+                    },
+                    "unresolved": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mod_id",
+                          "reason",
+                          "resolution_status"
+                        ],
+                        "properties": {
+                          "mod_id": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "not_in_catalog",
+                              "sha256_missing",
+                              "catalog_file_unavailable",
+                              "catalog_version_mismatch"
+                            ]
+                          },
+                          "resolution_status": {
+                            "type": "string",
+                            "enum": [
+                              "catalog_version_mismatch",
+                              "unlisted_local"
+                            ]
+                          },
+                          "resource_public_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resource_version_public_id": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "limits": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "联机会话"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
       }
     },
     "/v1/multiplayer/sessions/{id}/join": {
@@ -27270,7 +27572,7 @@
   "info": {
     "title": "MDTBBS Public Client API",
     "description": "Stable V1 contract for MindAuth public clients. Use /api/v1/capabilities for feature discovery. Server-side integrations use a separate authorization boundary and are not part of this specification. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "contact": {}
   },
   "tags": [],
@@ -33065,6 +33367,64 @@
           }
         }
       },
+      "ModPackRefDto": {
+        "type": "object",
+        "properties": {
+          "pack_public_id": {
+            "type": "string",
+            "example": "c0ffee00-0000-4000-8000-000000000000",
+            "maxLength": 36,
+            "description": "公开 Pack 资源的 public_id。"
+          },
+          "version_public_id": {
+            "type": "string",
+            "example": "c0ffee00-0000-4000-8000-000000000001",
+            "maxLength": 36,
+            "description": "固定 Pack 版本的 public_id；缺省时使用当前推荐已发布版本。"
+          }
+        },
+        "required": [
+          "pack_public_id"
+        ]
+      },
+      "SessionModDto": {
+        "type": "object",
+        "properties": {
+          "mod_id": {
+            "type": "string",
+            "example": "flood-driver",
+            "maxLength": 191,
+            "description": "Mod 的稳定标识（与资源目录 mod_id 同一命名空间）。"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "Flood Driver",
+            "maxLength": 255,
+            "description": "展示名称；缺省时由公开目录补齐。"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.2.0",
+            "maxLength": 100,
+            "description": "房主本地版本号。"
+          },
+          "sha256": {
+            "type": "string",
+            "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "maxLength": 64,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "本地 Mod 文件的 SHA-256；只有与已发布版本主文件一致时才可被自动同步。"
+          },
+          "required": {
+            "type": "boolean",
+            "example": true,
+            "description": "是否多人内容必需；缺省为 true。"
+          }
+        },
+        "required": [
+          "mod_id"
+        ]
+      },
       "CreateMultiplayerSessionDto": {
         "type": "object",
         "properties": {
@@ -33117,6 +33477,22 @@
             "maximum": 64,
             "example": 8,
             "description": "Peer 最大数量。"
+          },
+          "mod_pack_ref": {
+            "description": "引用一个已发布 Pack；与 mods 互斥。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModPackRefDto"
+              }
+            ]
+          },
+          "mods": {
+            "maxItems": 64,
+            "description": "房主本地 Mod 清单，最多 64 项；与 mod_pack_ref 互斥。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionModDto"
+            }
           }
         },
         "required": [
@@ -33136,6 +33512,62 @@
         "required": [
           "code"
         ]
+      },
+      "InstalledModDto": {
+        "type": "object",
+        "properties": {
+          "mod_id": {
+            "type": "string",
+            "example": "flood-driver",
+            "maxLength": 191,
+            "description": "本地 Mod 的稳定标识。"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.2.0",
+            "maxLength": 100,
+            "description": "本地版本号。"
+          },
+          "sha256": {
+            "type": "string",
+            "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "maxLength": 64,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "本地文件的 SHA-256；缺失时无法确认已同步。"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true,
+            "description": "本地是否已启用；缺省为 true。"
+          },
+          "client_only": {
+            "type": "boolean",
+            "example": false,
+            "description": "是否为纯客户端辅助 Mod（mod.hjson hidden / 白名单）；默认保留不禁用。"
+          }
+        },
+        "required": [
+          "mod_id"
+        ]
+      },
+      "ModSyncPlanDto": {
+        "type": "object",
+        "properties": {
+          "installed_mods": {
+            "maxItems": 128,
+            "description": "客户端本地已安装 Mod 清单，最多 128 项；省略时按空清单计算（全部需要下载）。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstalledModDto"
+            }
+          },
+          "join_code": {
+            "type": "string",
+            "example": "ABCD1234",
+            "maxLength": 32,
+            "description": "可选房间码；与 join 接口同一校验。持有有效房间码的客人可在加入前读取同步计划。"
+          }
+        }
       },
       "JoinMultiplayerSessionDto": {
         "type": "object",

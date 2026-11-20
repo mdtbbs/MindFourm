@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
@@ -7,7 +7,7 @@ import { MultiplayerOAuthProtected } from './multiplayer-oauth-protected.decorat
 import { MultiplayerService } from './multiplayer.service';
 import {
   CreateCandidateDto, CreateJoinIntentDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto,
-  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListJoinRequestsDto, ListMultiplayerInvitesDto, ListMultiplayerSessionsDto, ResolveSessionCodeDto,
+  JoinIntentConsumeDto, JoinMultiplayerSessionDto, ListJoinRequestsDto, ListMultiplayerInvitesDto, ListMultiplayerSessionsDto, ModSyncPlanDto, ResolveSessionCodeDto,
   RelayAgentRegisterDto, RelayAllocationAckDto, RelayAllocationRevokeDto, SetDefaultMultiplayerClientDto,
 } from './dto/multiplayer.dto';
 import { RelayInternalAuthGuard } from './relay-internal-auth.guard';
@@ -37,6 +37,10 @@ const MULTIPLAYER_SESSION_LIST_SCHEMA: any = {
       require_approval: { type: 'boolean' }, game: { type: 'object', additionalProperties: true },
       activity_name: { type: 'string', nullable: true }, current_players: { type: 'integer' }, max_players: { type: 'integer' },
       status: { type: 'string' }, expires_at: { type: 'string', format: 'date-time' },
+      is_modded: { type: 'boolean', description: '是否为模组房。' },
+      mod_count: { type: 'integer', description: '房主上报的 Mod 数量。' },
+      mod_syncable_count: { type: 'integer', description: '服务端可校验并自动下发授权的 Mod 数量。' },
+      mod_summary: { type: 'object', additionalProperties: true, description: '大厅摘要；mods 最多前 8 项，完整清单读取单会话。' },
       joinable: { type: 'boolean', description: '当前调用者能否直接加入。' },
       blocked_reason: { type: 'string', nullable: true, description: '不能直接加入时的稳定原因码。' },
       can_request_join: { type: 'boolean', description: '是否可改为请求房主批准。' },
@@ -48,6 +52,35 @@ const MULTIPLAYER_SESSION_LIST_SCHEMA: any = {
         total_pages: { type: 'integer' }, has_more: { type: 'boolean' },
       } },
     } },
+  },
+};
+
+const MOD_SYNC_PLAN_RESPONSE_SCHEMA: any = {
+  type: 'object', required: ['plan_version', 'session_id', 'status', 'generated_at', 'mod_summary', 'to_download', 'to_enable', 'to_disable', 'preserved_client_mods', 'unresolved', 'limits'], properties: {
+    plan_version: { type: 'integer', example: 1 },
+    session_id: { type: 'string', example: 'ses_AbCdEf0123456789_-wxyz' },
+    status: { type: 'string', enum: ['ready', 'sync_required', 'partial_sync_required'], description: 'ready 可直接加入；sync_required 需同步；partial_sync_required 表示仍有需手动获取的 Mod，但可先拉齐可同步项。' },
+    generated_at: { type: 'string', format: 'date-time' },
+    mod_summary: { type: 'object', additionalProperties: true, description: '房主 Mod 清单与可同步计数。' },
+    to_download: { type: 'array', items: { type: 'object', required: ['mod_id', 'sha256', 'resource_public_id', 'file_public_id', 'download_url', 'granted'], properties: {
+      mod_id: { type: 'string' }, display_name: { type: 'string', nullable: true }, version: { type: 'string', nullable: true },
+      sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, size_bytes: { type: 'integer', nullable: true },
+      resource_public_id: { type: 'string', format: 'uuid' }, resource_version_public_id: { type: 'string', format: 'uuid' },
+      file_public_id: { type: 'string', format: 'uuid' }, download_url: { type: 'string', format: 'uri-reference' },
+      reason: { type: 'string', enum: ['missing', 'hash_mismatch', 'unverified'] },
+      granted: { type: 'boolean', description: 'false 表示该文件在 60 秒滚动窗口内已有同账号授权记录。' },
+    } } },
+    to_enable: { type: 'array', items: { type: 'object', additionalProperties: true } },
+    to_disable: { type: 'array', items: { type: 'object', additionalProperties: true } },
+    preserved_client_mods: { type: 'array', items: { type: 'object', additionalProperties: true }, description: '纯客户端辅助 Mod，默认保留不禁用。' },
+    unresolved: { type: 'array', items: { type: 'object', required: ['mod_id', 'reason', 'resolution_status'], properties: {
+      mod_id: { type: 'string' }, display_name: { type: 'string', nullable: true }, version: { type: 'string', nullable: true },
+      sha256: { type: 'string', nullable: true },
+      reason: { type: 'string', enum: ['not_in_catalog', 'sha256_missing', 'catalog_file_unavailable', 'catalog_version_mismatch'] },
+      resolution_status: { type: 'string', enum: ['catalog_version_mismatch', 'unlisted_local'] },
+      resource_public_id: { type: 'string', nullable: true }, resource_version_public_id: { type: 'string', nullable: true },
+    } } },
+    limits: { type: 'object', additionalProperties: true },
   },
 };
 
@@ -133,6 +166,15 @@ export class MultiplayerV1Controller {
   @MultiplayerOAuthProtected('multiplayer.read')
   @Get('sessions/:id')
   getSession(@Param('id') id: string, @Req() request: any) { return this.multiplayer.getSession(request.user.id, id); }
+
+  @MultiplayerOAuthProtected('multiplayer.read', 'resource.read')
+  @Post('sessions/:id/mod-sync-plan')
+  @RateLimit({ max: 60, window: 60 })
+  @ApiOperation({ operationId: 'createMultiplayerSessionModSyncPlan', summary: '计算加入模组房所需的同步计划并批量签发下载授权' })
+  @ApiOkResponse({ description: '标准成功信封；data 是按房主清单与本地已安装 Mod 计算出的同步计划。', schema: MOD_SYNC_PLAN_RESPONSE_SCHEMA })
+  modSyncPlan(@Param('id') id: string, @Body() body: ModSyncPlanDto, @Req() request: any) {
+    return this.multiplayer.createModSyncPlan(request.user.id, id, body, request);
+  }
 
   @MultiplayerOAuthProtected('multiplayer.write')
   @Post('sessions/:id/join')

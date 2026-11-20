@@ -5,6 +5,8 @@ import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { isIP } from 'net';
 import { DataSource, EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import axios from 'axios';
+import { getClientIp } from '@common/utils/client-context.util';
+import { downloadActorKey } from '@common/utils/download-actor.util';
 import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
 import { lookupV1ErrorCode } from '../../common/contracts/v1-error-codes';
 import { RedisService } from '../../database/redis.service';
@@ -19,15 +21,22 @@ import { MultiplayerRelayAllocation } from '../../entities/multiplayer-relay-all
 import { MultiplayerSession } from '../../entities/multiplayer-session.entity';
 import { User } from '../../entities/user.entity';
 import { UserPresencePreference } from '../../entities/user-presence-preference.entity';
+import { DownloadGrantService } from '../downloads/download-grant.service';
 import { FriendsService } from '../friends/friends.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
 import { SettingsService } from '../settings/settings.service';
 import { SocialPolicyService } from '../social/social-policy.service';
 import {
-  CandidatePayloadDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto,
+  CandidatePayloadDto, CreateMultiplayerInviteDto, CreateMultiplayerSessionDto, ModSyncPlanDto,
   RelayAgentRegisterDto, RelayAllocationAckDto,
 } from './dto/multiplayer.dto';
+import { MultiplayerModCatalogService, ResolvedSessionMod } from './multiplayer-mod-catalog.service';
+import {
+  buildModSyncPlan, MAX_INSTALLED_MODS, MAX_SESSION_MODS, MOD_SUMMARY_LIST_LIMIT,
+  ModDownloadPlanItem, normalizeInstalledMods, summarizeSessionMods,
+} from './mod-sync-plan';
+import { resolvePublicCanonicalModIds } from '../resources/resource-mod-dependency-filter';
 import { InvitePolicyService } from './invite-policy.service';
 import { canDiscover, evaluateJoin, SessionPolicyService } from './session-policy.service';
 import {
@@ -187,6 +196,16 @@ function fail(status: number, code: string, details: unknown[] = []): never {
   );
 }
 
+/** 同步计划里的下载地址与资源文件接口保持同一形态。 */
+function modDownloadUrl(item: {
+  resource_public_id: string | null;
+  resource_version_public_id: string | null;
+  file_public_id: string | null;
+}): string | null {
+  if (!item.resource_public_id || !item.resource_version_public_id || !item.file_public_id) return null;
+  return `/api/v1/resources/${item.resource_public_id}/versions/${item.resource_version_public_id}/files/${item.file_public_id}/download`;
+}
+
 function withPagination<T>(items: T[], page: number, limit: number, total: number): T[] {
   const totalPages = Math.ceil(total / limit);
   Object.defineProperty(items, '__v1Pagination', {
@@ -224,6 +243,8 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     private readonly realtime: RealtimeEventsService,
     private readonly settings: SettingsService,
     private readonly config: ConfigService,
+    private readonly modCatalog: MultiplayerModCatalogService,
+    private readonly downloadGrants: DownloadGrantService,
   ) {}
 
   onModuleInit(): void {
@@ -236,15 +257,24 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async capabilities() {
-    const [sessions, invites, relay, thirdParty] = await Promise.all([
+    const [sessions, invites, relay, thirdParty, modSync] = await Promise.all([
       this.enabled('multiplayer_sessions_v1'), this.enabled('multiplayer_invites_v1'),
       this.enabled('multiplayer_relay_v1'), this.enabled('third_party_multiplayer_v1'),
+      this.modSyncEnabled(),
     ]);
     return {
       sessions_v1: sessions,
       invites_v1: sessions && invites,
       relay_v1: sessions && relay,
       third_party_multiplayer: sessions && thirdParty,
+      mod_sync_v1: sessions && modSync,
+      mod_sync: {
+        enabled: sessions && modSync,
+        max_mods_per_session: MAX_SESSION_MODS,
+        max_installed_mods: MAX_INSTALLED_MODS,
+        resolution_statuses: ['catalog_verified', 'catalog_version_mismatch', 'unlisted_local'] as const,
+        plan_statuses: ['ready', 'sync_required', 'partial_sync_required'] as const,
+      },
       visibility: ['private', 'friends', 'public'] as const,
       join_policies: ['invite_only', 'friends', 'public'] as const,
       // Enumerated combinations of the two orthogonal single-select fields.
@@ -340,6 +370,16 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     // retired `unlisted` value, so a hidden room stays reachable by its code.
     const requireApproval = input.require_approval === true;
 
+    // 模组房：`mod_pack_ref` 与 `mods` 互斥可选。功能关闭时整段 fail closed，
+    // 旧客户端不带这两个字段，行为完全不变。
+    if (input.mod_pack_ref && input.mods !== undefined) fail(400, 'SESSION_MODS_INVALID');
+    const hasModInput = !!input.mod_pack_ref || input.mods !== undefined;
+    if (hasModInput && !(await this.modSyncEnabled())) fail(403, 'FEATURE_DISABLED');
+    const resolvedMods = hasModInput
+      ? await this.modCatalog.resolveForCreate({ mod_pack_ref: input.mod_pack_ref, mods: input.mods })
+      : { pack_version_id: null, pack: null, mods: [] as ResolvedSessionMod[] };
+    const modSyncableCount = resolvedMods.mods.filter((mod) => mod.resolution_status === 'catalog_verified').length;
+
     const id = opaqueId('ses');
     // A room code is the entry path for owners who want to hand out an address
     // instead of relying on discovery, so it tracks `join_policy` rather than
@@ -356,6 +396,10 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       game_version: input.game_version?.trim() || null,
       activity_name: input.activity_name?.trim() || gameId,
       max_players: input.max_players ?? 8,
+      mod_pack_version_id: resolvedMods.pack_version_id,
+      is_modded: resolvedMods.mods.length > 0,
+      mod_count: resolvedMods.mods.length,
+      mod_syncable_count: modSyncableCount,
       status: 'active',
       close_after: null,
       expires_at: new Date(Date.now() + SESSION_LIFETIME_MS),
@@ -371,6 +415,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       });
       if (existingSession) fail(409, 'SESSION_ALREADY_ACTIVE', [{ session_id: existingSession.id }]);
       await manager.save(MultiplayerSession, session);
+      if (resolvedMods.mods.length) await this.modCatalog.saveSessionMods(manager, id, resolvedMods.mods);
       await manager.save(MultiplayerPeer, manager.create(MultiplayerPeer, {
         id: peerId, session_id: id, user_id: userId, client_id: clientId,
         role: 'owner', status: 'active', capabilities: null, last_seen_at: new Date(),
@@ -380,14 +425,25 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       }));
       await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
         actor_user_id: userId, action: 'session.created', target_type: 'session', target_id: id,
-        details: { visibility, join_policy: joinPolicy, require_approval: requireApproval, game_id: gameId },
+        details: {
+          visibility, join_policy: joinPolicy, require_approval: requireApproval, game_id: gameId,
+          is_modded: resolvedMods.mods.length > 0, mod_count: resolvedMods.mods.length,
+          mod_syncable_count: modSyncableCount, mod_pack_version_id: resolvedMods.pack_version_id,
+        },
       }));
     });
     await this.redis.set(`multiplayer:peer:${peerId}`, JSON.stringify({ peer_id: peerId, session_id: id, user_id: userId, client_id: clientId }), PRESENCE_TTL_SECONDS);
     await this.redis.set(`multiplayer:session:${id}`, JSON.stringify({ session_id: id, status: 'active', owner_user_id: userId }), Math.ceil(SESSION_LIFETIME_MS / 1000));
     await this.realtime.emitSession(id, 'session.updated', { session_id: id, status: 'active' });
     return {
-      session: this.toPublicSession(session, 1),
+      session: {
+        ...this.toPublicSession(session, 1),
+        mod_summary: summarizeSessionMods(
+          resolvedMods.mods.map((mod) => this.modCatalog.viewOfResolved(mod)),
+          resolvedMods.pack,
+          null,
+        ),
+      },
       peer: this.toPublicPeer(await this.peers.findOneByOrFail({ id: peerId })),
       resume_token: resumeToken,
       ...(code ? { join_code: code } : {}),
@@ -399,7 +455,20 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     const session = await this.findActiveSession(sessionId);
     const peer = await this.activePeer(sessionId, viewerId);
     if (!peer && !(await this.canViewSession(viewerId, session))) fail(403, 'SESSION_PERMISSION_DENIED');
-    return this.toPublicSession(session, await this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }));
+    const [modRows, packByVersion, currentPlayers] = await Promise.all([
+      this.modCatalog.findSessionMods([sessionId]),
+      this.modCatalog.packSummaries([session.mod_pack_version_id]),
+      this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }),
+    ]);
+    const pack = session.mod_pack_version_id ? packByVersion.get(Number(session.mod_pack_version_id)) || null : null;
+    return {
+      ...this.toPublicSession(session, currentPlayers),
+      mod_summary: summarizeSessionMods(
+        (modRows.get(sessionId) || []).map((row) => this.modCatalog.toView(row)),
+        pack,
+        null,
+      ),
+    };
   }
 
   /**
@@ -410,13 +479,22 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
    * Rows are projected through `toPublicSession`, so relay internals, room-code
    * hashes and peer-level network data never leave the control plane.
    */
-  async listDiscoverableSessions(viewerId: number, options: { page?: number; limit?: number; game_id?: string; game_version?: string } = {}) {
+  async listDiscoverableSessions(viewerId: number, options: {
+    page?: number; limit?: number; game_id?: string; game_version?: string;
+    modded?: boolean; mod_id?: string; pack_public_id?: string;
+  } = {}) {
     await this.requireEnabled('multiplayer_sessions_v1');
     const page = Math.max(1, Math.floor(options.page ?? 1));
     const limit = Math.min(50, Math.max(1, Math.floor(options.limit ?? 20)));
     const now = new Date();
     const gameId = options.game_id?.trim() || undefined;
     const gameVersion = options.game_version?.trim() || undefined;
+    const packPublicId = options.pack_public_id?.trim() || undefined;
+    // `mod_id` 支持公开别名：先把调用方拼写解析成规范 mod_id，再走会话子表索引。
+    const rawModId = options.mod_id?.trim();
+    const modId = rawModId
+      ? (await resolvePublicCanonicalModIds(this.dataSource, [rawModId])).get(rawModId.toLowerCase()) || rawModId
+      : undefined;
 
     // Apply visibility and block policy in SQL before pagination. Loading every
     // live public room to compute a correct total would grow with site activity.
@@ -447,6 +525,23 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       )`, { viewerId });
     if (gameId) query.andWhere('session.game_id = :gameId', { gameId });
     if (gameVersion) query.andWhere('session.game_version = :gameVersion', { gameVersion });
+    if (options.modded !== undefined) {
+      query.andWhere('session.is_modded = :modded', { modded: options.modded === true });
+    }
+    if (modId) {
+      // 模组筛选是发现条件，不是权限：命中后仍要逐项通过 assertCanJoin。
+      query.andWhere(`EXISTS (
+        SELECT 1 FROM multiplayer_session_mods session_mod
+        WHERE session_mod.session_id = session.id AND session_mod.mod_id = :modId
+      )`, { modId });
+    }
+    if (packPublicId) {
+      query.andWhere(`session.mod_pack_version_id IN (
+        SELECT pack_version.id FROM resource_versions pack_version
+        JOIN resources pack_resource ON pack_resource.id = pack_version.resource_id
+        WHERE pack_resource.public_id = :packPublicId
+      )`, { packPublicId });
+    }
     const [rows, total] = await query
       .orderBy('session.created_at', 'DESC')
       .skip((page - 1) * limit)
@@ -456,13 +551,15 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
 
     const ownerIds = [...new Set(rows.map((session) => session.owner_user_id))];
     const sessionIds = rows.map((session) => session.id);
-    const [friendRows, blocks, viewerPeers, occupyingPeers, ownerAllowsJoin, ownerAllowsRequest] = await Promise.all([
+    const [friendRows, blocks, viewerPeers, occupyingPeers, ownerAllowsJoin, ownerAllowsRequest, modRowsBySession, packByVersion] = await Promise.all([
       this.socialPolicy.areFriendsMany(viewerId, ownerIds),
       this.socialPolicy.isBlockedMany(viewerId, ownerIds),
       this.peers.find({ where: { session_id: In(sessionIds), user_id: viewerId, status: 'active' }, select: ['session_id'] }),
       this.peers.find({ where: { session_id: In(sessionIds), status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) }, select: ['session_id'] }),
       this.socialPolicy.canPerformMany(viewerId, ownerIds, 'allow_join'),
       this.socialPolicy.canPerformMany(viewerId, ownerIds, 'allow_join_request'),
+      this.modCatalog.findSessionMods(sessionIds),
+      this.modCatalog.packSummaries(rows.map((session) => session.mod_pack_version_id)),
     ]);
     const alreadyIn = new Set(viewerPeers.map((peer) => peer.session_id));
     const playerCounts = new Map<string, number>();
@@ -487,8 +584,17 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
         viaJoinCode: false,
         spaceAvailable: (playerCounts.get(session.id) || 0) < session.max_players,
       });
+      const pack = session.mod_pack_version_id
+        ? packByVersion.get(Number(session.mod_pack_version_id)) || null
+        : null;
       return [{
         ...this.toPublicSession(session, playerCounts.get(session.id) || 0),
+        // 大厅只带前 MOD_SUMMARY_LIST_LIMIT 项，完整清单走单会话读取。
+        mod_summary: summarizeSessionMods(
+          (modRowsBySession.get(session.id) || []).map((row) => this.modCatalog.toView(row)),
+          pack,
+          MOD_SUMMARY_LIST_LIMIT,
+        ),
         joinable: !inSession && decision.can_join,
         blocked_reason: inSession ? 'ALREADY_IN_SESSION' : decision.denial,
         can_request_join: !inSession && decision.can_request_join,
@@ -506,6 +612,110 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     await this.assertSessionActive(session);
     if (await this.socialPolicy.isBlockedEither(viewerId, session.owner_user_id)) fail(403, 'SESSION_PERMISSION_DENIED');
     return this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }));
+  }
+
+  /**
+   * 计算「同步模组并加入」计划。
+   *
+   * 权限：`multiplayer.read` + `resource.read`（控制器声明）＋会话可见性
+   * （房主/活跃 Peer/可见范围内的好友或公开会话）。只有 `catalog_verified`
+   * 且哈希一致的文件会经 `DownloadGrantService` 批量签发授权；未收录、哈希
+   * 不匹配或目录缺文件的项目只返回手动获取提示。
+   */
+  async createModSyncPlan(userId: number, sessionId: string, input: ModSyncPlanDto, req: any) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    if (!(await this.modSyncEnabled())) fail(403, 'FEATURE_DISABLED');
+    if (!(await this.settings.getBoolean('feature_resources_v1_read_enabled', true))) fail(403, 'FEATURE_DISABLED');
+
+    const session = await this.findActiveSession(sessionId);
+    if (!(await this.canReadSyncPlan(userId, session, input.join_code))) fail(403, 'SESSION_PERMISSION_DENIED');
+
+    const { mods: installed, duplicates } = normalizeInstalledMods(input.installed_mods);
+    if (duplicates.length) fail(400, 'SESSION_MODS_INVALID', duplicates.slice(0, 8));
+    if (installed.length > MAX_INSTALLED_MODS) fail(400, 'SESSION_MODS_INVALID');
+
+    const [modRowsBySession, packByVersion] = await Promise.all([
+      this.modCatalog.findSessionMods([sessionId]),
+      this.modCatalog.packSummaries([session.mod_pack_version_id]),
+    ]);
+    const rows = modRowsBySession.get(sessionId) || [];
+    const views = rows.map((row) => this.modCatalog.toView(row));
+    const plan = buildModSyncPlan(views, installed);
+    const pack = session.mod_pack_version_id ? packByVersion.get(Number(session.mod_pack_version_id)) || null : null;
+
+    let toDownload: Array<ModDownloadPlanItem & { granted: boolean; download_url: string | null }> = plan.to_download
+      .map((item) => ({ ...item, granted: false, download_url: modDownloadUrl(item) }));
+    if (toDownload.length) {
+      // 下载开关关闭时不能只发一半授权：整份计划 fail closed。
+      if (!(await this.settings.getBoolean('feature_resources_v1_download_enabled', true))) fail(403, 'FEATURE_DISABLED');
+      const fileInfo = await this.modCatalog.fileGrantInfo(
+        toDownload.map((item) => item.file_public_id).filter((id): id is string => !!id),
+      );
+      const rowByModId = new Map(rows.map((row) => [row.mod_id.toLowerCase(), row]));
+      const numericUserId = Number(userId);
+      // DownloadGrantService 只持久化该键的哈希；原始 IP/UA 不落库。
+      const actorKey = downloadActorKey(numericUserId, getClientIp(req), req?.headers?.['user-agent']);
+      toDownload = await Promise.all(toDownload.map(async (item) => {
+        const row = rowByModId.get(item.mod_id.toLowerCase());
+        const info = item.file_public_id ? fileInfo.get(item.file_public_id) : null;
+        if (!row || !info || !item.file_public_id) return item;
+        const granted = await this.downloadGrants.recordGrant({
+          resourceId: Number(row.resource_id),
+          versionId: Number(row.resource_version_id),
+          fileId: info.fileId,
+          grantedAt: new Date(),
+          userId: Number.isSafeInteger(numericUserId) && numericUserId > 0 ? numericUserId : null,
+          clientType: 'public-v1-mod-sync',
+          clientVersion: String(req?.headers?.['x-client-version'] || '').slice(0, 80) || null,
+          platform: String(req?.headers?.['x-platform'] || '').slice(0, 40) || null,
+          backend: String(info.deliveryMode || 'managed').slice(0, 32),
+        }, actorKey);
+        return { ...item, granted, download_url: modDownloadUrl(item) };
+      }));
+    }
+
+    return {
+      plan_version: 1,
+      session_id: sessionId,
+      status: plan.status,
+      generated_at: new Date().toISOString(),
+      mod_summary: summarizeSessionMods(views, pack, null),
+      to_download: toDownload,
+      to_enable: plan.to_enable,
+      to_disable: plan.to_disable,
+      preserved_client_mods: plan.preserved_client_mods,
+      unresolved: plan.unresolved,
+      limits: { max_session_mods: MAX_SESSION_MODS, max_installed_mods: MAX_INSTALLED_MODS },
+    };
+  }
+
+  /**
+   * 同步计划是加入前的预览：除会话可见范围外，持有未过期邀请或已批准加入
+   * 请求的用户也必须能取到清单，否则私密房客人无法在加入前完成同步。
+   */
+  private async canReadSyncPlan(userId: number, session: MultiplayerSession, joinCode?: string): Promise<boolean> {
+    if (await this.canViewSession(userId, session)) return true;
+    // 房间码是私密房的分享入口：与 join 接口同一比较方式，只定位会话、不绕过 join_policy。
+    const codeAuthorized = !!joinCode && !!session.code_hash && timingSafeEqual(
+      Buffer.from(sha256(joinCode.trim().toUpperCase()), 'hex'), Buffer.from(session.code_hash, 'hex'),
+    );
+    if (codeAuthorized) return true;
+    const now = new Date();
+    const [invite, approvedRequest] = await Promise.all([
+      this.invites.findOne({
+        where: {
+          session_id: session.id, target_user_id: userId,
+          status: In(['pending', 'accepted']), expires_at: MoreThan(now),
+        },
+      }),
+      this.joinRequests.findOne({
+        where: {
+          session_id: session.id, requester_user_id: userId,
+          status: 'approved', expires_at: MoreThan(now),
+        },
+      }),
+    ]);
+    return !!invite || !!approvedRequest;
   }
 
   async joinSession(userId: number, clientId: string, sessionId: string, input: { invite_id?: string; resume_token?: string; join_code?: string; capabilities?: Record<string, unknown> } = {}, approvedIntent = false) {
@@ -2320,12 +2530,20 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return this.settings.getBoolean(`feature_${key}_enabled`, false);
   }
 
+  /** 模组同步双站默认开启；设置行缺失时也按开启处理，运营可热关闭。 */
+  private modSyncEnabled(): Promise<boolean> {
+    return this.settings.getBoolean('feature_multiplayer_mod_sync_enabled', true);
+  }
+
   private toPublicSession(session: MultiplayerSession, currentPlayers: number) {
     return {
       id: session.id, owner_user_id: session.owner_user_id, visibility: session.visibility,
       join_policy: session.join_policy, require_approval: session.require_approval === true,
       game: { id: session.game_id, version: session.game_version },
       activity_name: session.activity_name, current_players: currentPlayers, max_players: session.max_players,
+      is_modded: session.is_modded === true,
+      mod_count: session.mod_count ?? 0,
+      mod_syncable_count: session.mod_syncable_count ?? 0,
       status: session.status, expires_at: session.expires_at,
     };
   }

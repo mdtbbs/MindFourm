@@ -24,7 +24,10 @@ export type ClientCapabilities = {
     multiplayer_invites_v1: boolean;
     multiplayer_relay_v1: boolean;
     third_party_multiplayer_v1: boolean;
+    mod_sync_v1: boolean;
   };
+  /** 模组房同步计划总开关（站点 profile × 运行时设置 × 联机会话开关）。 */
+  multiplayer_mod_sync_enabled: boolean;
   messages: { available: boolean; third_party_access: boolean };
   game_content: { maps: { read: boolean; download: boolean; upload: boolean }; schematics: { read: boolean; download: boolean; upload: boolean } };
   cloud_saves_v1: boolean;
@@ -88,7 +91,7 @@ export class CapabilitiesService {
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
       notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
-      cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled] = await Promise.all([
+      modSyncEnabled, cloudSavesEnabled, cloudSavePath, blobsEnabled, blobsPath, resourceCenterEnabled] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -103,6 +106,7 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('feature_multiplayer_invites_v1_enabled', false),
       this.settingsService.getBoolean('feature_multiplayer_relay_v1_enabled', false),
       this.settingsService.getBoolean('feature_third_party_multiplayer_v1_enabled', false),
+      this.settingsService.getBoolean('feature_multiplayer_mod_sync_enabled', true),
       this.settingsService.getBoolean('cloud_saves_enabled', false),
       this.settingsService.get('cloud_saves_storage_path'),
       this.settingsService.getBoolean('blobs_enabled', false),
@@ -116,6 +120,7 @@ export class CapabilitiesService {
       blobsPath || process.env.BLOBS_STORAGE_PATH || resolve(process.cwd(), 'storage', 'blobs'),
     );
     const resourceCenterAvailable = Boolean(this.siteConfig.current.features.resources && resourceCenterEnabled && resourceRead);
+    const modSyncAvailable = Boolean(this.siteConfig.current.features.multiplayerModSync) && modSyncEnabled && sessions;
     const editorReadiness = resourceCenterAvailable && resourceUpload
       ? await this.getEditorReadiness()
       : { rendererOperations: new Set<string>(), storageReady: false };
@@ -150,7 +155,9 @@ export class CapabilitiesService {
         multiplayer_invites_v1: sessions && invites,
         multiplayer_relay_v1: sessions && relay,
         third_party_multiplayer_v1: thirdPartyMultiplayer,
+        mod_sync_v1: modSyncAvailable,
       },
+      multiplayer_mod_sync_enabled: modSyncAvailable,
       messages: { available: messages, third_party_access: messages && thirdPartyMessages },
       game_content: {
         maps: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },

@@ -1,5 +1,22 @@
 # 公开 API 更新记录
 
+## 2026-11-20 — 模组房与同步计划
+
+Public V1 契约版本 1.9.0。
+
+### Added
+
+- `POST /api/v1/multiplayer/sessions` 新增互斥可选的 `mod_pack_ref` 与 `mods[]`（最多 64 项）。服务端只按公开 Mod 目录解析，并以已发布版本的 SHA-256 主文件给出 `catalog_verified` / `catalog_version_mismatch` / `unlisted_local` 权威定级；未过审、隔离、已删除、已合并或分类停用的资源不会留下可下载引用。
+- `GET /api/v1/multiplayer/sessions` 新增 `modded`、`mod_id`、`pack_public_id` 筛选参数；每个会话对象新增 `is_modded`、`mod_count`、`mod_syncable_count` 与 `mod_summary`。列表中的 `mod_summary.mods` 最多 8 项并带 `mods_truncated`，完整清单通过 `GET /api/v1/multiplayer/sessions/{id}` 读取。
+- `POST /api/v1/multiplayer/sessions/{id}/mod-sync-plan`（`multiplayer.read` + `resource.read`）：按房主清单与客户端 `installed_mods`（最多 128 项）计算 `ready` / `sync_required` / `partial_sync_required`，返回 `to_download`、`to_enable`、`to_disable`、`preserved_client_mods`、`unresolved` 与完整 `mod_summary`。请求可携带可选 `join_code`，与加入接口同一校验，使持有房间码的客人在加入前也能读取计划。`to_download` 复用 `DownloadGrantService` 批量签发 60 秒滚动去重授权并写入下载事件；未收录或哈希不匹配项永不下发文件 ID 或下载地址。
+- `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities` 新增 `multiplayer_mod_sync_enabled`、`multiplayer.mod_sync_v1` 及 `mod_sync` 限额与状态枚举。
+
+### Clarified
+
+- 站点开关 `feature_multiplayer_mod_sync_enabled` 双站默认开启，可由运营热关闭；关闭时携带模组字段建房与同步计划接口返回 403 `FEATURE_DISABLED`，旧客户端不传模组字段时行为不变。
+- 纯客户端辅助 Mod（`mod.hjson` 的 `hidden: true`，或内置 `mdtbbsaddon` / `lanlink` 白名单）默认保留，不因房主清单缺少而进入 `to_disable`。
+- 新增稳定错误码 `SESSION_MODS_INVALID`（400），用于互斥字段同时提交、清单重复/超限或 Pack 不可用。
+
 ## 2026-10-30 — 云存档文件级差量上传
 
 ### Added

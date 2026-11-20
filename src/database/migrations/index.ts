@@ -2,6 +2,7 @@ import { HtmlDocumentProjection1720000370000 } from './1720000370000-HtmlDocumen
 import { MultiplayerVisibilityJoinPolicySplit1720000380000 } from './1720000380000-MultiplayerVisibilityJoinPolicySplit';
 import { MultiplayerInviteLimits1720000390000 } from './1720000390000-MultiplayerInviteLimits';
 import { CloudSaveManifestSnapshots1720000400000 } from './1720000400000-CloudSaveManifestSnapshots';
+import { MultiplayerSessionMods1720000410000 } from './1720000410000-MultiplayerSessionMods';
 import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
 import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceViewsAnalytics';
 import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
@@ -181,4 +182,5 @@ export const migrations = [
   MultiplayerVisibilityJoinPolicySplit1720000380000,
   MultiplayerInviteLimits1720000390000,
   CloudSaveManifestSnapshots1720000400000,
+  MultiplayerSessionMods1720000410000,
 ];

@@ -18,6 +18,7 @@ export type MultiplayerSessionJoinPolicy = 'invite_only' | 'friends' | 'public';
 @Index('idx_multiplayer_sessions_owner_status', ['owner_user_id', 'status'])
 @Index('idx_multiplayer_sessions_expiry', ['expires_at', 'status'])
 @Index('idx_multiplayer_sessions_discovery', ['visibility', 'status', 'expires_at'])
+@Index('idx_multiplayer_sessions_mod_pack', ['mod_pack_version_id'])
 export class MultiplayerSession {
   @PrimaryColumn({ type: 'varchar', length: 48 })
   id: string;
@@ -53,6 +54,23 @@ export class MultiplayerSession {
 
   @Column({ type: 'smallint', unsigned: true, default: 8 })
   max_players: number;
+
+  /**
+   * 模组房：建房时房主可直接引用一个已发布的 Pack 版本，或上报最多 64 个 Mod。
+   * 计数只统计 Mod；Pack 里的地图/蓝图成员不会让房间变成模组房。
+   */
+  @Column({ type: 'int', nullable: true })
+  mod_pack_version_id: number | null;
+
+  @Column({ type: 'boolean', default: false })
+  is_modded: boolean;
+
+  @Column({ type: 'smallint', unsigned: true, default: 0 })
+  mod_count: number;
+
+  /** 其中服务端能按公开目录与 SHA-256 校验通过、可自动下发授权的数量。 */
+  @Column({ type: 'smallint', unsigned: true, default: 0 })
+  mod_syncable_count: number;
 
   @Column({ type: 'enum', enum: ['active', 'closing', 'closed'], default: 'active' })
   status: 'active' | 'closing' | 'closed';

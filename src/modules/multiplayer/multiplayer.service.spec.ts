@@ -665,6 +665,13 @@ describe('MultiplayerService lobby discovery', () => {
       }),
     };
     service.sessions = { createQueryBuilder: jest.fn().mockReturnValue(query) };
+    // 大厅现在会批量读取会话模组摘要；默认返回空清单，个别用例可覆盖。
+    service.modCatalog = {
+      findSessionMods: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, []]))),
+      packSummaries: jest.fn().mockResolvedValue(new Map()),
+      toView: jest.fn((row: any) => row),
+    };
+    service.dataSource = { query: jest.fn().mockResolvedValue([]) };
     service.peers = {
       find: jest.fn(async (options: any) => {
         const ids: string[] = options.where.session_id?._value ?? [];
@@ -712,6 +719,36 @@ describe('MultiplayerService lobby discovery', () => {
     expect(query.andWhere).toHaveBeenCalledWith('session.game_version = :gameVersion', { gameVersion: 'v157' });
   });
 
+  it('applies modded, canonical mod_id and pack filters before pagination', async () => {
+    const { service, query } = createLobbyService({ sessions: [row('ses_public', 1, 'public')], occupying: [] });
+    service.dataSource = {
+      query: jest.fn().mockResolvedValue([{ mod_id: 'flood-driver', requested_identifier: 'Flood-Driver' }]),
+    };
+
+    await service.listDiscoverableSessions(7, { modded: false, mod_id: 'Flood-Driver', pack_public_id: 'pack-uuid' });
+
+    expect(query.andWhere).toHaveBeenCalledWith('session.is_modded = :modded', { modded: false });
+    expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('multiplayer_session_mods'), { modId: 'flood-driver' });
+    expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('resource_versions'), { packPublicId: 'pack-uuid' });
+  });
+
+  it('projects mod_summary with the full counts and the list truncation flag', async () => {
+    const { service } = createLobbyService({ sessions: [row('ses_public', 1, 'public')], occupying: [] });
+    service.modCatalog.findSessionMods = jest.fn(async () => new Map([['ses_public', [{
+      mod_id: 'flood-driver', display_name: 'Flood Driver', version: '1.2.0', sha256: 'a'.repeat(64),
+      required: true, resolution_status: 'catalog_verified', resource_public_id: 'r', resource_version_public_id: 'v',
+      file_public_id: 'f', file_size_bytes: 10, unresolved_reason: null,
+    }]]]));
+    service.modCatalog.toView = jest.fn((row: any) => row);
+
+    const listed = (await service.listDiscoverableSessions(7))[0];
+    expect(listed).toMatchObject({ is_modded: false, mod_count: 0, mod_syncable_count: 0 });
+    expect(listed.mod_summary).toEqual({
+      modded: true, mod_count: 1, syncable_count: 1, pack: null, mods_truncated: false,
+      mods: [{ mod_id: 'flood-driver', display_name: 'Flood Driver', version: '1.2.0', syncable: true, resolution_status: 'catalog_verified' }],
+    });
+  });
+
   it('drops friend-scoped Sessions the viewer is not a friend of and blocked owners', async () => {
     const { service } = createLobbyService({
       sessions: [row('ses_friends', 2, 'friends'), row('ses_blocked', 3, 'public')],
@@ -751,8 +788,9 @@ describe('MultiplayerService lobby discovery', () => {
     });
     const listed = (await projectionService.listDiscoverableSessions(7))[0];
     expect(Object.keys(listed).sort()).toEqual([
-      'activity_name', 'blocked_reason', 'can_request_join', 'current_players', 'expires_at', 'game', 'id', 'join_policy',
-      'joinable', 'max_players', 'owner_user_id', 'require_approval', 'status', 'visibility',
+      'activity_name', 'blocked_reason', 'can_request_join', 'current_players', 'expires_at', 'game', 'id',
+      'is_modded', 'join_policy', 'joinable', 'max_players', 'mod_count', 'mod_summary', 'mod_syncable_count',
+      'owner_user_id', 'require_approval', 'status', 'visibility',
     ]);
     expect(JSON.stringify(listed)).not.toContain('code_hash');
   });

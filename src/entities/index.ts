@@ -143,6 +143,7 @@ import { ModReportAttachment } from './mod-report-attachment.entity';
 import { SocialPrivacySetting } from './social-privacy-setting.entity';
 import { UserPresencePreference } from './user-presence-preference.entity';
 import { MultiplayerSession } from './multiplayer-session.entity';
+import { MultiplayerSessionMod } from './multiplayer-session-mod.entity';
 import { MultiplayerPeer } from './multiplayer-peer.entity';
 import { MultiplayerPeerResumeToken } from './multiplayer-peer-resume-token.entity';
 import { MultiplayerInvite } from './multiplayer-invite.entity';
@@ -304,6 +305,7 @@ export const coreEntities = [
   SocialPrivacySetting,
   UserPresencePreference,
   MultiplayerSession,
+  MultiplayerSessionMod,
   MultiplayerPeer,
   MultiplayerPeerResumeToken,
   MultiplayerInvite,
@@ -342,7 +344,7 @@ export {
   GameSaveUploadSession, GameSaveIdempotency,
   BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
-  SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,
+  SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerSessionMod, MultiplayerPeer,
   MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinIntent, MultiplayerJoinRequest,
   MultiplayerRelayAllocation, MultiplayerAuditLog,
   AdminNotification,

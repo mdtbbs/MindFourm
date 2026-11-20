@@ -1,8 +1,48 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
-  IsBoolean, IsEnum, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested,
+  ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min,
+  MinLength, ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+/** 建房时房主上报的单个 Mod；`sha256` 是服务端权威定级的唯一凭据。 */
+export class SessionModDto {
+  @ApiProperty({ example: 'flood-driver', maxLength: 191, description: 'Mod 的稳定标识（与资源目录 mod_id 同一命名空间）。' })
+  @IsString() @MinLength(1) @MaxLength(191)
+  mod_id: string;
+
+  @ApiPropertyOptional({ example: 'Flood Driver', maxLength: 255, description: '展示名称；缺省时由公开目录补齐。' })
+  @IsOptional() @IsString() @MaxLength(255)
+  display_name?: string;
+
+  @ApiPropertyOptional({ example: '1.2.0', maxLength: 100, description: '房主本地版本号。' })
+  @IsOptional() @IsString() @MaxLength(100)
+  version?: string;
+
+  @ApiPropertyOptional({
+    example: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    maxLength: 64,
+    pattern: '^[a-fA-F0-9]{64}$',
+    description: '本地 Mod 文件的 SHA-256；只有与已发布版本主文件一致时才可被自动同步。',
+  })
+  @IsOptional() @IsString() @Matches(/^[a-fA-F0-9]{64}$/)
+  sha256?: string;
+
+  @ApiPropertyOptional({ example: true, description: '是否多人内容必需；缺省为 true。' })
+  @IsOptional() @IsBoolean()
+  required?: boolean;
+}
+
+/** 建房时直接引用一个已发布 Pack 的固定版本。 */
+export class ModPackRefDto {
+  @ApiProperty({ example: 'c0ffee00-0000-4000-8000-000000000000', maxLength: 36, description: '公开 Pack 资源的 public_id。' })
+  @IsString() @MaxLength(36)
+  pack_public_id: string;
+
+  @ApiPropertyOptional({ example: 'c0ffee00-0000-4000-8000-000000000001', maxLength: 36, description: '固定 Pack 版本的 public_id；缺省时使用当前推荐已发布版本。' })
+  @IsOptional() @IsString() @MaxLength(36)
+  version_public_id?: string;
+}
 
 export class CreateMultiplayerSessionDto {
   @ApiProperty({ example: 'mindustry', maxLength: 128, description: '游戏的稳定标识。' })
@@ -43,6 +83,18 @@ export class CreateMultiplayerSessionDto {
   @ApiPropertyOptional({ minimum: 2, maximum: 64, example: 8, description: 'Peer 最大数量。' })
   @IsOptional() @IsInt() @Min(2) @Max(64)
   max_players?: number;
+
+  @ApiPropertyOptional({ type: () => ModPackRefDto, description: '引用一个已发布 Pack；与 mods 互斥。' })
+  @IsOptional() @ValidateNested() @Type(() => ModPackRefDto)
+  mod_pack_ref?: ModPackRefDto;
+
+  @ApiPropertyOptional({
+    type: () => [SessionModDto],
+    maxItems: 64,
+    description: '房主本地 Mod 清单，最多 64 项；与 mod_pack_ref 互斥。',
+  })
+  @IsOptional() @IsArray() @ArrayMaxSize(64) @ValidateNested({ each: true }) @Type(() => SessionModDto)
+  mods?: SessionModDto[];
 }
 
 export class ListMultiplayerSessionsDto {
@@ -53,6 +105,24 @@ export class ListMultiplayerSessionsDto {
   @ApiPropertyOptional({ example: 'v157', maxLength: 64, description: '按游戏版本精确筛选。' })
   @IsOptional() @IsString() @MaxLength(64)
   game_version?: string;
+
+  @ApiPropertyOptional({ example: true, description: '按是否模组房筛选：true 只返回模组房，false 只返回原版房。' })
+  // 全局 ValidationPipe 开启了 enableImplicitConversion，`Boolean('false')` 会先被
+  // 隐式转成 true；因此必须读原始对象上的字符串值，不能只看 `value`。
+  @IsOptional() @Transform(({ obj, key }) => {
+    const raw = obj?.[key];
+    return raw === true || raw === 'true' || raw === '1';
+  })
+  @IsBoolean()
+  modded?: boolean;
+
+  @ApiPropertyOptional({ example: 'flood-driver', maxLength: 191, description: '只返回房主清单包含该 Mod 的会话。' })
+  @IsOptional() @IsString() @MaxLength(191)
+  mod_id?: string;
+
+  @ApiPropertyOptional({ example: 'c0ffee00-0000-4000-8000-000000000000', maxLength: 36, description: '只返回引用该公开 Pack 的会话。' })
+  @IsOptional() @IsString() @MaxLength(36)
+  pack_public_id?: string;
 
   @ApiPropertyOptional({ minimum: 1, example: 1, description: '页码，从 1 开始。' })
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
@@ -215,4 +285,50 @@ export class RelayAllocationRevokeDto {
   @ApiPropertyOptional({ example: '<RELAY_CREDENTIAL>', maxLength: 2048, description: '仅撤销尚未消费的分配时需要；Forum 会校验签名、分配 ID、Agent 与 expiry。' })
   @IsOptional() @IsString() @MaxLength(2048)
   credential?: string;
+}
+
+/** 客户端同步计划请求中的一个本地 Mod。 */
+export class InstalledModDto {
+  @ApiProperty({ example: 'flood-driver', maxLength: 191, description: '本地 Mod 的稳定标识。' })
+  @IsString() @MinLength(1) @MaxLength(191)
+  mod_id: string;
+
+  @ApiPropertyOptional({ example: '1.2.0', maxLength: 100, description: '本地版本号。' })
+  @IsOptional() @IsString() @MaxLength(100)
+  version?: string;
+
+  @ApiPropertyOptional({
+    example: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    maxLength: 64,
+    pattern: '^[a-fA-F0-9]{64}$',
+    description: '本地文件的 SHA-256；缺失时无法确认已同步。',
+  })
+  @IsOptional() @IsString() @Matches(/^[a-fA-F0-9]{64}$/)
+  sha256?: string;
+
+  @ApiPropertyOptional({ example: true, description: '本地是否已启用；缺省为 true。' })
+  @IsOptional() @IsBoolean()
+  enabled?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: '是否为纯客户端辅助 Mod（mod.hjson hidden / 白名单）；默认保留不禁用。' })
+  @IsOptional() @IsBoolean()
+  client_only?: boolean;
+}
+
+export class ModSyncPlanDto {
+  @ApiPropertyOptional({
+    type: () => [InstalledModDto],
+    maxItems: 128,
+    description: '客户端本地已安装 Mod 清单，最多 128 项；省略时按空清单计算（全部需要下载）。',
+  })
+  @IsOptional() @IsArray() @ArrayMaxSize(128) @ValidateNested({ each: true }) @Type(() => InstalledModDto)
+  installed_mods?: InstalledModDto[];
+
+  @ApiPropertyOptional({
+    example: 'ABCD1234',
+    maxLength: 32,
+    description: '可选房间码；与 join 接口同一校验。持有有效房间码的客人可在加入前读取同步计划。',
+  })
+  @IsOptional() @IsString() @MaxLength(32)
+  join_code?: string;
 }

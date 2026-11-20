@@ -313,6 +313,7 @@ const SOCIAL_MULTIPLAYER_ERRORS: ReadonlyArray<readonly [string, number, boolean
   ['SESSION_ALREADY_ACTIVE', 409, false, '账号已有活跃联机会话', 'The account already owns an active Session; the existing session_id is included in error.details.'],
   ['SESSION_FULL', 409, false, '联机会话人数已满', 'The Session has reached its player capacity.'],
   ['SESSION_NOT_JOINABLE', 400, false, '联机会话当前不可加入', 'The Session configuration does not allow this join path.'],
+  ['SESSION_MODS_INVALID', 400, false, '联机模组清单无效', 'The Session mod list is invalid: mutually exclusive inputs, duplicates, or an unavailable Pack.'],
   ['SESSION_PERMISSION_DENIED', 403, false, '无权访问此联机会话', 'The caller cannot view or join this Session.'],
   ['PEER_NOT_FOUND', 404, false, '联机 Peer 不存在', 'The requested Peer does not exist in this Session.'],
   ['PEER_EXPIRED', 404, false, '联机 Peer 已过期', 'The Peer has left or expired.'],
